@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary / backup files
+*.backup
+*.bak
+*~
+
+# Generated archives
+*.zip
+*.tar.gz
+*.7z
+*.rar
+
+# Logs
+*.log
+
+# Secrets
+.env
+.env.*
+nexus_key

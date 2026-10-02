@@ -1,0 +1,105 @@
+id = "cyberpunk-2077"
+name = "Cyberpunk 2077 (CyberpunkVR Port, experimental)"
+steam_appid = 1091500
+mod_page = "https://www.nexusmods.com/cyberpunk2077/mods/30093"
+manual_download = true
+# Mod archives are unpacked straight into the game folder (several at once, in the order given).
+method = "gameroot"
+nexus_game = "cyberpunk2077"
+
+setup = [
+  "Check that the plain game runs under Proton first.",
+  "Once only: enable the 'version' DLL override so CET and friends load under Proton. Run: protontricks 1091500 --gui, pick the default wineprefix, Run winecfg, open the Libraries tab, add 'version', then Apply (the method on the Red Modding wiki's CET Linux page).",
+  "Download the MAIN file of every mod in the checklist below (the links open each Nexus page; a free account is needed). Mods 1-14 first; the VR port (last row) comes later. Skip any 'test' or 'optional' files, and keep the file names Nexus gives you: the hub tells the mods apart by the number in the name.",
+  "Click 'Install mod file…' and select all of mods 1-14 at once. The hub sorts them into the right order, checks every archive before touching the game, and then shows the checklist.",
+  "Make sure the checklist says READY, then start the game once WITHOUT VR so the mod loaders create their files, and quit.",
+  "Download the CyberpunkVR Port (last row) and install it the same way.",
+]
+
+play = [
+  "Start WiVRn and connect the Quest first (the mod wants the OpenXR runtime running before the game).",
+  "Launch Cyberpunk 2077 from Steam. The mod describes a pre-launch picker for headset and resolution; whether it appears under Proton is unverified.",
+  "In game: F10 opens the in-headset settings overlay, F7 recenters, F8 switches the VR menu between full view and a small panel. Start with the mod's supplied VR graphics preset.",
+]
+
+good_to_know = [
+  "Experimental community mod (v0.1.7), tested by its author on Windows with a PICO 4. Linux/Proton support isn't documented, though its Nexus changelog includes a fix for something that only broke under Proton. WiVRn on CachyOS is untested.",
+  "The launch options above are the usual Proton setup (version DLL override + OpenXR runtime visibility) but are unverified for this mod.",
+  "Remove any other VR injector first (for example R.E.A.L. VR's dxgi.dll in bin/x64). Two VR mods on the same engine hooks crash the game.",
+  "If it crashes: check dependency versions (Codeware must be 1.20+) and read bin/x64/cyberpunkvrport.log and red4ext/logs.",
+  "This build targets game patch 2.31. Game updates can break RED4ext mods.",
+  "The launch options start with a small guard (vrhub-check). It refuses to start the game if a required mod is missing or damaged, and tells you which. Add VRHUB_SKIP_CHECK=1 at the start of the launch options to bypass it.",
+  "Mods 11-14 are labelled by Nexus number until the hub can look up their names. Enter your Nexus API key in the hub and the names fill in.",
+  "'Uninstall mod' removes everything installed through the hub for this game, dependencies included. Steam's 'Verify integrity of game files' restores the vanilla files.",
+]
+
+[[components]]
+nexus_mod = 107
+name = "Cyber Engine Tweaks"
+
+[[components]]
+nexus_mod = 2380
+name = "RED4ext"
+
+[[components]]
+nexus_mod = 1511
+name = "redscript"
+
+[[components]]
+nexus_mod = 4197
+name = "TweakXL"
+
+[[components]]
+nexus_mod = 4198
+name = "ArchiveXL"
+
+[[components]]
+nexus_mod = 4575
+name = "Input Loader"
+
+[[components]]
+nexus_mod = 7780
+name = "Codeware (1.20 or newer)"
+
+[[components]]
+nexus_mod = 29190
+name = "Nova Optics"
+
+[[components]]
+nexus_mod = 6945
+name = "Equipment-EX"
+
+[[components]]
+nexus_mod = 21936
+name = "Visual Holsters (Automatic Clothes Swap)"
+
+[[components]]
+nexus_mod = 18002
+name = "Nexus mod #18002"
+
+[[components]]
+nexus_mod = 22071
+name = "Nexus mod #22071"
+
+[[components]]
+nexus_mod = 22251
+name = "Nexus mod #22251"
+
+[[components]]
+nexus_mod = 33136
+name = "Nexus mod #33136"
+
+[[components]]
+nexus_mod = 30093
+name = "CyberpunkVR Port"
+phase = 2
+
+[launch]
+args = ""
+env = { WINEDLLOVERRIDES = "version=n,b", PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
+
+[[updates]]
+name = "CyberpunkVR Port (Nexus)"
+nexus_game = "cyberpunk2077"
+nexus_mod = 30093
+tracks = ["cyberpunk-2077"]
