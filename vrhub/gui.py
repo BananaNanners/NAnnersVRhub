@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QHB
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
                                QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
 
-from . import hub, runtime, updates
+from . import __version__, hub, runtime, updates
 from .cli import _roots
 
 
@@ -37,13 +37,13 @@ def _row(*buttons):
 class HubWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NAnnersVRhub")
+        self.setWindowTitle(f"NAnnersVRhub {__version__}")
         self.resize(1150, 640)
         self.rows: list[dict] = []
         self.update_results: dict = {}
         self.worker: UpdateWorker | None = None
 
-        title = QLabel("NAnnersVRhub")
+        title = QLabel(f"NAnnersVRhub {__version__}")
         title.setStyleSheet("font-size: 20px; font-weight: bold;")
         self.runtime_label = QLabel()
         self.table = QTableWidget(0, 5)
@@ -66,6 +66,7 @@ class HubWindow(QMainWindow):
         self.mark_btn = QPushButton("Mark as up to date")
         self.key_btn = QPushButton("Nexus API key…")
         self.verify_btn = QPushButton("Verify mods")
+        self.diag_btn = QPushButton("Copy diagnostics")
         refresh_btn = QPushButton("Refresh")
         self.install_btn.clicked.connect(self.install)
         self.uninstall_btn.clicked.connect(self.uninstall)
@@ -77,12 +78,13 @@ class HubWindow(QMainWindow):
         self.mark_btn.clicked.connect(self.mark_current)
         self.key_btn.clicked.connect(self.set_nexus_key)
         self.verify_btn.clicked.connect(self.verify_mods)
+        self.diag_btn.clicked.connect(self.copy_diagnostics)
         refresh_btn.clicked.connect(self.refresh)
 
         left = QVBoxLayout()
         left.addWidget(self.table)
         left.addLayout(_row(self.install_btn, self.uninstall_btn, self.profile_btn, self.unprofile_btn))
-        left.addLayout(_row(self.copy_btn, self.inject_btn, self.verify_btn))
+        left.addLayout(_row(self.copy_btn, self.inject_btn, self.verify_btn, self.diag_btn))
         left.addLayout(_row(self.check_btn, self.mark_btn, self.key_btn, refresh_btn))
         main = QHBoxLayout()
         main.addLayout(left, 5)
@@ -254,6 +256,13 @@ class HubWindow(QMainWindow):
         r = self.current()
         if r:
             QApplication.clipboard().setText(hub.launch_options(r))
+
+    def copy_diagnostics(self):
+        r = self.current()
+        if r:
+            QApplication.clipboard().setText(hub.diagnostics(r, _roots()))
+            QMessageBox.information(self, "Diagnostics copied",
+                                    "A paste-friendly diagnostic summary is now on the clipboard.")
 
 
 def main() -> int:

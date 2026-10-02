@@ -93,6 +93,7 @@ name = "Nexus mod #33136"
 nexus_mod = 30093
 name = "CyberpunkVR Port"
 phase = 2
+required_files = ["red4ext/plugins/CyberpunkVR_Stereo/CyberpunkVR_Stereo.dll"]
 
 [launch]
 args = ""

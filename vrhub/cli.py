@@ -27,6 +27,7 @@ def main(argv=None) -> int:
     v.add_argument("--quiet", action="store_true", help="print only problems/notices (used by the launch guard)")
     v.add_argument("--names", action="store_true", help="look up the real mod names on Nexus first (needs an API key)")
     sub.add_parser("info", help="show the setup checklist for a game").add_argument("game")
+    sub.add_parser("diagnose", help="print a paste-friendly local diagnostic summary").add_argument("game")
     i = sub.add_parser("install", help="install a mod file (.pak/.zip, or the UEVR zip)")
     i.add_argument("game")
     i.add_argument("--file", type=Path, required=True, nargs="+",
@@ -91,6 +92,8 @@ def main(argv=None) -> int:
             return 0 if rep["ready"] else 1
         if a.cmd == "info":
             print(hub.details_text(r))
+        elif a.cmd == "diagnose":
+            print(hub.diagnostics(r, _roots()))
         elif a.cmd == "install":
             done = hub.install_many(r, a.file, _roots())
             if len(done) > 5:

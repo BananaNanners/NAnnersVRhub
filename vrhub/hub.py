@@ -18,6 +18,43 @@ RECIPE_DIR = HUB_DIR / "recipes"
 APPDATA = Path("drive_c/users/steamuser/AppData")
 
 
+def log_file() -> Path:
+    return state_file().parent / "vrhub.log"
+
+
+def _log(event: str, **data) -> None:
+    """Append one small JSON event to the local hub log. Never log secrets."""
+    try:
+        p = log_file()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        record = {"time": int(time.time()), "event": event, **data}
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, sort_keys=True) + "\n")
+    except OSError:
+        pass  # diagnostics must never break an install
+
+
+def _zip_members(z: zipfile.ZipFile) -> dict[str, str]:
+    """Return original->normalized regular-file names for ZIPs from either OS.
+
+    Some Windows-created archives use backslashes even for directory entries.
+    Normalize first, then decide whether the member is a directory. Duplicate
+    normalized file names are rejected instead of silently overwriting each other.
+    """
+    members: dict[str, str] = {}
+    seen: set[str] = set()
+    for info in z.infolist():
+        orig = info.filename
+        norm = orig.replace("\\", "/")
+        if info.is_dir() or norm.endswith("/"):
+            continue
+        if norm in seen:
+            raise RuntimeError(f"Archive contains the same path more than once: {norm}")
+        seen.add(norm)
+        members[orig] = norm
+    return members
+
+
 def state_file() -> Path:
     return Path(os.environ.get("VRHUB_STATE", "~/.local/share/vrhub/state.json")).expanduser()
 
@@ -53,7 +90,7 @@ def _extract(z: zipfile.ZipFile, anchor: str, base: Path) -> list[Path]:
     """Extract everything at/below the folder that holds `anchor` (shallowest match),
     stripping any wrapper folder. Validates all paths before writing anything."""
     base = base.resolve()
-    names = {n: n.replace("\\", "/") for n in z.namelist() if not n.endswith("/")}
+    names = _zip_members(z)
     hits = sorted((n for n in names.values() if n.rsplit("/", 1)[-1] == anchor), key=len)
     if not hits:
         raise RuntimeError(f"No {anchor} found anywhere in that zip.")
@@ -151,7 +188,7 @@ def _stage_archive(archive: Path, stage: Path) -> list[Path]:
     if archive.suffix.lower() == ".zip":
         base = stage.resolve()
         with zipfile.ZipFile(archive) as z:
-            members = {n: n.replace("\\", "/") for n in z.namelist() if not n.replace("\\", "/").endswith("/")}
+            members = _zip_members(z)
             targets = {n: (base / norm).resolve() for n, norm in members.items()}
             for n, t in targets.items():  # validate everything before writing anything
                 if not t.is_relative_to(base):
@@ -177,19 +214,21 @@ def _stage_archive(archive: Path, stage: Path) -> list[Path]:
     return files
 
 
-def _plan_gameroot(rels: list[Path], label: str) -> list[tuple[Path, Path]]:
+def _plan_gameroot(rels: list[Path], label: str, root_dirs=None) -> list[tuple[Path, Path]]:
     """Map archive files to game-folder paths. Strips one wrapper folder, fixes the case of the
     top-level folder (Linux is case-sensitive), and ignores readmes/anything outside ROOT_DIRS."""
+    roots = {x.lower() for x in (root_dirs or ROOT_DIRS)}
     def is_root(part: str) -> bool:
-        return part.lower() in ROOT_DIRS
+        return part.lower() in roots
     strip = 0
     if not any(len(r.parts) > 1 and is_root(r.parts[0]) for r in rels):
         tops = {r.parts[0] for r in rels if len(r.parts) > 1}
         if len(tops) == 1 and any(len(r.parts) > 2 and is_root(r.parts[1]) for r in rels):
             strip = 1
         else:
-            raise RuntimeError(f"{label} doesn't look like a Cyberpunk mod archive "
-                               "(no bin / r6 / red4ext / archive folder inside).")
+            expected = " / ".join(sorted(roots))
+            raise RuntimeError(f"{label} doesn't look like a supported game-root archive "
+                               f"(none of these folders were found: {expected}).")
     plan = []
     for r in rels:
         parts = r.parts[strip:]
@@ -205,17 +244,39 @@ def _component_for(recipe: dict, filename: str) -> dict | None:
     return hits[0] if len({h["nexus_mod"] for h in hits}) == 1 else None
 
 
+def _component_required_files(comp: dict) -> list[Path]:
+    return [Path(p.replace("\\", "/")) for p in comp.get("required_files", [])]
+
+
+def _validate_component_plan(comp: dict | None, plan: list[tuple[Path, Path]], archive_name: str) -> None:
+    if not plan:
+        raise RuntimeError(f"{archive_name}: no installable game files were found.")
+    if not comp:
+        return
+    required = _component_required_files(comp)
+    if not required:
+        return
+    destinations = {str(dest).replace("\\", "/").lower() for _src, dest in plan}
+    missing = [str(p) for p in required if str(p).replace("\\", "/").lower() not in destinations]
+    if missing:
+        raise RuntimeError(
+            f"{archive_name}: this doesn't look like the complete {comp['name']} archive. "
+            f"Required file(s) missing: {', '.join(missing)}"
+        )
+
+
 def _install_gameroot(recipe: dict, mod_files: list[Path], steam_roots=None) -> list[Path]:
-    """Extract one or more mod archives into the game folder (in recipe order if it lists components)."""
+    """Stage/validate all archives, then install transactionally into the game root."""
     game = find_game(recipe["steam_appid"], steam_roots)
     if not game:
         raise RuntimeError(f"{recipe['name']}: not found in any Steam library.")
     for f in mod_files:
         if not f.is_file():
             raise RuntimeError(f"File not found: {f}")
+
     comp_of: list[dict | None] = [None] * len(mod_files)
     comps = recipe.get("components")
-    if comps:  # work out which mod each file is, reject unknowns/duplicates, sort into install order
+    if comps:
         mapped: dict[str, tuple[dict, Path]] = {}
         for f in mod_files:
             c = _component_for(recipe, f.name)
@@ -234,26 +295,73 @@ def _install_gameroot(recipe: dict, mod_files: list[Path], steam_roots=None) -> 
         comp_of = [c for c, _ in ordered]
 
     base = game.resolve()
-    stage_root = state_file().parent / "staging" / f"{recipe['id']}-{int(time.time())}"
+    token = f"{recipe['id']}-{time.time_ns()}"
+    app_root = state_file().parent
+    stage_root = app_root / "staging" / token
+    txn_root = app_root / "transactions" / token
+    backup_root = txn_root / "backup"
     written_by: list[list[Path]] = []
+    original_backups: dict[Path, Path] = {}
+    originally_missing: set[Path] = set()
+
     try:
         plans = []
-        for i, f in enumerate(mod_files):  # stage + check EVERY archive before touching the game
+        root_dirs = recipe.get("root_dirs")
+        for i, (f, comp) in enumerate(zip(mod_files, comp_of)):
             stage = stage_root / str(i)
             stage.mkdir(parents=True)
-            plans.append((stage, _plan_gameroot(_stage_archive(f, stage), f.name)))
+            rels = _stage_archive(f, stage)
+            plan = _plan_gameroot(rels, f.name, root_dirs)
+            _validate_component_plan(comp, plan, f.name)
+            plans.append((stage, plan))
+
+        # Back up every destination that existed before this transaction exactly once.
+        all_targets: list[Path] = []
+        for _stage, plan in plans:
+            for _src, dest in plan:
+                target = (base / dest).resolve()
+                if not target.is_relative_to(base):
+                    raise RuntimeError(f"Unsafe path: {dest}")
+                all_targets.append(target)
+        for target in dict.fromkeys(all_targets):
+            if target.exists():
+                if not target.is_file():
+                    raise RuntimeError(f"Install target is not a regular file: {target}")
+                rel = target.relative_to(base)
+                backup = backup_root / rel
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(target, backup)
+                original_backups[target] = backup
+            else:
+                originally_missing.add(target)
+
         for stage, plan in plans:
             written: list[Path] = []
             for src, dest in plan:
                 target = (base / dest).resolve()
-                if not target.is_relative_to(base):
-                    raise RuntimeError(f"Unsafe path: {dest}")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(stage / src, target)
                 written.append(target)
             written_by.append(written)
+
+    except Exception as e:
+        # Roll back the game tree to exactly how it looked before this transaction.
+        for target in originally_missing:
+            try:
+                target.unlink(missing_ok=True)
+            except OSError:
+                pass
+        for target, backup in original_backups.items():
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(backup, target)
+            except OSError:
+                pass
+        _log("install_rollback", recipe=recipe["id"], error=str(e), archives=[f.name for f in mod_files])
+        raise
     finally:
         shutil.rmtree(stage_root, ignore_errors=True)
+        shutil.rmtree(txn_root, ignore_errors=True)
 
     now = int(time.time())
     st = _load_state()
@@ -262,10 +370,13 @@ def _install_gameroot(recipe: dict, mod_files: list[Path], steam_roots=None) -> 
     all_new = [str(w) for ws in written_by for w in ws]
     for c, f, ws in zip(comp_of, mod_files, written_by):
         if c is not None:
-            comp_state[str(c["nexus_mod"])] = {"files": [str(w) for w in ws], "installed_at": now, "archive": f.name}
+            comp_state[str(c["nexus_mod"])] = {
+                "files": [str(w) for w in ws], "installed_at": now, "archive": f.name
+            }
     st[recipe["id"]] = {"files": list(dict.fromkeys(entry.get("files", []) + all_new)),
                         "keep": str(base), "installed_at": now, "components": comp_state}
     _save_state(st)
+    _log("install_ok", recipe=recipe["id"], files=len(all_new), archives=[f.name for f in mod_files])
     return [w for ws in written_by for w in ws]
 
 
@@ -384,9 +495,21 @@ def verify(recipe: dict) -> dict | None:
             status, detail = "missing", "not installed"
         else:
             gone = [f for f in rec["files"] if not Path(f).exists()]
-            status = "damaged" if gone else "ok"
-            detail = f"{len(gone)} of {len(rec['files'])} files missing, reinstall it" if gone else \
-                f"installed ({len(rec['files'])} files)"
+            keep = st.get(recipe["id"], {}).get("keep")
+            required_gone = []
+            if keep:
+                game_root = Path(keep)
+                required_gone = [str(p) for p in _component_required_files(c) if not (game_root / p).is_file()]
+            if gone or required_gone:
+                status = "damaged"
+                bits = []
+                if gone:
+                    bits.append(f"{len(gone)} of {len(rec['files'])} recorded files missing")
+                if required_gone:
+                    bits.append("required file(s) missing: " + ", ".join(required_gone))
+                detail = "; ".join(bits) + ", reinstall it"
+            else:
+                status, detail = "ok", f"installed ({len(rec['files'])} files)"
         rows.append({"n": i, "id": c["nexus_mod"], "name": component_label(c, names), "phase": c.get("phase", 1),
                      "status": status, "detail": detail,
                      "page": f"https://www.nexusmods.com/{game}/mods/{c['nexus_mod']}"})
@@ -469,6 +592,18 @@ def mark_current(recipe: dict) -> list[str]:
             marked.append(k)
     _save_state(st)
     return marked
+
+
+def diagnostics(recipe: dict, steam_roots=None) -> str:
+    """Human-readable local diagnostic summary; safe to paste into a bug report."""
+    game = find_game(recipe["steam_appid"], steam_roots)
+    rep = verify(recipe)
+    lines = [f"Game: {recipe['name']}", f"Recipe: {recipe['id']}",
+             f"Steam app: {recipe['steam_appid']}", f"Game path: {game or 'not found'}",
+             f"State file: {state_file()}", f"Log file: {log_file()}"]
+    if rep:
+        lines += ["", verify_text(rep)]
+    return "\n".join(lines)
 
 
 SECTIONS = (("One-time setup", "setup", True), ("Each time you play", "play", True),

@@ -1,12 +1,13 @@
 [project]
 name = "nannersvrhub"
-version = "0.2.0"
+version = "0.3.0"
 description = "NAnnersVRhub: Linux VR mod hub (CachyOS / WiVRn / Quest 3)"
 requires-python = ">=3.11"
 dependencies = []
 
 [project.scripts]
-nannersvrhub = "vrhub.cli:main"
+nannersvrhub = "vrhub.launcher:main"
+nannersvrhub-cli = "vrhub.cli:main"
 
 [build-system]
 requires = ["setuptools"]
