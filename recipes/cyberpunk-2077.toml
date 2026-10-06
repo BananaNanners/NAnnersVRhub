@@ -104,3 +104,7 @@ name = "CyberpunkVR Port (Nexus)"
 nexus_game = "cyberpunk2077"
 nexus_mod = 30093
 tracks = ["cyberpunk-2077"]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true

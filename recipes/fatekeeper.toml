@@ -40,3 +40,7 @@ env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
 name = "FK_UEVR (UEVR build + profile)"
 github = "jbusfield/FK_UEVR"
 tracks = ["fatekeeper", "fatekeeper:profile"]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true

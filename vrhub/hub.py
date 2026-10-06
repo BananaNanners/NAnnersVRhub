@@ -10,7 +10,9 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-from . import updates
+from . import runtime, updates
+from .handlers import get_handler
+from .schema import RecipeError, validate_recipe
 from .steam import find_game
 
 HUB_DIR = Path(__file__).resolve().parent.parent
@@ -59,10 +61,26 @@ def state_file() -> Path:
     return Path(os.environ.get("VRHUB_STATE", "~/.local/share/vrhub/state.json")).expanduser()
 
 
+
+
+def game_path(recipe: dict, steam_roots=None) -> Path | None:
+    """Resolve a recipe's install folder through its owning storefront."""
+    if recipe.get("store", "steam") == "steam":
+        return find_game(recipe["steam_appid"], steam_roots)
+    handler = get_handler(recipe)
+    finder = getattr(handler, "game_path", None)
+    return finder(recipe) if finder else None
+
 def load_recipes() -> dict[str, dict]:
     out = {}
     for f in sorted(RECIPE_DIR.glob("*.toml")):
-        r = tomllib.loads(f.read_text())
+        try:
+            r = tomllib.loads(f.read_text())
+        except tomllib.TOMLDecodeError as e:
+            raise RecipeError(f"{f.name}: invalid TOML: {e}") from e
+        validate_recipe(r, f.name)
+        if r["id"] in out:
+            raise RecipeError(f"{f.name}: duplicate recipe id '{r['id']}'")
         out[r["id"]] = r
     return out
 
@@ -126,6 +144,8 @@ def _uevr_dir(recipe: dict, steam_roots=None) -> Path:
 
 def install(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
     """Install a mod from a .pak file, or from a .zip containing one (or a UEVR zip)."""
+    if not get_handler(recipe).install_supported(recipe):
+        raise RuntimeError(f"{recipe['name']} is a guided workflow; it has no direct mod-file install step.")
     game = find_game(recipe["steam_appid"], steam_roots)
     if not game:
         raise RuntimeError(f"{recipe['name']}: not found in any Steam library.")
@@ -380,8 +400,106 @@ def _install_gameroot(recipe: dict, mod_files: list[Path], steam_roots=None) -> 
     return [w for ws in written_by for w in ws]
 
 
+def inspect_archive(recipe: dict, archive: Path) -> dict:
+    """Stage one archive without touching the game and report what would be installed."""
+    if not archive.is_file():
+        raise RuntimeError(f"File not found: {archive}")
+    if recipe.get("method") != "gameroot":
+        raise RuntimeError("Archive inspection is currently available for game-root recipes.")
+    comp = _component_for(recipe, archive.name) if recipe.get("components") else None
+    token = f"inspect-{recipe['id']}-{time.time_ns()}"
+    stage = state_file().parent / "staging" / token
+    stage.mkdir(parents=True)
+    try:
+        rels = _stage_archive(archive, stage)
+        plan = _plan_gameroot(rels, archive.name, recipe.get("root_dirs"))
+        _validate_component_plan(comp, plan, archive.name)
+        roots: dict[str, int] = {}
+        for _src, dest in plan:
+            roots[dest.parts[0]] = roots.get(dest.parts[0], 0) + 1
+        return {
+            "archive": archive.name,
+            "component": component_label(comp) if comp else None,
+            "nexus_mod": comp.get("nexus_mod") if comp else None,
+            "archive_files": len(rels),
+            "install_files": len(plan),
+            "roots": roots,
+            "required_files": [str(p) for p in _component_required_files(comp or {})],
+            "sample": [str(dest) for _src, dest in plan[:12]],
+        }
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+
+
+def inspect_text(report: dict) -> str:
+    lines = [f"Archive: {report['archive']}"]
+    if report.get("component"):
+        lines.append(f"Component: {report['component']} (#{report['nexus_mod']})")
+    lines += [f"Files in archive: {report['archive_files']}",
+              f"Files that would be installed: {report['install_files']}"]
+    if report.get("roots"):
+        lines.append("Game-root destinations: " + ", ".join(f"{k} ({v})" for k, v in sorted(report["roots"].items())))
+    if report.get("required_files"):
+        lines.append("Required sentinel(s): " + ", ".join(report["required_files"]))
+    if report.get("sample"):
+        lines.append("Sample destinations:")
+        lines.extend(f"  {x}" for x in report["sample"])
+    return "\n".join(lines)
+
+
+def preflight(recipe: dict, steam_roots=None) -> dict:
+    """Return recipe-driven readiness checks without changing the system."""
+    rows = []
+    game = game_path(recipe, steam_roots)
+    store = recipe.get("store", "steam")
+    game_label = "Steam game" if store == "steam" else "Heroic/GOG game"
+    missing = "not found in any Steam library" if store == "steam" else "not found in Heroic's installed GOG games"
+    rows.append({"name": game_label, "ok": bool(game),
+                 "detail": str(game) if game else missing})
+    req = recipe.get("requirements", {})
+    if req.get("proton_prefix"):
+        if recipe.get("store", "steam") != "steam":
+            rows.append({"name": "Proton prefix", "ok": False,
+                         "detail": "store-specific handler must validate this prefix"})
+        elif game:
+            pfx = game.parents[1] / "compatdata" / str(recipe["steam_appid"]) / "pfx"
+            rows.append({"name": "Proton prefix", "ok": pfx.is_dir(),
+                         "detail": str(pfx) if pfx.is_dir() else "missing; launch the game once with Proton"})
+        else:
+            rows.append({"name": "Proton prefix", "ok": False, "detail": "game not found"})
+    xr = req.get("openxr")
+    if xr:
+        path, lib = runtime.active_runtime()
+        if xr == "wivrn":
+            ok = runtime.is_wivrn()
+            detail = f"WiVRn active ({lib or path or 'runtime path unavailable'})" if ok else "WiVRn is not the active OpenXR runtime"
+        else:
+            ok = bool(path)
+            detail = f"{lib or path}" if ok else "no active OpenXR runtime found"
+        rows.append({"name": "OpenXR", "ok": ok, "detail": detail})
+    rep = verify(recipe)
+    if rep:
+        rows.append({"name": "Required mods", "ok": rep["ready"], "required": True,
+                     "detail": f"{rep['ok']}/{rep['total']} components OK"})
+    rows.extend(get_handler(recipe).preflight_rows(recipe, game))
+    for r in rows:
+        r.setdefault("required", True)
+    return {"ready": all(r["ok"] or not r["required"] for r in rows), "rows": rows}
+
+
+def preflight_text(report: dict) -> str:
+    lines = []
+    for r in report["rows"]:
+        tag = "[ok] " if r["ok"] else ("[!!] " if r.get("required", True) else "[--] ")
+        lines.append(tag + f"{r['name']}: {r['detail']}")
+    lines.append("READY" if report["ready"] else "NOT READY")
+    return "\n".join(lines)
+
+
 def install_many(recipe: dict, mod_files: list[Path], steam_roots=None) -> list[Path]:
     """Install one or several downloaded files (several only for 'gameroot' games)."""
+    if not get_handler(recipe).install_supported(recipe):
+        raise RuntimeError(f"{recipe['name']} is a guided workflow; it has no direct mod-file install step.")
     if recipe.get("method") == "gameroot":
         return _install_gameroot(recipe, mod_files, steam_roots)
     if len(mod_files) != 1:
@@ -473,6 +591,58 @@ def launch_options(recipe: dict) -> str:
     guard = f'"{HUB_DIR / "vrhub-check"}" {recipe["id"]}' if recipe.get("components") else ""
     return " ".join(x for x in (env, guard, "%command%", args) if x)
 
+
+
+def game_launcher_label(recipe: dict) -> str | None:
+    """Return the game-specific tool launcher label, if the handler provides one."""
+    return get_handler(recipe).launcher_label(recipe)
+
+
+def game_play_label(recipe: dict) -> str | None:
+    """Return the handler-owned modded-game launch label, if available."""
+    return get_handler(recipe).play_label(recipe)
+
+
+def game_live_status(recipe: dict, steam_roots=None) -> dict:
+    """Return lightweight live process status for handler-owned launch workflows."""
+    game = game_path(recipe, steam_roots)
+    return get_handler(recipe).live_status(recipe, game)
+
+
+def game_bridge_log(recipe: dict) -> Path | None:
+    """Return a handler-owned bridge/debug log path when one exists."""
+    return get_handler(recipe).bridge_log(recipe)
+
+
+def game_bridge_log_label(recipe: dict) -> str:
+    """Return the user-facing label for a handler-owned debug log."""
+    return get_handler(recipe).bridge_log_label(recipe)
+
+
+def launch_game_tool(recipe: dict, steam_roots=None) -> subprocess.Popen:
+    """Start a handler-owned launcher such as MGO/Mod Organizer."""
+    game = game_path(recipe, steam_roots)
+    rep = preflight(recipe, steam_roots)
+    bad = [r for r in rep["rows"] if r.get("required", True) and not r["ok"]]
+    if bad:
+        detail = "; ".join(f"{r['name']}: {r['detail']}" for r in bad)
+        raise RuntimeError(f"Preflight is not ready: {detail}")
+    proc = get_handler(recipe).launch(recipe, game)
+    _log("launch_game_tool", recipe=recipe["id"], pid=proc.pid)
+    return proc
+
+
+def launch_game_play(recipe: dict, steam_roots=None) -> subprocess.Popen:
+    """Launch the handler-configured game path through its owning storefront/tool."""
+    game = game_path(recipe, steam_roots)
+    rep = preflight(recipe, steam_roots)
+    bad = [r for r in rep["rows"] if r.get("required", True) and not r["ok"]]
+    if bad:
+        detail = "; ".join(f"{r['name']}: {r['detail']}" for r in bad)
+        raise RuntimeError(f"Preflight is not ready: {detail}")
+    proc = get_handler(recipe).launch_play(recipe, game)
+    _log("launch_game_play", recipe=recipe["id"], pid=proc.pid)
+    return proc
 
 def component_label(comp: dict, names: dict | None = None) -> str:
     names = _load_state().get("_names", {}) if names is None else names
@@ -569,7 +739,7 @@ def game_rows(steam_roots=None) -> list[dict]:
     for r in load_recipes().values():
         rep = verify(r)
         rows.append({"recipe": r,
-                     "game_found": find_game(r["steam_appid"], steam_roots) is not None,
+                     "game_found": game_path(r, steam_roots) is not None,
                      "mod_installed": is_installed(r["id"]),
                      "components": (rep["ok"], rep["total"], rep["ready"]) if rep else None,
                      "has_profile": "profile" in r,
@@ -596,13 +766,19 @@ def mark_current(recipe: dict) -> list[str]:
 
 def diagnostics(recipe: dict, steam_roots=None) -> str:
     """Human-readable local diagnostic summary; safe to paste into a bug report."""
-    game = find_game(recipe["steam_appid"], steam_roots)
+    game = game_path(recipe, steam_roots)
     rep = verify(recipe)
+    store = recipe.get("store", "steam")
+    store_line = (f"Steam app: {recipe['steam_appid']}" if store == "steam"
+                  else f"Heroic/GOG app: {recipe['heroic_appid']}")
     lines = [f"Game: {recipe['name']}", f"Recipe: {recipe['id']}",
-             f"Steam app: {recipe['steam_appid']}", f"Game path: {game or 'not found'}",
+             store_line, f"Game path: {game or 'not found'}",
              f"State file: {state_file()}", f"Log file: {log_file()}"]
     if rep:
         lines += ["", verify_text(rep)]
+    handler_lines = get_handler(recipe).diagnostics(recipe, game)
+    if handler_lines:
+        lines += ["", "Handler diagnostics:", *handler_lines]
     return "\n".join(lines)
 
 
@@ -613,9 +789,12 @@ SECTIONS = (("One-time setup", "setup", True), ("Each time you play", "play", Tr
 def details_text(recipe: dict) -> str:
     launch = recipe.get("launch", {})
     lines = [recipe["name"], "", f"Mod page: {recipe['mod_page']}"]
+    for link in recipe.get("links", []):
+        lines.append(f"{link['label']}: {link['url']}")
     if recipe.get("profile", {}).get("page"):
         lines.append(f"Profile:  {recipe['profile']['page']}")
-    lines += ["", "Steam launch options:", f"  {launch_options(recipe)}"]
+    if recipe.get("store", "steam") == "steam":
+        lines += ["", "Steam launch options:", f"  {launch_options(recipe)}"]
     if launch.get("optional_args"):
         lines.append(f"  (optional: add {launch['optional_args']})")
     if recipe.get("components"):
@@ -623,6 +802,9 @@ def details_text(recipe: dict) -> str:
         for n, c in enumerate(recipe["components"], 1):
             lines.append(f"  {n}. {component_label(c)} (#{c['nexus_mod']})"
                          + ("  - installed last" if c.get("phase", 1) != 1 else ""))
+    notes = get_handler(recipe).detail_notes(recipe)
+    if notes:
+        lines += ["", "Game-specific notes:"] + [f"  - {x}" for x in notes]
     for title, key, numbered in SECTIONS:
         items = recipe.get(key)
         if items:
@@ -635,8 +817,16 @@ def details_html(recipe: dict, update_items: list[dict] | None = None, report: d
     """Readable rich-text version for the GUI (headings, numbered steps, code box)."""
     e = html.escape
     launch = recipe.get("launch", {})
-    out = [f"<h2>{e(recipe['name'])}</h2>"]
+    out = [
+        "<style>"
+        "body{color:#F5F2DE;} h2{color:#FFD21A;} h3{color:#F5F2DE;} "
+        "a{color:#23B7FF;} code,pre{color:#FFD21A;background:#0D1115;} "
+        "table{border-color:#2A3139;}"
+        "</style>",
+        f"<h2>{e(recipe['name'])}</h2>"
+    ]
     links = [f'<a href="{e(recipe["mod_page"])}">Mod page</a>']
+    links += [f'<a href="{e(x["url"])}">{e(x["label"])}</a>' for x in recipe.get("links", [])]
     if recipe.get("profile", {}).get("page"):
         links.append(f'<a href="{e(recipe["profile"]["page"])}">Profile page</a>')
     out.append("<p>" + " &nbsp;|&nbsp; ".join(links) + "</p>")
@@ -646,16 +836,20 @@ def details_html(recipe: dict, update_items: list[dict] | None = None, report: d
             out.append(f"<li><b>{e(i['name'])}:</b> {e(i['detail'])} "
                        f'(<a href="{e(i["page"])}">open</a>)</li>')
         out.append("</ul>")
-    out.append("<h3>Steam launch options</h3>")
-    out.append('<table border="1" cellspacing="0" cellpadding="6"><tr><td><pre>'
-               f"{e(launch_options(recipe))}</pre></td></tr></table>")
-    if launch.get("optional_args"):
-        out.append(f"<p><i>Optional: also add <code>{e(launch['optional_args'])}</code></i></p>")
+    if recipe.get("store", "steam") == "steam":
+        out.append("<h3>Steam launch options</h3>")
+        out.append('<table border="1" cellspacing="0" cellpadding="6"><tr><td><pre>'
+                   f"{e(launch_options(recipe))}</pre></td></tr></table>")
+        if launch.get("optional_args"):
+            out.append(f"<p><i>Optional: also add <code>{e(launch['optional_args'])}</code></i></p>")
+    notes = get_handler(recipe).detail_notes(recipe)
+    if notes:
+        out.append("<h3>Game-specific notes</h3><ul>" + "".join(f"<li>{e(x)}</li>" for x in notes) + "</ul>")
     if report:
-        colour = {"ok": "#2e9e4f", "missing": "#c0392b", "damaged": "#d68910"}
+        colour = {"ok": "#4FE39A", "missing": "#FF5B50", "damaged": "#FFD21A"}
         out.append("<h3>Mods checklist</h3>")
-        verdict = ("<b style='color:#2e9e4f'>Ready to launch.</b>" if report["ready"] else
-                   f"<b style='color:#c0392b'>Not ready: {len(report['required_bad'])} required mod(s) need attention.</b>")
+        verdict = ("<b style='color:#4FE39A'>Ready to launch.</b>" if report["ready"] else
+                   f"<b style='color:#FF5B50'>Not ready: {len(report['required_bad'])} required mod(s) need attention.</b>")
         if report["ready"] and report["later_bad"]:
             verdict += " The VR port isn't installed yet, so the game would start without VR."
         out.append(f"<p>{verdict} ({report['ok']} of {report['total']} installed)</p>")

@@ -1,0 +1,49 @@
+id = "skyrim-vr-mgo"
+name = "Skyrim VR (Mad God's Overhaul / WiVRn)"
+steam_appid = 611670
+mod_page = "https://www.nexusmods.com/skyrimspecialedition/mods/107780"
+method = "guide"
+handler = "skyrim-vr"
+manual_download = true
+
+[[links]]
+label = "Jackify"
+url = "https://github.com/Omni-guides/Jackify"
+
+[[links]]
+label = "MGO Nexus"
+url = "https://www.nexusmods.com/skyrimspecialedition/mods/107780"
+
+setup = [
+  "Install and launch a clean Skyrim VR through Steam/Proton at least once before installing the modlist.",
+  "Install Mad God's Overhaul with Jackify/Wabbajack. NAnnersVRhub does not copy or redistribute the MGO modlist.",
+  "For the Linux WiVRn path, use MGO's bundled 'Open Composite XR - Incompatible with VR Performance Kit' mod.",
+  "Keep both VR Performance Kit variants disabled when using the bundled OpenComposite path.",
+  "NAnnersVRhub auto-detects common MGO install folders; set NANNERS_MGO_DIR only if you want to override the detected location.",
+]
+
+play = [
+  "Start WiVRn and connect the Quest before launching Skyrim VR.",
+  "Leave WiVRn's OpenVR compatibility layer on xrizer for this workflow.",
+  "Launch Skyrim VR through the MGO Mod Organizer/SKSEVR entry configured by your modlist rather than launching SkyrimVR.exe directly.",
+]
+
+good_to_know = [
+  "This first Skyrim VR integration is intentionally a guided/preflight workflow. Jackify/Wabbajack remains the modlist installer and updater.",
+  "Do not substitute a system-wide /opt/opencomposite installation for MGO's bundled OpenComposite in this workflow.",
+  "PC and Quest WiVRn versions should match; re-test the stack after a WiVRn or xrizer update.",
+]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
+
+[handler_config]
+mgo_dir_env = "NANNERS_MGO_DIR"
+mgo_globs = ["SkyrimVR*MGO*", "*Skyrim*MGO*", "MGO*", "Games/SkyrimVR*MGO*", "Games/*MGO*", "Applications/SkyrimVR*MGO*", "Applications/*MGO*"]
+opencomposite_mod = "Open Composite XR - Incompatible with VR Performance Kit"
+conflicting_mod_dirs = ["VR Performance Kit", "VR Performance Kit - FSR2"]
+
+[launch]
+args = ""
+env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }

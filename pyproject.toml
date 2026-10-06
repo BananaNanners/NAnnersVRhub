@@ -1,6 +1,6 @@
 [project]
 name = "nannersvrhub"
-version = "0.3.0"
+version = "0.4.0"
 description = "NAnnersVRhub: Linux VR mod hub (CachyOS / WiVRn / Quest 3)"
 requires-python = ">=3.11"
 dependencies = []
@@ -15,3 +15,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["vrhub"]
+
+[tool.setuptools.package-data]
+vrhub = ["assets/*.png"]

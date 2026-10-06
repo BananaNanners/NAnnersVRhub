@@ -28,6 +28,10 @@ def main(argv=None) -> int:
     v.add_argument("--names", action="store_true", help="look up the real mod names on Nexus first (needs an API key)")
     sub.add_parser("info", help="show the setup checklist for a game").add_argument("game")
     sub.add_parser("diagnose", help="print a paste-friendly local diagnostic summary").add_argument("game")
+    sub.add_parser("preflight", help="check game/runtime/mod readiness without changing anything").add_argument("game")
+    ins = sub.add_parser("inspect", help="inspect a game-root mod archive without installing it")
+    ins.add_argument("game")
+    ins.add_argument("--file", type=Path, required=True)
     i = sub.add_parser("install", help="install a mod file (.pak/.zip, or the UEVR zip)")
     i.add_argument("game")
     i.add_argument("--file", type=Path, required=True, nargs="+",
@@ -39,6 +43,8 @@ def main(argv=None) -> int:
     sub.add_parser("uninstall-profile", help="remove the profile (restores the backup)").add_argument("game")
     sub.add_parser("mark-current", help="record that your install is the latest release").add_argument("game")
     sub.add_parser("launch-injector", help="run the UEVR injector for a game").add_argument("game")
+    sub.add_parser("launch-tool", help="launch a game-specific tool such as MO2").add_argument("game")
+    sub.add_parser("launch-game", help="launch the handler-configured modded game path").add_argument("game")
     a = ap.parse_args(argv)
     recipes = hub.load_recipes()
 
@@ -51,7 +57,7 @@ def main(argv=None) -> int:
             path, lib = runtime.active_runtime()
             print(f"OpenXR runtime: {'WiVRn OK' if runtime.is_wivrn() else 'NOT WiVRn'} ({lib or 'none found'})")
             for r in recipes.values():
-                g = find_game(r["steam_appid"], _roots())
+                g = hub.game_path(r, _roots())
                 mod = "mod installed" if hub.is_installed(r["id"]) else "mod not installed"
                 prof = ""
                 if "profile" in r:
@@ -94,6 +100,12 @@ def main(argv=None) -> int:
             print(hub.details_text(r))
         elif a.cmd == "diagnose":
             print(hub.diagnostics(r, _roots()))
+        elif a.cmd == "preflight":
+            rep = hub.preflight(r, _roots())
+            print(hub.preflight_text(rep))
+            return 0 if rep["ready"] else 1
+        elif a.cmd == "inspect":
+            print(hub.inspect_text(hub.inspect_archive(r, a.file)))
         elif a.cmd == "install":
             done = hub.install_many(r, a.file, _roots())
             if len(done) > 5:
@@ -117,6 +129,12 @@ def main(argv=None) -> int:
         elif a.cmd == "launch-injector":
             hub.launch_injector(r, _roots())
             print("Injector started. Pick the game process, tick OpenXR, Inject.")
+        elif a.cmd == "launch-tool":
+            hub.launch_game_tool(r, _roots())
+            print(f"{hub.game_launcher_label(r) or 'Tool'} request sent through Steam.")
+        elif a.cmd == "launch-game":
+            hub.launch_game_play(r, _roots())
+            print(f"{hub.game_play_label(r) or 'Game'} request sent through Steam/MO2.")
         elif a.cmd == "uninstall":
             for f in hub.uninstall(a.game):
                 print(f"Removed {f}")

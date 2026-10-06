@@ -39,3 +39,7 @@ name = "Ready or Not VRO (Nexus)"
 nexus_game = "readyornot"
 nexus_mod = 6914
 tracks = ["ready-or-not"]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
