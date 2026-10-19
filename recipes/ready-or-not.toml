@@ -43,3 +43,37 @@ tracks = ["ready-or-not"]
 [requirements]
 openxr = "wivrn"
 proton_prefix = true
+
+[compatibility]
+runtime = "WiVRn"
+validation = "user-reported"
+proton = "Reuse the game's existing Steam-selected Proton build and prefix. The October 17 report records proton-cachyos-slr; its exact build version was not captured."
+adapter = "VRO mod packages in ReadyOrNot/Content/Paks; the selected host runtime and installed packages do not establish current VR rendering."
+launch = "Steam launch dialog -> DirectX 11 flat gameplay -> load a mission -> press U for VR; Home exits VR, per the existing recipe."
+requirements = [
+  "Install the VRO package files in the current Steam game directory.",
+  "Review -usehmd -VRTweaks -VRMappings and runtime import in the game's actual Steam launch options.",
+  "Use the DirectX 11 launch choice or the recipe's -d3d11 fallback; review aim assist settings in game.",
+  "Connect through WiVRn before launch and test VR after a mission loads.",
+]
+manual_checks = [
+  "Review DirectX 11 selection, VRO launch arguments, runtime import and aim assist settings; Steam options and in-game settings are not scanned.",
+  "After loading a mission, verify the U/Home VR transitions, actual headset rendering and controller behavior.",
+]
+notes = [
+  "The report validates recorded VRO package files, not arbitrary .pak files found in the game folder.",
+  "The October 17 user-reported live test succeeded; this dated reference does not automatically validate another session or setup.",
+]
+
+[compatibility.checks]
+recorded_proton = true
+tracked_install = true
+
+[compatibility.reference]
+tested_on = "2026-10-17"
+source = "User-reported success after the Ready or Not dev4-fix1 live-test instructions and compatibility report."
+system = "CachyOS; WiVRn; Steam/Proton."
+headset = "Meta Quest 3 (established project setup)"
+modlist = "VRO mod; report found its one recorded package file in the current game's Paks folder."
+proton = "proton-cachyos-slr (recorded prefix path; exact build version not captured)"
+result = "User reported success after the requested test covering mission VR entry with U, head tracking/controller inputs and exit with Home. This is user-reported evidence, not automatic gameplay telemetry."

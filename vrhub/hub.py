@@ -474,7 +474,7 @@ def preflight(recipe: dict, steam_roots=None) -> dict:
             ok = runtime.is_wivrn()
             detail = f"WiVRn active ({lib or path or 'runtime path unavailable'})" if ok else "WiVRn is not the active OpenXR runtime"
         else:
-            ok = bool(path)
+            ok = bool(path and lib)
             detail = f"{lib or path}" if ok else "no active OpenXR runtime found"
         rows.append({"name": "OpenXR", "ok": ok, "detail": detail})
     rep = verify(recipe)
@@ -779,6 +779,9 @@ def diagnostics(recipe: dict, steam_roots=None) -> str:
     handler_lines = get_handler(recipe).diagnostics(recipe, game)
     if handler_lines:
         lines += ["", "Handler diagnostics:", *handler_lines]
+    if "compatibility" in recipe:
+        from . import compatibility
+        lines += ["", compatibility.report_text(compatibility.report(recipe, steam_roots))]
     return "\n".join(lines)
 
 

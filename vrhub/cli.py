@@ -1,10 +1,11 @@
 import argparse
+import json
 import os
 import sys
 import zipfile
 from pathlib import Path
 
-from . import hub, runtime, updates
+from . import compatibility, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
 from .steam import find_game
 
 
@@ -17,6 +18,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="nannersvrhub", description="NAnnersVRhub: Linux VR mod hub (WiVRn / Quest)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status", help="check the OpenXR runtime and list games")
+    s = sub.add_parser("scan", help="read-only host VR setup scan (hardware remains unverified)")
+    s.add_argument("--json", action="store_true", help="print the structured report")
     sub.add_parser("gui", help="open the Qt window")
     sub.add_parser("updates", help="check for newer releases")
     k = sub.add_parser("nexus-key", help="save or clear your Nexus API key (for automatic Nexus update checks)")
@@ -29,6 +32,30 @@ def main(argv=None) -> int:
     sub.add_parser("info", help="show the setup checklist for a game").add_argument("game")
     sub.add_parser("diagnose", help="print a paste-friendly local diagnostic summary").add_argument("game")
     sub.add_parser("preflight", help="check game/runtime/mod readiness without changing anything").add_argument("game")
+    c = sub.add_parser("compatibility", help="show dated compatibility reference and current read-only evidence")
+    c.add_argument("game")
+    c.add_argument("--json", action="store_true", help="print the structured compatibility report")
+    record_test = sub.add_parser("record-test", help="save an explicit local gameplay test report")
+    record_test.add_argument("game")
+    record_test.add_argument("--result", required=True, choices=list(live_tests.OUTCOMES))
+    record_test.add_argument("--notes", default="", help="what worked, failed, and any workaround (max 4000 characters)")
+    for key in live_tests.CHECKS:
+        record_test.add_argument("--" + key.replace("_", "-"), choices=list(live_tests.STATES), default="not-tested")
+    record_test.add_argument("--json", action="store_true", help="print the saved record as JSON")
+    test_history = sub.add_parser("test-history", help="read this game's local gameplay test history")
+    test_history.add_argument("game")
+    test_history.add_argument("--json", action="store_true")
+    logs = sub.add_parser("logs", help="inspect bounded game-log tails without changing files or readiness")
+    logs.add_argument("game")
+    logs.add_argument("--file", type=Path, nargs="+", help="inspect these 1–4 logs instead of the expected automatic path")
+    logs.add_argument("--json", action="store_true")
+    support = sub.add_parser("support-report", help="collect a fresh combined support report for one game")
+    support.add_argument("game")
+    support.add_argument("--file", type=Path, nargs="+", help="explicit log files instead of the expected automatic path")
+    support.add_argument("--json", action="store_true")
+    support.add_argument("--output", type=Path, help="also save to a new file (existing files are preserved)")
+    support.add_argument("--no-excerpts", action="store_true", help="omit matching log excerpts")
+    support.add_argument("--include-home-path", action="store_true", help="keep this Linux home path instead of replacing it with ~")
     ins = sub.add_parser("inspect", help="inspect a game-root mod archive without installing it")
     ins.add_argument("game")
     ins.add_argument("--file", type=Path, required=True)
@@ -46,9 +73,12 @@ def main(argv=None) -> int:
     sub.add_parser("launch-tool", help="launch a game-specific tool such as MO2").add_argument("game")
     sub.add_parser("launch-game", help="launch the handler-configured modded game path").add_argument("game")
     a = ap.parse_args(argv)
-    recipes = hub.load_recipes()
-
     try:
+        if a.cmd == "scan":
+            report = system_scan.scan()
+            print(json.dumps(report, indent=2) if a.json else system_scan.report_text(report))
+            return 0 if report["status"] == "HOST CHECKS PASSED" else 1
+        recipes = hub.load_recipes()
         if a.cmd == "gui":
             from .gui import main as gui_main
             return gui_main()
@@ -86,6 +116,36 @@ def main(argv=None) -> int:
         if a.game not in recipes:
             raise RuntimeError(f"Unknown game '{a.game}'. Known: {', '.join(recipes)}")
         r = recipes[a.game]
+        if a.cmd == "support-report":
+            snapshot = support_report.collect(r, _roots(), log_files=a.file)
+            view = support_report.export_view(snapshot, include_excerpts=not a.no_excerpts,
+                                              replace_home=not a.include_home_path)
+            if a.output:
+                support_report.save(a.output, view, json_format=a.json)
+            print(support_report.serialize(view, json_format=a.json), end="")
+            return 0 if snapshot["collection_status"] == "COMPLETE" else 1
+        if a.cmd == "logs":
+            rep = log_diagnostics.report(r, _roots(), files=a.file)
+            print(json.dumps(rep, indent=2) if a.json else log_diagnostics.report_text(rep))
+            # This is command/read availability, never a gameplay pass/fail code.
+            return 0 if any(item["status"] in {"READ", "EMPTY"} for item in rep["logs"]) else 1
+        if a.cmd == "compatibility":
+            rep = compatibility.report(r, _roots())
+            print(json.dumps(rep, indent=2) if a.json else compatibility.report_text(rep))
+            return 0 if rep["status"] in {"LOCAL CHECKS PASSED", "REVIEW REQUIRED"} else 1
+        if a.cmd == "record-test":
+            checks = {key: getattr(a, key) for key in live_tests.CHECKS}
+            # Validate before scanning, and never write install bookkeeping.
+            live_tests.validate_result(a.result, a.notes, checks)
+            report = compatibility.report(r, _roots())
+            entry = live_tests.record(r, a.result, a.notes, checks, report)
+            print(json.dumps(entry, indent=2) if a.json else live_tests.record_text(entry))
+            return 0
+        if a.cmd == "test-history":
+            entries = live_tests.history(r["id"])
+            print(json.dumps({"schema_version": 1, "recipe_id": r["id"], "records": entries}, indent=2)
+                  if a.json else live_tests.history_text(r, entries))
+            return 0
         if a.cmd == "verify":
             if not r.get("components"):
                 raise RuntimeError(f"{r['name']} has no component checklist.")

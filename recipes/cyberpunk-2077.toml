@@ -23,7 +23,7 @@ play = [
 ]
 
 good_to_know = [
-  "Experimental community mod (v0.1.7), tested by its author on Windows with a PICO 4. Linux/Proton support isn't documented, though its Nexus changelog includes a fix for something that only broke under Proton. WiVRn on CachyOS is untested.",
+  "Experimental community mod (v0.1.7), tested by its author on Windows with a PICO 4. Linux/Proton support isn't documented, though its Nexus changelog includes a fix for something that only broke under Proton. A user-reported CachyOS/WiVRn immersive test succeeded with the documented HUD-panel workaround; full stability remains unverified.",
   "The launch options above are the usual Proton setup (version DLL override + OpenXR runtime visibility) but are unverified for this mod.",
   "Remove any other VR injector first (for example R.E.A.L. VR's dxgi.dll in bin/x64). Two VR mods on the same engine hooks crash the game.",
   "If it crashes: check dependency versions (Codeware must be 1.20+) and read bin/x64/cyberpunkvrport.log and red4ext/logs.",
@@ -108,3 +108,44 @@ tracks = ["cyberpunk-2077"]
 [requirements]
 openxr = "wivrn"
 proton_prefix = true
+
+[compatibility]
+runtime = "WiVRn"
+validation = "user-reported-workaround"
+proton = "Keep the game's existing Steam-selected Proton build. The October 17 report records proton-cachyos-slr; its exact build version was not captured."
+adapter = "CyberpunkVR_Stereo native plugin through the selected OpenXR runtime; file presence does not prove the plugin loads."
+launch = "Steam launch dialog -> Cyberpunk 2077 with its mod dependencies and CyberpunkVR Port."
+workarounds = [
+  "In loaded gameplay, keep F10 -> General -> VR menu quad OFF.",
+  "Keep F10 -> HUD -> Enable HUD panel OFF.",
+  "Keep F10 -> HUD -> World-space interactions / dialogs OFF.",
+  "Close F10 completely before evaluating immersion; the settings overlay also adds panels. These HUD features were disabled in the successful test.",
+]
+requirements = [
+  "Connect through WiVRn before launch.",
+  "Install the recipe's prerequisite components and the phase-2 VR port; base-game readiness alone does not establish a VR installation.",
+  "Review the version DLL override and PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1 in Steam's actual launch options.",
+]
+manual_checks = [
+  "Review version=n,b DLL override and runtime import in the game's Steam settings; the Hub environment is not evidence of those settings.",
+  "Check the current game/mod dependency versions and loader logs, then verify actual VR rendering and controller behavior in gameplay.",
+]
+notes = [
+  "Experimental workflow with a user-reported immersive-rendering workaround. Stereo depth, sustained stability and restoring the disabled HUD features have not been separately validated.",
+  "The log reported xrEndFrame res=-39 (XR_ERROR_POSE_INVALID). The panel-dependent failure suggests a mixed-layer submission problem, but the precise cause in the installed build is not confirmed.",
+  "Existing recipe guidance supplies setup details; this profile does not download mods, change launch options or replace Proton.",
+]
+
+[compatibility.checks]
+recorded_proton = true
+all_components = true
+game_files = ["red4ext/plugins/CyberpunkVR_Stereo/CyberpunkVR_Stereo.dll"]
+
+[compatibility.reference]
+tested_on = "2026-10-17"
+source = "User-reported immersive view after the panel-disabling test at 23:59 America/Los_Angeles; earlier compatibility report and xrEndFrame error output."
+system = "CachyOS; WiVRn; Steam/Proton."
+headset = "Meta Quest 3 (established project setup)"
+modlist = "CyberpunkVR Port 0.1.7 project workflow; report found all 15 components and 257 recorded VR-port files."
+proton = "proton-cachyos-slr (recorded prefix path; exact build version not captured)"
+result = "Initially a floating screen; disabling only VR menu quad produced passthrough and xrEndFrame res=-39. With the HUD panel and world-space interactions/dialogs also disabled and F10 closed, the user confirmed immersion. Full stereo-depth validation, extended gameplay and HUD restoration remain untested."

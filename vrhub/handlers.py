@@ -11,6 +11,7 @@ import configparser
 import os
 import re
 import shutil
+import shlex
 import struct
 import subprocess
 import sys
@@ -23,6 +24,9 @@ class GameHandler:
     name = "generic"
 
     def preflight_rows(self, recipe: dict, game: Path | None) -> list[dict]:
+        return []
+
+    def compatibility_rows(self, recipe: dict, game: Path | None) -> list[dict]:
         return []
 
     def detail_notes(self, recipe: dict) -> list[str]:
@@ -312,6 +316,7 @@ class SkyrimVRHandler(GameHandler):
                         "appname": row.get("AppName", "MO2"),
                         "exe": exe,
                         "vdf": str(real),
+                        "launch_options": row.get("LaunchOptions", ""),
                     }
         return None
 
@@ -487,6 +492,138 @@ class SkyrimVRHandler(GameHandler):
             lines.append("MO2 Skyrim executable: SKSEVR/SKSE entry not detected")
         return lines
 
+    @staticmethod
+    def _is_opencomposite_mod(recipe: dict, name: str) -> bool:
+        """Match named adapter variants; alternatives may carry version tokens."""
+        cfg = recipe.get("handler_config", {})
+        primary = cfg.get("opencomposite_mod", "Open Composite XR - Incompatible with VR Performance Kit")
+        if name == primary:
+            return True
+        for base in cfg.get("opencomposite_alternatives", []):
+            if name == base or re.fullmatch(re.escape(base) + r"(?: [0-9][0-9A-Za-z.+_-]*)+", name):
+                return True
+        return False
+
+    def _opencomposite_dirs(self, recipe: dict, mgo: Path) -> list[Path]:
+        try:
+            return sorted((p for p in (mgo / "mods").iterdir()
+                           if self._is_opencomposite_mod(recipe, p.name) and p.is_dir()),
+                          key=lambda p: p.name)
+        except OSError:
+            return []
+
+    def _profile_mods(self, mgo: Path | None) -> tuple[dict | None, Path | None, str]:
+        """Read enabled mods using the same rules for both report views."""
+        state = self._mo2_state(mgo) if mgo and mgo.is_dir() else {}
+        profile = state.get("profile")
+        modlist = None
+        reason = "MO2 active profile is not available."
+        if mgo and profile and Path(profile).name == profile and profile not in {".", ".."}:
+            modlist = mgo / "profiles" / profile / "modlist.txt"
+            ini = state.get("ini")
+            if ini:
+                cp = configparser.ConfigParser(interpolation=None, strict=False)
+                try:
+                    cp.read(ini, encoding="utf-8")
+                    # Custom profile roots need explicit resolution; never report
+                    # a default-folder modlist as evidence for a redirected root.
+                    if any(key.lower() in {"profiles_directory", "profilesdirectory", "base_directory"}
+                           and value.strip() for section in cp.sections() for key, value in cp.items(section)):
+                        modlist = None
+                        reason = "Custom MO2 base/profile directory: enabled mod state is unverified; review it in MO2."
+                except (OSError, configparser.Error, UnicodeError):
+                    modlist = None
+                    reason = "MO2 profile directory settings could not be read."
+        enabled = None
+        if modlist:
+            try:
+                entries = {}
+                for line in modlist.read_text(encoding="utf-8-sig").splitlines():
+                    line = line.strip()
+                    if line.startswith(("+", "-")):
+                        name = line[1:].strip()
+                        if name in entries:
+                            raise ValueError("duplicate mod entries")
+                        entries[name] = line[0] == "+"
+                enabled = entries
+            except (OSError, UnicodeError, ValueError):
+                reason = f"Cannot read an unambiguous active-profile modlist: {modlist}. Check enabled mods in MO2."
+        return enabled, modlist, reason
+
+    def compatibility_rows(self, recipe: dict, game: Path | None) -> list[dict]:
+        rows = []
+        def add(name, status, detail):
+            rows.append({"name": name, "status": status, "detail": detail})
+
+        mgo = self._mgo_dir(recipe)
+        shortcut = self._steam_shortcut(recipe, mgo) if mgo and mgo.is_dir() else None
+        compat = self._shortcut_compat(shortcut) if shortcut else None
+        if compat:
+            _, prefix, proton = compat
+            add("MO2 shortcut prefix", "ok", str(prefix / "pfx"))
+            reference = recipe.get("compatibility", {}).get("reference", {}).get("proton", "")
+            version = proton.parent.name
+            same = reference == version or reference.startswith(version + " (")
+            add("MO2 shortcut Proton", "ok" if same or not reference else "warning",
+                f"{proton}; recorded by prefix config_info, not a running-process check. " +
+                ("Matches dated reference." if same else
+                 "Differs from the dated reference; retest this build before treating it as validated." if reference else
+                 "No dated Proton reference recorded."))
+        else:
+            add("MO2 shortcut prefix/Proton", "error",
+                "Cannot resolve the MO2 shortcut's own prefix and recorded Proton. Launch MO2 once through its Steam shortcut and retry.")
+
+        key = "PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES"
+        import_value = None
+        options = shortcut.get("launch_options", "") if shortcut else ""
+        try:
+            tokens = shlex.split(options)
+        except ValueError:
+            tokens = []
+        # Recognize only leading shell/env assignments. Do not infer environment
+        # from text buried in an echo, quoted script, or shell control expression.
+        simple = not any(char in options for char in ";|&`\n") and "$" not in options
+        if simple:
+            for token in tokens:
+                if token == "env" and import_value is None:
+                    continue
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", token):
+                    break
+                name, value = token.split("=", 1)
+                if name == key:
+                    import_value = value
+        import_ok = import_value == "1" and "%command%" in tokens
+        add("Shortcut runtime import", "ok" if import_ok else "warning",
+            f"{key}=1 recorded in MO2 shortcut launch options; Steam execution is unverified." if import_ok else
+            f"No unambiguous leading {key}=1 found in MO2 shortcut launch options. Review in Steam; the Hub environment does not prove shortcut configuration.")
+        enabled, modlist, reason = self._profile_mods(mgo)
+        cfg = recipe.get("handler_config", {})
+        if enabled is None:
+            add("Active-profile OpenComposite", "unknown", reason)
+            add("Active-profile VR Performance Kit", "unknown", reason)
+        else:
+            selected = [name for name, on in enabled.items() if on and self._is_opencomposite_mod(recipe, name)]
+            if len(selected) > 1:
+                add("Active-profile OpenComposite", "error",
+                    "Multiple recognized OpenComposite variants enabled: " + ", ".join(selected) +
+                    ". Review their MO2 priorities and select one adapter variant.")
+            elif selected:
+                name = selected[0]
+                folder = mgo / "mods" / name
+                present = folder.is_dir()
+                add("Active-profile OpenComposite", "ok" if present else "error",
+                    f"Enabled: {name} in {modlist}; folder: {folder}" +
+                    (" (present; DLL loading unverified)." if present else " (missing or inaccessible)."))
+            else:
+                disabled = [name for name in enabled if self._is_opencomposite_mod(recipe, name)]
+                add("Active-profile OpenComposite", "error",
+                    ("Recognized variants are disabled: " + ", ".join(disabled) if disabled else
+                     "No recognized OpenComposite variant listed") + f" in {modlist}.")
+            conflicts = [name for name in cfg.get("conflicting_mod_dirs", []) if enabled.get(name)]
+            add("Active-profile VR Performance Kit", "error" if conflicts else "ok",
+                "Enabled conflicts: " + ", ".join(conflicts) if conflicts else f"No configured VR Performance Kit variants enabled in {modlist}.")
+        return rows
+
     def preflight_rows(self, recipe: dict, game: Path | None) -> list[dict]:
         cfg = recipe.get("handler_config", {})
         env_name = cfg.get("mgo_dir_env", "NANNERS_MGO_DIR")
@@ -510,10 +647,11 @@ class SkyrimVRHandler(GameHandler):
         rows.append({"name": "MGO Mod Organizer", "ok": mo2.is_file(), "required": True,
                      "detail": str(mo2) if mo2.is_file() else "ModOrganizer.exe not found in MGO directory"})
 
-        wanted = cfg.get("opencomposite_mod", "Open Composite XR - Incompatible with VR Performance Kit")
-        oc = mgo / "mods" / wanted
-        rows.append({"name": "MGO OpenComposite", "ok": oc.is_dir(), "required": True,
-                     "detail": str(oc) if oc.is_dir() else f"missing bundled mod: {wanted}"})
+        adapters = self._opencomposite_dirs(recipe, mgo)
+        rows.append({"name": "MGO OpenComposite", "ok": bool(adapters), "required": True,
+                     "detail": ("Installed adapter folders: " + "; ".join(str(p) for p in adapters)
+                                + ". Enabled state is checked in Compatibility profile.") if adapters else
+                               "No recognized MGO OpenComposite variant folder found."})
 
         shortcut = self._steam_shortcut(recipe, mgo)
         rows.append({
@@ -544,9 +682,16 @@ class SkyrimVRHandler(GameHandler):
         # Presence is informational: whether a mod is enabled is profile-specific.
         perf = [mgo / "mods" / n for n in cfg.get("conflicting_mod_dirs", [])]
         present = [p.name for p in perf if p.exists()]
-        rows.append({"name": "VR Performance Kit", "ok": not present, "required": False,
-                     "detail": ("present in modlist; keep disabled in the active MO2 profile: " + ", ".join(present))
-                               if present else "no configured conflicting mod folders found"})
+        enabled, modlist, reason = self._profile_mods(mgo)
+        if enabled is not None:
+            conflicts = [name for name in cfg.get("conflicting_mod_dirs", []) if enabled.get(name)]
+            rows.append({"name": "VR Performance Kit", "ok": not conflicts, "required": False,
+                         "detail": ("Enabled conflicts: " + ", ".join(conflicts)) if conflicts else
+                                   f"No configured VR Performance Kit variants enabled in {modlist}."})
+        else:
+            rows.append({"name": "VR Performance Kit", "ok": not present, "required": False,
+                         "detail": ("Folders present; enabled state unverified: " + ", ".join(present) + ". " + reason)
+                                   if present else "No configured conflicting mod folders found; enabled state is unverified."})
         return rows
 
     def detail_notes(self, recipe: dict) -> list[str]:
