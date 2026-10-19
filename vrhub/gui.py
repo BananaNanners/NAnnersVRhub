@@ -5,14 +5,350 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QFrame, QHBoxLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QFileDialog, QFrame, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
-                               QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
+                               QComboBox, QDialog, QDialogButtonBox, QFormLayout, QListWidget, QPlainTextEdit,
+                               QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
-from . import __version__, hub, runtime, updates
+from . import __version__, compatibility, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
 from .handlers import get_handler
 from .cli import _roots
+from .display_time import age_text, filename_stamp, local_time
 from .theme import BLUE, GREEN, LOGO_PATH, MUTED, RED, STYLESHEET, TEXT, YELLOW
+
+
+class ScanWorker(QThread):
+    done = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, previous=None, parent=None):
+        super().__init__(parent)
+        self.previous = previous
+
+    def run(self):
+        try:
+            self.done.emit(system_scan.refresh_live(self.previous) if self.previous else system_scan.scan())
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class LogWorker(QThread):
+    done = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, recipe, roots, files, parent=None):
+        super().__init__(parent)
+        self.recipe, self.roots, self.files = recipe, roots, files
+
+    def run(self):
+        try:
+            self.done.emit(log_diagnostics.report(self.recipe, self.roots, self.files))
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class LogDiagnosticsDialog(QDialog):
+    def __init__(self, recipe, roots=None, parent=None):
+        super().__init__(parent)
+        self.recipe, self.roots, self.files = recipe, roots, None
+        self.worker = None
+        self.log_report = None
+        self._closing = False
+        self.setObjectName("logDiagnosticsDialog")
+        self.setWindowTitle("Game log diagnostics — " + recipe["name"])
+        self.resize(900, 700)
+        layout = QVBoxLayout(self)
+        title = QLabel(recipe["name"])
+        title.setWordWrap(True)
+        title.setStyleSheet(f"color: {YELLOW}; font-size: 16px; font-weight: 700;")
+        layout.addWidget(title)
+        intro = QLabel("Inspect recent log tails for known errors. Findings are historical evidence; they do not change compatibility checks or gameplay test history.")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        self.auto_btn = QPushButton("Scan expected log")
+        self.choose_btn = QPushButton("Choose log files…")
+        self.refresh_btn = QPushButton("Refresh")
+        self.copy_btn = QPushButton("Copy log report")
+        self.copy_btn.setEnabled(False)
+        self.auto_btn.clicked.connect(self.scan_expected)
+        self.choose_btn.clicked.connect(self.choose_files)
+        self.refresh_btn.clicked.connect(self.refresh)
+        self.copy_btn.clicked.connect(self.copy_report)
+        layout.addLayout(_row(self.auto_btn, self.choose_btn, self.refresh_btn, self.copy_btn))
+        self.summary = QLabel("Ready to inspect the expected log path.")
+        self.summary.setWordWrap(True)
+        layout.addWidget(self.summary)
+        self.details = QPlainTextEdit()
+        self.details.setReadOnly(True)
+        layout.addWidget(self.details, 1)
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        QTimer.singleShot(0, self.refresh)
+
+    def scan_expected(self):
+        self.files = None
+        self.refresh()
+
+    def choose_files(self):
+        files, _ = QFileDialog.getOpenFileNames(self, "Choose logs for " + self.recipe["name"], "", "Log/text files (*.log *.txt);;All files (*)")
+        if not files:
+            return
+        if len(files) > log_diagnostics.MAX_FILES:
+            self.summary.setText("Choose at most four log files.")
+            return
+        self.files = files
+        self.refresh()
+
+    def refresh(self):
+        if self.worker or self._closing:
+            return
+        self.log_report = None
+        self.copy_btn.setEnabled(False)
+        for button in (self.auto_btn, self.choose_btn, self.refresh_btn):
+            button.setEnabled(False)
+        self.summary.setText("Reading bounded log tails…")
+        self.details.clear()
+        self.worker = LogWorker(self.recipe, self.roots, self.files, self)
+        self.worker.done.connect(self.show_report)
+        self.worker.failed.connect(self.show_error)
+        self.worker.finished.connect(self.scan_finished)
+        self.worker.start()
+
+    def show_report(self, report):
+        self.log_report = report
+        self.summary.setText(report["status"] + " — modification times do not identify a session.")
+        self.details.setPlainText(log_diagnostics.report_text(report))
+        self.copy_btn.setEnabled(True)
+
+    def show_error(self, message):
+        self.summary.setText("Log diagnostics unavailable")
+        self.details.setPlainText(message)
+
+    def scan_finished(self):
+        worker, self.worker = self.worker, None
+        if worker:
+            worker.deleteLater()
+        for button in (self.auto_btn, self.choose_btn, self.refresh_btn):
+            button.setEnabled(True)
+        if self._closing:
+            super().reject()
+
+    def copy_report(self):
+        if self.log_report is not None:
+            QApplication.clipboard().setText(log_diagnostics.report_text(self.log_report))
+            self.summary.setText("Log report copied. Review paths and excerpts before sharing.")
+
+    def reject(self):
+        self._closing = True
+        if not self.worker:
+            super().reject()
+
+    def closeEvent(self, event):
+        self._closing = True
+        if self.worker:
+            event.ignore()
+            return
+        super().closeEvent(event)
+
+
+class SupportReportWorker(QThread):
+    done = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, recipe, roots, files, parent=None):
+        super().__init__(parent)
+        self.recipe, self.roots, self.files = recipe, roots, files
+
+    def run(self):
+        try:
+            self.done.emit(support_report.collect(self.recipe, self.roots, self.files))
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class SupportReportDialog(QDialog):
+    def __init__(self, recipe, roots=None, parent=None):
+        super().__init__(parent)
+        self.recipe, self.roots = recipe, roots
+        self.files = None
+        self.worker = None
+        self.snapshot = None
+        self.view = None
+        self._closing = False
+        self.setObjectName("supportReportDialog")
+        self.setWindowTitle("Combined support report — " + recipe["name"])
+        self.resize(980, 800)
+        layout = QVBoxLayout(self)
+        title = QLabel(recipe["name"])
+        title.setWordWrap(True)
+        title.setStyleSheet(f"color: {YELLOW}; font-size: 16px; font-weight: 700;")
+        layout.addWidget(title)
+        intro = QLabel("Preview a fresh system scan, compatibility checks, log findings and the latest local gameplay test. Review paths, notes and excerpts before sharing. Nothing is uploaded automatically.")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        self.refresh_btn = QPushButton("Collect new snapshot")
+        self.refresh_btn.setToolTip("Read the current sources again. Copy and Save keep the already captured snapshot.")
+        self.choose_btn = QPushButton("Choose log files…")
+        self.auto_btn = QPushButton("Use expected log")
+        self.refresh_btn.clicked.connect(self.refresh)
+        self.choose_btn.clicked.connect(self.choose_files)
+        self.auto_btn.clicked.connect(self.use_expected)
+        layout.addLayout(_row(self.refresh_btn, self.choose_btn, self.auto_btn))
+        options = QHBoxLayout()
+        self.home_check = QCheckBox("Replace this Linux home path with ~")
+        self.home_check.setChecked(True)
+        self.excerpts_check = QCheckBox("Include log excerpts")
+        self.excerpts_check.setChecked(True)
+        self.format_combo = QComboBox()
+        self.format_combo.addItem("Text report", False)
+        self.format_combo.addItem("JSON report", True)
+        for checkbox in (self.home_check, self.excerpts_check):
+            checkbox.toggled.connect(self.update_preview)
+            options.addWidget(checkbox)
+        options.addWidget(self.format_combo)
+        self.format_combo.currentIndexChanged.connect(self.update_preview)
+        layout.addLayout(options)
+        self.snapshot_label = QLabel("No snapshot collected yet.")
+        self.snapshot_label.setObjectName("snapshotStatus")
+        self.snapshot_label.setWordWrap(True)
+        layout.addWidget(self.snapshot_label)
+        self.export_label = QLabel("Export options will appear after collection.")
+        self.export_label.setWordWrap(True)
+        self.export_label.setStyleSheet(f"color: {YELLOW}; font-weight: 700;")
+        layout.addWidget(self.export_label)
+        self.summary = QLabel("Ready to collect a fresh report.")
+        self.summary.setWordWrap(True)
+        layout.addWidget(self.summary)
+        self.preview = QPlainTextEdit()
+        self.preview.setReadOnly(True)
+        layout.addWidget(self.preview, 1)
+        self.copy_btn = QPushButton("Copy report")
+        self.save_btn = QPushButton("Save report…")
+        close_btn = QPushButton("Close")
+        self.copy_btn.setEnabled(False)
+        self.save_btn.setEnabled(False)
+        self.copy_btn.clicked.connect(self.copy_report)
+        self.save_btn.clicked.connect(self.save_report)
+        close_btn.clicked.connect(self.reject)
+        layout.addLayout(_row(self.copy_btn, self.save_btn, close_btn))
+        self.age_timer = QTimer(self)
+        self.age_timer.setInterval(1000)
+        self.age_timer.timeout.connect(self.update_snapshot_label)
+        self.age_timer.start()
+        QTimer.singleShot(0, self.refresh)
+
+    def refresh(self):
+        if self.worker or self._closing:
+            return
+        self.snapshot = self.view = None
+        self.snapshot_label.setText("Collecting a new snapshot…")
+        self.export_label.setText("Waiting for the new snapshot.")
+        self.preview.clear()
+        self.copy_btn.setEnabled(False)
+        self.save_btn.setEnabled(False)
+        for button in (self.refresh_btn, self.choose_btn, self.auto_btn):
+            button.setEnabled(False)
+        self.summary.setText("Collecting fresh sections…")
+        self.worker = SupportReportWorker(self.recipe, self.roots, self.files, self)
+        self.worker.done.connect(self.show_report)
+        self.worker.failed.connect(self.show_error)
+        self.worker.finished.connect(self.collection_finished)
+        self.worker.start()
+
+    def show_report(self, snapshot):
+        self.snapshot = snapshot
+        self.update_preview()
+
+    def show_error(self, message):
+        self.summary.setText("Support report unavailable")
+        self.snapshot_label.setText("No snapshot available; collection failed.")
+        self.export_label.setText("Copy/Save unavailable until a snapshot is collected.")
+        self.preview.setPlainText(message)
+
+    def collection_finished(self):
+        worker, self.worker = self.worker, None
+        if worker:
+            worker.deleteLater()
+        for button in (self.refresh_btn, self.choose_btn, self.auto_btn):
+            button.setEnabled(True)
+        if self._closing:
+            super().reject()
+
+    def update_preview(self):
+        if self.snapshot is None:
+            return
+        self.view = support_report.export_view(self.snapshot, self.excerpts_check.isChecked(), self.home_check.isChecked())
+        self.preview.setPlainText(support_report.serialize(self.view, self.format_combo.currentData()))
+        self.update_snapshot_label()
+        options = self.view["export_options"]
+        self.export_label.setText(("JSON" if self.format_combo.currentData() else "TEXT") + " export · Log excerpts: " +
+                                  ("INCLUDED" if options["include_log_excerpts"] else "OMITTED") + " · Linux home path: " +
+                                  ("REPLACED WITH ~" if options["replace_linux_home_path"] else "INCLUDED"))
+        self.summary.setText("Section collection: " + self.snapshot["collection_status"] + " — availability only; each section retains its own evidence and dates.")
+        self.copy_btn.setEnabled(True)
+        self.save_btn.setEnabled(True)
+
+    def update_snapshot_label(self):
+        if self.snapshot is None:
+            return
+        stamp = self.snapshot["collection_finished_at"]
+        self.snapshot_label.setText("Snapshot collected: " + local_time(stamp) + " · " + age_text(stamp) +
+                                    "\nCopy/Save export this snapshot. Collect new snapshot reads again; closing a game does not refresh it.")
+
+    def choose_files(self):
+        files, _ = QFileDialog.getOpenFileNames(self, "Choose logs for " + self.recipe["name"], "", "Log/text files (*.log *.txt);;All files (*)")
+        if not files:
+            return
+        if len(files) > log_diagnostics.MAX_FILES:
+            self.summary.setText("Choose at most four log files.")
+            return
+        self.files = files
+        self.refresh()
+
+    def use_expected(self):
+        self.files = None
+        self.refresh()
+
+    def copy_report(self):
+        if self.view is not None:
+            QApplication.clipboard().setText(support_report.serialize(self.view, self.format_combo.currentData()))
+            self.summary.setText("The previewed report was copied. Review it before sharing.")
+
+    def save_report(self):
+        if self.view is None:
+            return
+        json_format = self.format_combo.currentData()
+        extension = ".json" if json_format else ".txt"
+        stamp = filename_stamp(self.snapshot["collection_finished_at"])
+        excerpt_suffix = "" if self.view["export_options"]["include_log_excerpts"] else "-no-excerpts"
+        default = f"NAnnersVRhub-{self.recipe['id']}-support-{stamp}{excerpt_suffix}{extension}"
+        name, _ = QFileDialog.getSaveFileName(self, "Save a new support report", default,
+                                             "JSON reports (*.json)" if json_format else "Text reports (*.txt)")
+        if not name:
+            return
+        if not name.lower().endswith(extension):
+            name += extension
+        try:
+            support_report.save(Path(name), self.view, json_format)
+        except FileExistsError:
+            QMessageBox.warning(self, "Report already exists", "Choose a new filename. Existing files are preserved.")
+        except OSError as exc:
+            QMessageBox.warning(self, "Could not save report", str(exc))
+        else:
+            self.summary.setText("The previewed report was saved to " + name)
+
+    def reject(self):
+        self._closing = True
+        if not self.worker:
+            super().reject()
+
+    def closeEvent(self, event):
+        self._closing = True
+        if self.worker:
+            event.ignore()
+            return
+        super().closeEvent(event)
 
 
 class UpdateWorker(QThread):
@@ -37,6 +373,97 @@ def _row(*buttons):
     return lay
 
 
+class RecordTestDialog(QDialog):
+    def __init__(self, recipe, roots=None, parent=None):
+        super().__init__(parent)
+        self.recipe, self.roots = recipe, roots
+        self.setObjectName("liveTestDialog")
+        self.setWindowTitle("Record live test — " + recipe["name"])
+        self.resize(640, 560)
+        layout = QVBoxLayout(self)
+        title = QLabel(recipe["name"])
+        title.setWordWrap(True)
+        title.setStyleSheet(f"color: {YELLOW}; font-size: 16px; font-weight: 700;")
+        layout.addWidget(title)
+        intro = QLabel("Record what you tested. Areas marked Not tested remain unverified. The Hub does not detect gameplay success automatically.")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        form = QFormLayout()
+        self.result_combo = QComboBox()
+        self.result_combo.addItem("Choose a result…", None)
+        for key, label in live_tests.OUTCOMES.items():
+            self.result_combo.addItem(label.title(), key)
+        form.addRow("Overall result", self.result_combo)
+        self.checks = {}
+        for key, label in live_tests.CHECKS.items():
+            combo = QComboBox()
+            for status in ("not-tested", "passed", "failed"):
+                combo.addItem(live_tests.STATES[status].title(), status)
+            self.checks[key] = combo
+            form.addRow(label, combo)
+        layout.addLayout(form)
+        layout.addWidget(QLabel("Notes — what worked, failed, or needed a workaround"))
+        self.notes = QPlainTextEdit()
+        self.notes.setPlaceholderText("Required for partial success or failure. Include limitations and any settings you changed.")
+        layout.addWidget(self.notes, 1)
+        self.error = QLabel()
+        self.error.setWordWrap(True)
+        self.error.setStyleSheet(f"color: {RED};")
+        layout.addWidget(self.error)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        self.buttons.button(QDialogButtonBox.Save).setObjectName("primaryAction")
+        self.buttons.accepted.connect(self.save)
+        self.buttons.rejected.connect(self.reject)
+        layout.addWidget(self.buttons)
+
+    def save(self):
+        checks = {key: combo.currentData() for key, combo in self.checks.items()}
+        try:
+            live_tests.validate_result(self.result_combo.currentData(), self.notes.toPlainText(), checks)
+            report = compatibility.report(self.recipe, self.roots)
+            self.saved_record = live_tests.record(self.recipe, self.result_combo.currentData(), self.notes.toPlainText(), checks, report)
+        except (RuntimeError, OSError) as exc:
+            self.error.setText(str(exc))
+            return
+        self.accept()
+
+
+class TestHistoryDialog(QDialog):
+    def __init__(self, recipe, entries, parent=None):
+        super().__init__(parent)
+        self.entries = entries
+        self.setObjectName("testHistoryDialog")
+        self.setWindowTitle("Test history — " + recipe["name"])
+        self.resize(850, 680)
+        layout = QVBoxLayout(self)
+        self.list = QListWidget()
+        for entry in entries:
+            self.list.addItem(f"{local_time(entry['recorded_at'])} — {live_tests.OUTCOMES[entry['outcome']]}")
+        self.list.setMaximumHeight(170)
+        layout.addWidget(self.list)
+        self.details = QTextBrowser()
+        layout.addWidget(self.details, 1)
+        self.copy_btn = QPushButton("Copy selected test")
+        self.copy_btn.clicked.connect(self.copy_selected)
+        self.copy_btn.setEnabled(bool(entries))
+        close = QDialogButtonBox(QDialogButtonBox.Close)
+        close.rejected.connect(self.reject)
+        layout.addLayout(_row(self.copy_btn, close))
+        self.list.currentRowChanged.connect(self.show_record)
+        if entries:
+            self.list.setCurrentRow(0)
+        else:
+            self.details.setPlainText("No local tests recorded. Bundled references are separate from your local history.")
+
+    def show_record(self, index):
+        self.details.setPlainText(live_tests.record_text(self.entries[index], include_setup=True)
+                                  if 0 <= index < len(self.entries) else "")
+
+    def copy_selected(self):
+        if 0 <= self.list.currentRow() < len(self.entries):
+            QApplication.clipboard().setText(live_tests.record_text(self.entries[self.list.currentRow()], include_setup=True))
+
+
 class HubWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -48,6 +475,9 @@ class HubWindow(QMainWindow):
         self.rows: list[dict] = []
         self.update_results: dict = {}
         self.worker: UpdateWorker | None = None
+        self.scan_worker: ScanWorker | None = None
+        self.scan_report: dict | None = None
+        self._closing = False
 
         header = QFrame()
         header.setObjectName("brandHeader")
@@ -90,6 +520,31 @@ class HubWindow(QMainWindow):
 
         self.details = QTextBrowser()
         self.details.setOpenExternalLinks(True)
+        self.compat_report = None
+        self.compat_details = QTextBrowser()
+        self.compat_refresh_btn = QPushButton("Refresh compatibility")
+        self.compat_copy_btn = QPushButton("Copy compatibility report")
+        self.record_test_btn = QPushButton("Record live test…")
+        self.test_history_btn = QPushButton("Test history…")
+        self.log_diagnostics_btn = QPushButton("Log diagnostics…")
+        self.support_report_btn = QPushButton("Create support report…")
+        self.support_report_btn.clicked.connect(self.show_support_report)
+        self.log_diagnostics_btn.clicked.connect(self.show_log_diagnostics)
+        self.record_test_btn.clicked.connect(self.record_live_test)
+        self.test_history_btn.clicked.connect(self.show_test_history)
+        self.compat_refresh_btn.clicked.connect(self.refresh_compatibility)
+        self.compat_copy_btn.clicked.connect(self.copy_compatibility)
+        compat_page = QWidget()
+        compat_layout = QVBoxLayout(compat_page)
+        compat_layout.addLayout(_row(self.compat_refresh_btn, self.compat_copy_btn))
+        compat_layout.addLayout(_row(self.record_test_btn, self.test_history_btn, self.log_diagnostics_btn))
+        compat_layout.addWidget(self.support_report_btn)
+        compat_layout.addWidget(self.compat_details)
+        self.game_details_tabs = QTabWidget()
+        self.game_details_tabs.addTab(self.details, "Setup guide")
+        self.game_details_tabs.addTab(compat_page, "Compatibility profile")
+        self.game_details_tabs.currentChanged.connect(
+            lambda index: self.refresh_compatibility() if index == 1 else None)
         self.install_btn = QPushButton("Install mod file…")
         self.uninstall_btn = QPushButton("Uninstall mod")
         self.profile_btn = QPushButton("Install profile…")
@@ -138,7 +593,47 @@ class HubWindow(QMainWindow):
         main = QHBoxLayout()
         main.setSpacing(10)
         main.addLayout(left, 5)
-        main.addWidget(self.details, 6)
+        main.addWidget(self.game_details_tabs, 6)
+        games_page = QWidget()
+        games_page.setObjectName("gamesPage")
+        games_page.setLayout(main)
+        dashboard = QWidget()
+        dashboard.setObjectName("systemDashboard")
+        dashboard_layout = QVBoxLayout(dashboard)
+        dashboard_title = QLabel("VR SYSTEM DASHBOARD")
+        dashboard_title.setStyleSheet(f"color: {YELLOW}; font-size: 20px; font-weight: 800;")
+        self.scan_summary = QLabel("Scan your host VR setup, then use game Preflight for the selected game.")
+        self.scan_summary.setWordWrap(True)
+        self.runtime_state = QLabel("Runtime: checking…")
+        self.server_state = QLabel("Server: checking…")
+        self.headset_state = QLabel("Headset: checking…")
+        self.controllers_state = QLabel("Controllers: UNVERIFIED")
+        for label in (self.runtime_state, self.server_state, self.headset_state, self.controllers_state):
+            label.setObjectName("runtimePill")
+        self.auto_live = QCheckBox("Auto-refresh live status every 5 seconds")
+        self.auto_live.setChecked(True)
+        self.auto_live.toggled.connect(lambda checked: self.refresh_system_live() if checked else None)
+        self.scan_btn = QPushButton("SCAN MY VR SETUP")
+        self.scan_btn.setObjectName("primaryAction")
+        self.scan_btn.clicked.connect(self.scan_setup)
+        self.copy_scan_btn = QPushButton("Copy system report")
+        self.copy_scan_btn.clicked.connect(self.copy_system_report)
+        self.copy_scan_btn.setEnabled(False)
+        self.save_scan_btn = QPushButton("Save system report…")
+        self.save_scan_btn.clicked.connect(self.save_system_report)
+        self.save_scan_btn.setEnabled(False)
+        self.system_details = QTextBrowser()
+        self.system_details.setPlainText("Connect the headset in your runtime manager, then scan. The scan does not start a runtime or change your setup.")
+        dashboard_layout.addWidget(dashboard_title)
+        dashboard_layout.addLayout(_row(self.runtime_state, self.server_state, self.headset_state, self.controllers_state))
+        dashboard_layout.addWidget(self.scan_summary)
+        dashboard_layout.addWidget(self.auto_live)
+        dashboard_layout.addLayout(_row(self.scan_btn, self.copy_scan_btn, self.save_scan_btn))
+        dashboard_layout.addWidget(self.system_details, 1)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(dashboard, "VR System")
+        self.tabs.addTab(games_page, "Games")
+        self.tabs.currentChanged.connect(lambda index: self.refresh_system_live() if index == 0 else None)
         status_row = QHBoxLayout()
         status_row.addWidget(self.runtime_label)
         status_row.addWidget(self.live_status_label)
@@ -148,7 +643,7 @@ class HubWindow(QMainWindow):
         root.setSpacing(9)
         root.addWidget(header)
         root.addLayout(status_row)
-        root.addLayout(main)
+        root.addWidget(self.tabs, 1)
         central = QWidget()
         central.setLayout(root)
         self.setCentralWidget(central)
@@ -157,8 +652,102 @@ class HubWindow(QMainWindow):
         self.status_timer.setInterval(2000)
         self.status_timer.timeout.connect(self.update_live_status)
         self.status_timer.start()
+        self.scan_timer = QTimer(self)
+        self.scan_timer.setInterval(5000)
+        self.scan_timer.timeout.connect(self.refresh_system_live)
+        self.scan_timer.start()
         self.refresh()
         self.check_updates()  # quietly, in the background
+        QTimer.singleShot(0, self.scan_setup)
+
+    def refresh_system_live(self):
+        if self.auto_live.isChecked() and self.tabs.currentIndex() == 0 and self.scan_report:
+            self.scan_setup(live_only=True)
+
+    def scan_setup(self, _checked=False, *, live_only=False):
+        if self._closing or self.scan_worker:
+            return
+        self.scan_btn.setEnabled(False)
+        self.copy_scan_btn.setEnabled(False)
+        self.save_scan_btn.setEnabled(False)
+        if not live_only:
+            self.scan_summary.setText("Scanning host VR setup…")
+        self.scan_worker = ScanWorker(self.scan_report if live_only else None, self)
+        self.scan_worker.done.connect(self.show_system_report)
+        self.scan_worker.failed.connect(self.scan_failed)
+        self.scan_worker.finished.connect(self.scan_finished)
+        self.scan_worker.start()
+
+    def show_system_report(self, report):
+        self.scan_report = report
+        live = report["live"]
+        selection = f"{report['runtime']} SELECTED" if live["runtime_selected"] else "NOT CONFIGURED"
+        self.runtime_state.setText(f"Runtime: {selection}")
+        self.runtime_state.setStyleSheet(f"color: {GREEN if live['runtime_selected'] else RED};")
+        server = live["server_running"]
+        self.server_state.setText("Server: " + ("RUNNING" if server else "NOT OBSERVED" if server is False else "UNKNOWN"))
+        self.server_state.setStyleSheet(f"color: {GREEN if server else MUTED};")
+        headset = live["headset_connected"]
+        self.headset_state.setText("Headset: " + ("CONNECTED" if headset else "DISCONNECTED" if headset is False else "UNKNOWN"))
+        self.headset_state.setStyleSheet(f"color: {GREEN if headset else YELLOW if headset is False else MUTED};")
+        self.controllers_state.setStyleSheet(f"color: {MUTED};")
+        self.scan_summary.setText(f"{report['status']}  •  Live status checked: {local_time(live['sampled_at'])}")
+        self.runtime_label.setText(f"●  {selection}")
+        self.runtime_label.setStyleSheet(f"color: {GREEN if live['runtime_selected'] else RED};")
+        scrollbar = self.system_details.verticalScrollBar()
+        position = scrollbar.value()
+        self.system_details.setHtml(system_scan.report_html(report))
+        scrollbar.setValue(position)
+        self.copy_scan_btn.setEnabled(True)
+        self.save_scan_btn.setEnabled(True)
+
+    def scan_failed(self, message):
+        self.scan_report = None
+        self.runtime_state.setText("Runtime: UNKNOWN")
+        self.server_state.setText("Server: UNKNOWN")
+        self.headset_state.setText("Headset: UNKNOWN")
+        for label in (self.runtime_state, self.server_state, self.headset_state):
+            label.setStyleSheet(f"color: {MUTED};")
+        self.scan_summary.setText("Scan could not complete. Rescan to try again.")
+        self.system_details.setPlainText(message)
+
+    def scan_finished(self):
+        worker = self.scan_worker
+        self.scan_worker = None
+        if worker:
+            worker.deleteLater()
+        self.scan_btn.setEnabled(True)
+        self.close_when_idle()
+
+    def close_when_idle(self):
+        if self._closing and not self.scan_worker and not (self.worker and self.worker.isRunning()):
+            self.close()
+
+    def copy_system_report(self):
+        if self.scan_report:
+            QApplication.clipboard().setText(system_scan.report_text(self.scan_report))
+            self.statusBar().showMessage("System report copied.", 4000)
+
+    def save_system_report(self):
+        if not self.scan_report:
+            return
+        name, _ = QFileDialog.getSaveFileName(self, "Save VR system report", "NAnnersVRhub-system-report.txt", "Text reports (*.txt)")
+        if name:
+            try:
+                Path(name).write_text(system_scan.report_text(self.scan_report) + "\n", encoding="utf-8")
+            except OSError as exc:
+                QMessageBox.warning(self, "Could not save report", str(exc))
+            else:
+                self.statusBar().showMessage("System report saved.", 4000)
+
+    def closeEvent(self, event):
+        # Polling threads must finish before the window can destroy them.
+        self._closing = True
+        self.scan_timer.stop()
+        if self.scan_worker or (self.worker and self.worker.isRunning()):
+            event.ignore()
+            return
+        super().closeEvent(event)
 
     def current(self) -> dict | None:
         idx = self.table.currentRow()
@@ -166,8 +755,9 @@ class HubWindow(QMainWindow):
 
     def refresh(self):
         keep = self.table.currentRow()
-        ok = runtime.is_wivrn()
-        self.runtime_label.setText("●  WiVRn ACTIVE" if ok else "●  WiVRn NOT ACTIVE")
+        path, lib = runtime.active_runtime()
+        ok = bool(path and lib)
+        self.runtime_label.setText(f"●  {runtime.runtime_name(path, lib)} SELECTED" if ok else "●  OpenXR NOT CONFIGURED")
         self.runtime_label.setStyleSheet(f"color: {GREEN if ok else RED};")
         self.rows = hub.game_rows(_roots())
         self.table.setRowCount(len(self.rows))
@@ -191,6 +781,7 @@ class HubWindow(QMainWindow):
 
     def show_details(self):
         r = self.current()
+        self.refresh_compatibility()
         self.details.setHtml(hub.details_html(r, self.update_results.get(r["id"]), hub.verify(r)) if r else "")
         can_install = bool(r and get_handler(r).install_supported(r))
         self.install_btn.setEnabled(can_install)
@@ -214,6 +805,57 @@ class HubWindow(QMainWindow):
         if r:
             self.bridge_log_btn.setText(hub.game_bridge_log_label(r))
         self.update_live_status()
+
+    def refresh_compatibility(self):
+        self.compat_report = None
+        self.compat_copy_btn.setEnabled(False)
+        self.compat_refresh_btn.setEnabled(bool(self.current()))
+        self.record_test_btn.setEnabled(bool(self.current()))
+        self.test_history_btn.setEnabled(bool(self.current()))
+        self.log_diagnostics_btn.setEnabled(bool(self.current()))
+        self.support_report_btn.setEnabled(bool(self.current()))
+        r = self.current()
+        if not r:
+            self.compat_details.clear()
+            return
+        try:
+            self.compat_report = compatibility.report(r, _roots())
+            self.compat_details.setHtml(compatibility.report_html(self.compat_report))
+            self.compat_copy_btn.setEnabled(True)
+        except (RuntimeError, OSError) as exc:
+            self.compat_details.setPlainText(f"Compatibility report unavailable: {exc}")
+
+    def record_live_test(self):
+        recipe = self.current()
+        if recipe and RecordTestDialog(recipe, _roots(), self).exec() == QDialog.Accepted:
+            self.refresh_compatibility()
+            self.statusBar().showMessage("Local gameplay test saved.", 4000)
+
+    def show_test_history(self):
+        recipe = self.current()
+        if not recipe:
+            return
+        try:
+            entries = live_tests.history(recipe["id"])
+        except (RuntimeError, OSError) as exc:
+            QMessageBox.warning(self, "Test history unavailable", str(exc))
+            return
+        TestHistoryDialog(recipe, entries, self).exec()
+
+    def show_log_diagnostics(self):
+        recipe = self.current()
+        if recipe:
+            LogDiagnosticsDialog(recipe, _roots(), self).exec()
+
+    def show_support_report(self):
+        recipe = self.current()
+        if recipe:
+            SupportReportDialog(recipe, _roots(), self).exec()
+
+    def copy_compatibility(self):
+        if self.compat_report is not None:
+            QApplication.clipboard().setText(compatibility.report_text(self.compat_report))
+            self.statusBar().showMessage("Compatibility report copied.", 4000)
 
     def update_live_status(self):
         r = self.current()
@@ -258,6 +900,7 @@ class HubWindow(QMainWindow):
         self.check_btn.setText("Checking…")
         self.worker = UpdateWorker()
         self.worker.done.connect(self._updates_done)
+        self.worker.finished.connect(self.close_when_idle)
         self.worker.start()
 
     def _updates_done(self, results):

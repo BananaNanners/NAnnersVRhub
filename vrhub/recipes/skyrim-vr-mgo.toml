@@ -1,0 +1,78 @@
+id = "skyrim-vr-mgo"
+name = "Skyrim VR (Mad God's Overhaul / WiVRn)"
+steam_appid = 611670
+mod_page = "https://www.nexusmods.com/skyrimspecialedition/mods/107780"
+method = "guide"
+handler = "skyrim-vr"
+manual_download = true
+
+[[links]]
+label = "Jackify"
+url = "https://github.com/Omni-guides/Jackify"
+
+[[links]]
+label = "MGO Nexus"
+url = "https://www.nexusmods.com/skyrimspecialedition/mods/107780"
+
+setup = [
+  "Install and launch a clean Skyrim VR through Steam/Proton at least once before installing the modlist.",
+  "Install Mad God's Overhaul with Jackify/Wabbajack. NAnnersVRhub does not copy or redistribute the MGO modlist.",
+  "Use one MGO OpenComposite variant in the active MO2 profile: Open Composite XR or Open Composite Unleashed for Skyrim VR.",
+  "Keep both VR Performance Kit variants disabled when using the bundled OpenComposite path.",
+  "NAnnersVRhub auto-detects common MGO install folders; set NANNERS_MGO_DIR only if you want to override the detected location.",
+]
+
+play = [
+  "Start WiVRn and connect the Quest before launching Skyrim VR.",
+  "Leave WiVRn's OpenVR compatibility layer on xrizer for this workflow.",
+  "Launch Skyrim VR through the MGO Mod Organizer/SKSEVR entry configured by your modlist rather than launching SkyrimVR.exe directly.",
+]
+
+good_to_know = [
+  "This first Skyrim VR integration is intentionally a guided/preflight workflow. Jackify/Wabbajack remains the modlist installer and updater.",
+  "Do not substitute a system-wide /opt/opencomposite installation for MGO's bundled OpenComposite in this workflow.",
+  "PC and Quest WiVRn versions should match; re-test the stack after a WiVRn or xrizer update.",
+]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
+
+[handler_config]
+mgo_dir_env = "NANNERS_MGO_DIR"
+mgo_globs = ["SkyrimVR*MGO*", "*Skyrim*MGO*", "MGO*", "Games/SkyrimVR*MGO*", "Games/*MGO*", "Applications/SkyrimVR*MGO*", "Applications/*MGO*"]
+opencomposite_mod = "Open Composite XR - Incompatible with VR Performance Kit"
+opencomposite_alternatives = ["Open Composite Unleashed for Skyrim VR"]
+conflicting_mod_dirs = ["VR Performance Kit", "VR Performance Kit - FSR2", "VR Performance Kit - FSR - Use with DLAA", "VR Performance Kit - CAS Sharpening - Default"]
+
+[launch]
+args = ""
+env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
+
+[compatibility]
+runtime = "WiVRn"
+validation = "user-reported"
+proton = "Reuse the Proton build configured for the Jackify MO2 Steam shortcut. GE-Proton10-14 is the tested reference, not a required version."
+adapter = "One MGO OpenComposite variant (XR or Unleashed) enabled in the active MO2 profile; host xrizer selection is separate and does not prove which DLL the game loads."
+launch = "Steam MO2 shortcut -> Mod Organizer -> configured SKSEVR entry."
+requirements = [
+  "Connect the headset through WiVRn before launching.",
+  "Keep one MGO OpenComposite variant enabled in the selected MO2 profile, with its mod folder present.",
+  "Keep the recognized VR Performance Kit variants disabled, including FSR - Use with DLAA and CAS Sharpening - Default.",
+  "Use the MO2 shortcut's own Proton prefix rather than Skyrim's base-game prefix.",
+  "Review PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1 in the MO2 shortcut's Steam launch options. The report checks simple leading environment assignments; wrappers may need manual review.",
+]
+notes = [
+  "The October 17 profile snapshot reports Open Composite Unleashed for Skyrim VR 171182 5.0.4 2026 enabled and the older XR entry disabled. This is configuration evidence, not a new gameplay test.",
+  "A local pass means configuration checks passed; it does not confirm a current gameplay session.",
+  "Jackify/Wabbajack remains responsible for MGO installation and updates.",
+]
+
+[compatibility.reference]
+tested_on = "2026-10-17"
+source = "User-reported dev3-fix1 local-check report and live launch/controller regression test on October 17; earlier dev2 reconnect reports."
+system = "CachyOS; WiVRn; xrizer host adapter."
+headset = "Meta Quest 3"
+modlist = "Mad God's Overhaul 3.8"
+proton = "GE-Proton10-14 (MO2 shortcut)"
+result = "Dev3-fix1 local checks passed with OpenComposite Unleashed enabled; user confirmed the game enters normally and controllers work. Earlier dev2 completed CONNECTED -> UNKNOWN -> CONNECTED."

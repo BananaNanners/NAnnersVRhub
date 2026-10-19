@@ -3,6 +3,7 @@ import html
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import time
@@ -11,12 +12,13 @@ import zipfile
 from pathlib import Path
 
 from . import runtime, updates
+from .paths import guard_path
 from .handlers import get_handler
 from .schema import RecipeError, validate_recipe
 from .steam import find_game
 
 HUB_DIR = Path(__file__).resolve().parent.parent
-RECIPE_DIR = HUB_DIR / "recipes"
+RECIPE_DIR = Path(__file__).resolve().parent / "recipes"
 APPDATA = Path("drive_c/users/steamuser/AppData")
 
 
@@ -474,7 +476,7 @@ def preflight(recipe: dict, steam_roots=None) -> dict:
             ok = runtime.is_wivrn()
             detail = f"WiVRn active ({lib or path or 'runtime path unavailable'})" if ok else "WiVRn is not the active OpenXR runtime"
         else:
-            ok = bool(path)
+            ok = bool(path and lib)
             detail = f"{lib or path}" if ok else "no active OpenXR runtime found"
         rows.append({"name": "OpenXR", "ok": ok, "detail": detail})
     rep = verify(recipe)
@@ -588,7 +590,7 @@ def uninstall(recipe_id: str) -> list[Path]:
 def launch_options(recipe: dict) -> str:
     env = " ".join(f"{k}={v}" for k, v in recipe.get("launch", {}).get("env", {}).items())
     args = recipe.get("launch", {}).get("args", "")
-    guard = f'"{HUB_DIR / "vrhub-check"}" {recipe["id"]}' if recipe.get("components") else ""
+    guard = f'{shlex.quote(str(guard_path()))} {shlex.quote(recipe["id"])}' if recipe.get("components") else ""
     return " ".join(x for x in (env, guard, "%command%", args) if x)
 
 
@@ -779,6 +781,9 @@ def diagnostics(recipe: dict, steam_roots=None) -> str:
     handler_lines = get_handler(recipe).diagnostics(recipe, game)
     if handler_lines:
         lines += ["", "Handler diagnostics:", *handler_lines]
+    if "compatibility" in recipe:
+        from . import compatibility
+        lines += ["", compatibility.report_text(compatibility.report(recipe, steam_roots))]
     return "\n".join(lines)
 
 

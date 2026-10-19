@@ -104,4 +104,21 @@ def validate_recipe(recipe: dict, source: str = "recipe") -> dict:
     if "proton_prefix" in requirements and not isinstance(requirements["proton_prefix"], bool):
         raise RecipeError(f"{source}: requirements.proton_prefix must be true/false")
 
+    if "compatibility" in recipe:
+        from .compatibility import validate
+        validate(recipe["compatibility"], source)
+        checks = recipe["compatibility"].get("checks", {})
+        if checks and store != "steam":
+            raise RecipeError(f"{source}: compatibility.checks currently require a Steam recipe")
+        if checks.get("tracked_profile"):
+            if not recipe.get("profile"):
+                raise RecipeError(f"{source}: tracked_profile requires a recipe profile")
+            profile_dir = Path(recipe["profile"]["dir"].replace("\\", "/"))
+            if profile_dir.is_absolute() or ".." in profile_dir.parts or ":" in str(profile_dir):
+                raise RecipeError(f"{source}: unsafe compatibility profile directory")
+        expected = recipe["compatibility"]["runtime"]
+        required = requirements.get("openxr")
+        if (required == "wivrn" and expected not in {"WiVRn", "any"}):
+            raise RecipeError(f"{source}: compatibility.runtime contradicts requirements.openxr")
+
     return recipe

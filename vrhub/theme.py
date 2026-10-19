@@ -26,6 +26,27 @@ QWidget {{
     color: {TEXT};
     font-size: 10.5pt;
 }}
+QWidget#systemDashboard, QWidget#gamesPage, QDialog#liveTestDialog, QDialog#testHistoryDialog, QDialog#logDiagnosticsDialog, QDialog#supportReportDialog {{
+    background: {BG};
+}}
+QTabWidget::pane {{
+    background: {BG};
+    border: 1px solid {BORDER};
+    border-radius: 8px;
+}}
+QTabBar::tab {{
+    background: {PANEL_2};
+    color: {MUTED};
+    padding: 9px 18px;
+    border: 1px solid {BORDER};
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+}}
+QTabBar::tab:selected {{
+    color: {YELLOW};
+    background: {PANEL};
+    border-bottom-color: {PANEL};
+}}
 QFrame#brandHeader {{
     background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
         stop:0 #090B0E, stop:0.55 #15130A, stop:1 #08131C);
@@ -54,7 +75,14 @@ QLabel#runtimePill, QLabel#liveStatus {{
     padding: 6px 10px;
     font-weight: 700;
 }}
-QTableWidget, QTextBrowser {{
+QLabel#snapshotStatus {{
+    background: {PANEL_2};
+    border: 1px solid {BORDER};
+    border-radius: 7px;
+    padding: 8px;
+    color: {TEXT};
+}}
+QTableWidget, QTextBrowser, QPlainTextEdit, QListWidget {{
     background: {PANEL};
     alternate-background-color: {PANEL_2};
     border: 1px solid {BORDER};
@@ -105,6 +133,18 @@ QPushButton#primaryAction:hover {{
 QPushButton#secondaryAction {{
     border-color: #1E7198;
     color: {BLUE};
+}}
+QComboBox {{
+    background: {PANEL_2};
+    border: 1px solid {BORDER};
+    border-radius: 6px;
+    padding: 5px 8px;
+}}
+QComboBox QAbstractItemView {{
+    background: {PANEL};
+    color: {TEXT};
+    selection-background-color: #3B3108;
+    selection-color: {TEXT};
 }}
 QLineEdit {{
     background: {PANEL};

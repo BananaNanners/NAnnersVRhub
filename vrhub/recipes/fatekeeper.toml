@@ -1,0 +1,88 @@
+id = "fatekeeper"
+name = "Fatekeeper (UEVR + FK profile)"
+steam_appid = 2186990
+mod_page = "https://github.com/jbusfield/FK_UEVR/releases/tag/1.0.0"
+manual_download = true
+# No dedicated VR mod: Unreal Engine 5 game played through UEVR plus a community profile.
+method = "uevr"
+
+setup = [
+  "Install protontricks, then launch Fatekeeper once from Steam (Proton on) so its Proton prefix exists.",
+  "Download UEVR_FK.zip and SLASHER-Win64-Shipping.zip from the release page (link above).",
+  "Once only: install the .NET 6 Desktop Runtime into the game's prefix with: protontricks-launch --no-bwrap --appid 2186990 --no-background-wineserver <windowsdesktop-runtime-6.0.x-win-x64.exe>",
+  "Click 'Install mod file…' and choose UEVR_FK.zip.",
+  "Click 'Install profile…' and choose SLASHER-Win64-Shipping.zip (any existing UEVR data for the game is backed up first).",
+  "In the game's graphics settings, turn DLSS Frame Generation off.",
+]
+
+play = [
+  "Start WiVRn and connect the Quest.",
+  "Launch Fatekeeper from Steam and get into actual gameplay.",
+  "Click 'Run UEVR injector', pick the Fatekeeper process, tick OpenXR, then press Inject.",
+  "Put the headset on. To confirm the profile loaded, press Insert: the Fatekeeper config should appear in UEVR's left panel below 'Script UI'.",
+]
+
+good_to_know = [
+  "Don't use UEVR's own 'Import Config': under Wine it silently copies only some of the files (no hands, broken eyes).",
+  "UEVR_FK.zip contains a community-modified UEVRBackend.dll, and the profile ships plugin DLLs. They run inside the game process, so use them at your own discretion.",
+]
+
+[profile]
+dir = "Roaming/UnrealVRMod/SLASHER-Win64-Shipping"   # under the prefix's AppData
+page = "https://github.com/jbusfield/FK_UEVR/releases/tag/1.0.0"
+
+[launch]
+args = ""
+# Lets the Proton container see the host OpenXR runtime (WiVRn). Worked-with setup: see notes.
+env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
+
+[[updates]]
+name = "FK_UEVR (UEVR build + profile)"
+github = "jbusfield/FK_UEVR"
+tracks = ["fatekeeper", "fatekeeper:profile"]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
+
+[compatibility]
+runtime = "WiVRn"
+validation = "user-reported"
+proton = "Reuse the game's existing Steam-selected Proton build and prefix. The October 17 test report records proton-cachyos-slr; its precise build version was not captured."
+adapter = "Community UEVR_FK injector/backend in the game prefix, with OpenXR selected in the injector."
+launch = "Steam -> actual Fatekeeper gameplay -> Run UEVR injector -> select the game process and OpenXR -> Inject."
+workarounds = [
+  "Keep UEVR 2D Screen Mode OFF, then close the in-game UEVR overlay with Insert before evaluating full VR. The October 18 user test restored full immersion after closing that overlay.",
+  "Use Insert for this test: the user's controller shortcut also opened WayVR's menu. This instruction closes the in-game overlay; it does not require closing the desktop injector window.",
+]
+requirements = [
+  "Connect through WiVRn and expose the host runtime to the Proton container.",
+  "Install the recipe's UEVR_FK build and SLASHER-Win64-Shipping profile into this game's prefix.",
+  "Use the Hub's profile-install workflow so the full archive is extracted, including any shipped plugin files.",
+  "Follow the existing setup guide for the .NET 6 Desktop Runtime and disable DLSS Frame Generation before injection.",
+]
+manual_checks = [
+  "Verify the .NET 6 Desktop Runtime in this game prefix and DLSS Frame Generation disabled in the game; these settings are not scanned.",
+  "Review runtime import in Steam, select OpenXR in the injector, and confirm the Fatekeeper profile, VR rendering and controls in actual gameplay.",
+]
+notes = [
+  "October 18 user report: full VR returned with 2D Screen Mode off and the UEVR overlay closed using Insert. The setting and overlay state are not scanned automatically; the exact cause of the earlier frame-validation failures remains unconfirmed.",
+  "The file inventory checks only files recorded by the Hub; it does not compare them with a downloaded release or certify plugin loading.",
+  "Manual installs without a Hub inventory stay INCOMPLETE even when the named injector and config files are found.",
+]
+
+[compatibility.checks]
+recorded_proton = true
+tracked_install = true
+tracked_profile = true
+prefix_files = ["drive_c/uevr/UEVRInjector.exe", "drive_c/uevr/UEVRBackend.dll", "drive_c/users/steamuser/AppData/Roaming/UnrealVRMod/SLASHER-Win64-Shipping/config.txt"]
+commands = ["protontricks-launch"]
+
+[compatibility.reference]
+tested_on = "2026-10-17"
+source = "User-reported success after dev4 Fatekeeper live-test instructions and a compatibility report with all measured checks passing."
+system = "CachyOS; WiVRn; Steam/Proton."
+headset = "Meta Quest 3 (established project setup)"
+modlist = "UEVR_FK + SLASHER-Win64-Shipping profile; report found all 11 recorded UEVR files and 87 profile files."
+proton = "proton-cachyos-slr (recorded prefix path; exact build version not captured)"
+result = "User reported success after the requested live test covering VR rendering, head tracking, controller inputs and Fatekeeper profile loading. This is user-reported evidence, not automatic gameplay telemetry."
