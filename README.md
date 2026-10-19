@@ -1,4 +1,4 @@
-# NAnnersVRhub 0.5.0
+# NAnnersVRhub 0.5.1
 
 **NAnnersVRhub — Linux VR Compatibility & Mod Manager**
 
@@ -6,7 +6,40 @@ A Linux VR mod hub for Steam games, developed on CachyOS + WiVRn + Quest 3.
 
 Current recipes: Cyberpunk 2077, Fatekeeper, Ready or Not, and the first Skyrim VR / Mad God's Overhaul workflow.
 
-## Run 0.5.0
+## Install 0.5.1
+
+The final build promotes the accepted installer candidate. See
+[RELEASE-NOTES-0.5.1.md](RELEASE-NOTES-0.5.1.md) and
+[INSTALL-0.5.1.md](INSTALL-0.5.1.md) for setup, upgrades and rollback.
+
+After downloading, run in fish:
+
+```fish
+unzip -n ~/Downloads/NAnnersVRhub-0.5.1-source.zip -d ~/Downloads
+and cd ~/Downloads/NAnnersVRhub-0.5.1
+and python install.py
+```
+
+Requires Linux, Python 3.11+ and working PySide6 in the selected Python
+(`sudo pacman -S pyside6` on CachyOS/Arch if needed). The Hub installer itself
+uses no sudo, pip or network access. Open **NAnnersVRhub** from the application
+menu or run `~/.local/bin/nannersvrhub`.
+
+App copies live in a permanent folder; saved tests, mod records and backups
+stay in their existing location. Future extracted builds use `python install.py`
+to upgrade. Close the Hub before switching versions. To select the previous
+managed version, run `~/.local/bin/nannersvrhub-manage rollback`; repeating it
+switches back. Automatic Hub downloads are outside this release.
+
+Recipes live in `vrhub/recipes/`. Regular wheel builds also include the recipes,
+icon and app/CLI/guard/manager entry points. The source installer is the
+recommended desktop workflow, with stable launchers and a menu entry.
+
+The user confirmed dev1 independent startup, all four games listed and two games
+running as expected, then reported **Pass** for the RC1 upgrade/rollback check.
+See [candidate acceptance](RELEASE-CANDIDATE-0.5.1.md) for the historical procedure.
+
+## Earlier 0.5.0 source release
 
 The final source release promotes the accepted RC1 build, preserving its dev8
 feature set and behavior. See [RELEASE-NOTES-0.5.0.md](RELEASE-NOTES-0.5.0.md),
@@ -36,9 +69,10 @@ Launch the GUI:
 
     nannersvrhub
 
-Keep the source folder available for this editable install. The supported
-distribution paths are the extracted source and editable checkout; a standalone
-non-editable wheel/system package is outside this release's distribution scope.
+Keep the source folder available for this editable install. The 0.5.0
+distribution used extracted source/editable checkouts. Version 0.5.1-rc1 adds
+complete wheel resources and the per-user desktop installer; see the new
+installation guide above.
 
 ## 0.5.0 feature set
 

@@ -1,3 +1,28 @@
+# NAnnersVRhub 0.5.1
+
+- Promote the accepted installer candidate to final with unchanged installer,
+  guard, recipe and game behavior; runtime changes are limited to the version label.
+- Record user-reported independent startup, four games listed and two unspecified
+  games working, followed by aggregate acceptance of upgrade/rollback/return.
+- Prepare source installation, desktop shortcut, local upgrades, app rollback and
+  complete runtime resource packaging for GitHub release.
+
+# NAnnersVRhub 0.5.1-rc1
+
+- Record user-reported dev1 acceptance: independent installed startup, all four games listed and two unspecified games running as expected.
+- Prepare a version-label-only candidate for real desktop upgrade/rollback acceptance; keep installer, guard, resources and game workflows unchanged.
+- Keep GitHub publication on hold pending the candidate checks.
+
+# NAnnersVRhub 0.5.1-dev1
+
+- Add an offline per-user installer with dependency/resource checks, permanent
+  versioned app copies, stable launchers and an application-menu entry.
+- Add explicit local source upgrades, status and integrity-checked rollback;
+  preserve existing gameplay history, mod records, backups and game settings.
+- Package all four recipes inside vrhub, including them in regular wheels;
+  provide installed guard/management entry points and stable managed guard paths.
+- Keep GitHub publication on hold pending desktop installer acceptance.
+
 # NAnnersVRhub 0.5.0
 
 - Promoted the accepted RC1 source build to final 0.5.0, preserving the frozen dev8 runtime behavior and existing four recipes.

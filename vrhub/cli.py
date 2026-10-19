@@ -5,7 +5,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-from . import compatibility, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
+from . import __version__, compatibility, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
 from .steam import find_game
 
 
@@ -16,6 +16,7 @@ def _roots():
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="nannersvrhub", description="NAnnersVRhub: Linux VR mod hub (WiVRn / Quest)")
+    ap.add_argument("--version", action="version", version="NAnnersVRhub " + __version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status", help="check the OpenXR runtime and list games")
     s = sub.add_parser("scan", help="read-only host VR setup scan (hardware remains unverified)")
