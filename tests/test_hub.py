@@ -116,11 +116,11 @@ class Hub030Tests(unittest.TestCase):
 
 
 class PublicRecipeSetDev13Tests(unittest.TestCase):
-    def test_public_recipe_set_contains_only_verified_workflows(self):
+    def test_public_recipe_set_contains_documented_workflows(self):
         from vrhub.hub import load_recipes
         self.assertEqual(
             set(load_recipes()),
-            {"cyberpunk-2077", "fatekeeper", "ready-or-not", "skyrim-vr-mgo"},
+            {"cyberpunk-2077", "fatekeeper", "ready-or-not", "skyrim-vr-mgo", "hogwarts-legacy"},
         )
 
 if __name__ == "__main__":

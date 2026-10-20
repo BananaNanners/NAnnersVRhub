@@ -1,0 +1,105 @@
+id = "hogwarts-legacy"
+name = "Hogwarts Legacy (Heroic/Epic + UEVR)"
+store = "heroic-epic"
+handler = "heroic-uevr"
+heroic_title = "Hogwarts Legacy"
+method = "uevr"
+manual_download = true
+mod_page = "https://github.com/jbusfield/HL_UEVR/releases/tag/v2.0.6"
+
+setup = [
+  "Launch the Epic Games copy once through Heroic. Keep the Wine/Proton runner and prefix already selected in that game's Heroic settings.",
+  "Download BOTH UEVR.zip and HogwartsLegacy.zip from the linked HL_UEVR v2.0.6 release. Use its packaged UEVR build with this profile; do not substitute the Fatekeeper build or mix files from older Hogwarts profiles.",
+  "Click 'Install mod file…' and select UEVR.zip. This installs the complete injector/backend bundle into Hogwarts Legacy's Heroic prefix only.",
+  "Click 'Install profile…' and select HogwartsLegacy.zip. The Hub installs its scripts, data, model files and plugin DLLs together. An existing untracked HogwartsLegacy profile is backed up and replaced; remove a Hub-recorded profile first if replacing one.",
+  "In this game's Heroic environment variables, review PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES with value 1 when using Proton. Do not paste Steam's %command% into Heroic. The Hub does not change Heroic's settings.",
+  "If the injector requests .NET, use this game's Heroic Settings -> Wine -> Run EXE on prefix to run the Windows x64 .NET 6 Desktop Runtime installer. Do not use Steam AppID 990080 or protontricks for this Heroic copy.",
+  "Disable DLSS Frame Generation before injection; disable HDR for the initial UEVR test. These settings are reviewed manually.",
+]
+
+play = [
+  "Start WiVRn and connect the headset before launching Hogwarts Legacy through Heroic.",
+  "Wait for shader loading to finish and the main menu to appear. Click 'Run UEVR injector' in the Hub. Native Heroic uses its saved Wine/Proton runner and existing prefix. For Flatpak or a failed launch, use the displayed manual Heroic Run EXE on prefix steps. Select the HogwartsLegacy process and OpenXR in the injector, then Inject.",
+  "Load a save and check actual headset rendering, stereo depth, head tracking, movement/turning and wand aiming/casting. Close the in-game UEVR overlay using Insert before judging immersion; check that 2D Screen Mode is OFF if you only see a floating screen.",
+  "Record the result with 'Record live test…'. Motion controls, optional body/gesture/voice features and menu behavior need their own live checks on this Linux setup.",
+]
+
+good_to_know = [
+  "The maintainer's v2.0.6 release includes a matching UEVR bundle using JoeyHodge fixes. Older Nexus 1.x instructions and add-ons may not apply to this rewritten 2.x profile.",
+  "Use the Hub's full profile installation instead of UEVR's Import Config under Wine. The expected destination is the selected Windows user's AppData/Roaming/UnrealVRMod/HogwartsLegacy inside Heroic's prefix, without a second nested HogwartsLegacy folder.",
+  "Do not delete your Hogwarts Legacy save folder. Only the separate UnrealVRMod/HogwartsLegacy VR profile is replaced, with the existing folder backed up by the Hub.",
+  "October 19 user-reported tests passed one-click injector launch, VR rendering, head tracking, controller input and stereo depth. A short follow-up also confirmed spell drawing and wrist-flick activation. Voice, body tracking, other gestures and longer-session stability were not tested.",
+]
+
+[[links]]
+label = "Heroic: Run EXE on prefix"
+url = "https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/wiki/How-To:-Wine-and-Proton"
+
+[[links]]
+label = "HL profile guide and controls"
+url = "https://github.com/jbusfield/HL_UEVR"
+
+[[links]]
+label = "UEVR setup documentation"
+url = "https://docs.uevr.io/"
+
+[[links]]
+label = "Windows .NET 6 downloads (if requested by injector)"
+url = "https://dotnet.microsoft.com/en-us/download/dotnet/6.0"
+
+[profile]
+dir = "Roaming/UnrealVRMod/HogwartsLegacy"
+page = "https://github.com/jbusfield/HL_UEVR/releases/tag/v2.0.6"
+
+[launch]
+args = ""
+env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
+
+[[updates]]
+name = "HL_UEVR (matching UEVR build + Hogwarts profile)"
+github = "jbusfield/HL_UEVR"
+tracks = ["hogwarts-legacy", "hogwarts-legacy:profile"]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
+
+[compatibility]
+runtime = "WiVRn"
+validation = "user-reported"
+proton = "Reuse the game's existing Heroic-selected Wine/Proton runner and prefix. The October 19 test records Proton-CachyOS-latest as the saved Heroic selection; its exact build version was not captured."
+adapter = "HL_UEVR v2.0.6's packaged UEVR injector/backend plus its HogwartsLegacy profile in this game's Heroic prefix, with OpenXR selected in the injector."
+launch = "Heroic/Epic -> finish shader loading -> main menu -> Hub Run UEVR injector (native) or Heroic Run EXE on prefix -> HogwartsLegacy process and OpenXR -> Inject -> gameplay."
+requirements = [
+  "Connect through WiVRn before launch and review PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1 in this game's actual Heroic environment settings when using Proton.",
+  "Install BOTH archives from the same HL_UEVR release into the Hogwarts Legacy Heroic prefix, including the profile's complete scripts/data/plugins and model files.",
+  "Replace older VR profile contents using the Hub's backup workflow rather than merging old and new profiles. This is separate from game saves.",
+  "Review injector runtime dependencies if prompted and disable DLSS Frame Generation before injection.",
+]
+manual_checks = [
+  "Review the Windows runtime dependency if requested, Heroic runtime import, Frame Generation/HDR settings, OpenXR selection and injection after shader loading; these are not scanned.",
+  "Verify the Hogwarts profile, full VR rendering with the UEVR overlay closed, head tracking, stereo depth, movement/turning, wand aiming/casting and menu return behavior in loaded gameplay. Optional gesture/body/voice features remain unverified.",
+]
+notes = [
+  "The recipe follows the maintainer's v2.0.6 packaged pair, inspected on October 19, 2026. The inventory checks presence of recorded files; it does not certify their versions or successful loading.",
+  "October 19 18:21:50 PDT user-reported SUCCESS in dev4 confirmed the Hub one-click injector button, rendering, head tracking, controller input and stereo depth with WiVRn active. A follow-up reported working controllers, spell drawing and wrist-flick activation during a few minutes of gameplay. The earlier disconnected-runtime snapshot is unchanged; voice, body tracking, other gestures and longer-session stability remain unverified.",
+]
+
+[compatibility.checks]
+tracked_install = true
+tracked_profile = true
+prefix_files = [
+  "drive_c/uevr/UEVRInjector.exe",
+  "drive_c/uevr/UEVRBackend.dll",
+  "drive_c/uevr/LuaVR.dll",
+]
+profile_files = ["config.txt", "scripts/main.lua", "plugins/uevr_utils.dll"]
+
+[compatibility.reference]
+tested_on = "2026-10-19"
+source = "User-reported local gameplay SUCCESS recorded at 18:21:50 PDT in 0.5.2-dev4, followed by a short gameplay and spell-gesture report at 18:34 PDT. Earlier dev3 manual launch also passed."
+system = "CachyOS; native Heroic/Epic; WiVRn active in the dev4 test snapshot. The earlier dev3 disconnected-runtime snapshot remains historical."
+headset = "Meta Quest 3 (established project setup)"
+modlist = "HL_UEVR v2.0.6 packaged pair; report found 10 recorded UEVR files and 192 profile files."
+proton = "Proton-CachyOS-latest (saved Heroic runner selection; exact build version not captured)"
+result = "User reported the Hub Run UEVR injector button worked for one-click Run EXE on prefix; VR rendering, head tracking, controller input and stereo depth PASSED. A few minutes of gameplay also confirmed working controllers, spell drawing and wrist-flick activation. Voice, body tracking, other gestures and longer-session stability were not tested."

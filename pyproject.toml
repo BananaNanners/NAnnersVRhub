@@ -1,6 +1,6 @@
 [project]
 name = "nannersvrhub"
-version = "0.5.1"
+version = "0.5.2"
 description = "NAnnersVRhub: Linux VR mod hub (CachyOS / WiVRn / Quest 3)"
 requires-python = ">=3.11"
 dependencies = []
@@ -23,3 +23,6 @@ packages = ["vrhub"]
 
 [tool.setuptools.package-data]
 vrhub = ["assets/*.png", "recipes/*.toml"]
+
+[tool.nannersvrhub]
+required_recipes = ["cyberpunk-2077", "fatekeeper", "hogwarts-legacy", "ready-or-not", "skyrim-vr-mgo"]

@@ -24,16 +24,22 @@ def validate_recipe(recipe: dict, source: str = "recipe") -> dict:
     _need(recipe, "id", source)
     _need(recipe, "name", source)
     store = recipe.get("store", "steam")
-    if store not in {"steam", "heroic-gog"}:
+    if store not in {"steam", "heroic-gog", "heroic-epic"}:
         raise RecipeError(f"{source}: unsupported store '{store}'")
     if store == "steam":
         appid = _need(recipe, "steam_appid", source)
         if not isinstance(appid, int) or appid <= 0:
             raise RecipeError(f"{source}: steam_appid must be a positive integer")
-    else:
+    elif store == "heroic-gog":
         appid = _need(recipe, "heroic_appid", source)
         if not str(appid).isdigit():
             raise RecipeError(f"{source}: heroic_appid must be a numeric GOG app id")
+    else:
+        title = _need(recipe, "heroic_title", source)
+        if not isinstance(title, str) or not title.strip():
+            raise RecipeError(f"{source}: heroic_title must be a non-empty string")
+        if recipe.get("handler") != "heroic-uevr" or recipe.get("method") != "uevr":
+            raise RecipeError(f"{source}: Heroic/Epic currently requires the heroic-uevr handler and method='uevr'")
 
     method = recipe.get("method", "file")
     if method not in {"file", "gameroot", "uevr", "guide"}:
@@ -55,6 +61,8 @@ def validate_recipe(recipe: dict, source: str = "recipe") -> dict:
     from .handlers import handler_names
     if handler not in handler_names():
         raise RecipeError(f"{source}: unknown handler '{handler}'")
+    if handler == "heroic-uevr" and store != "heroic-epic":
+        raise RecipeError(f"{source}: heroic-uevr requires store='heroic-epic'")
 
     links = recipe.get("links", [])
     if links and (not isinstance(links, list) or any(
@@ -108,8 +116,12 @@ def validate_recipe(recipe: dict, source: str = "recipe") -> dict:
         from .compatibility import validate
         validate(recipe["compatibility"], source)
         checks = recipe["compatibility"].get("checks", {})
-        if checks and store != "steam":
-            raise RecipeError(f"{source}: compatibility.checks currently require a Steam recipe")
+        if checks and store not in {"steam", "heroic-epic"}:
+            raise RecipeError(f"{source}: compatibility.checks currently require a Steam or Heroic/Epic recipe")
+        if checks.get("profile_files") and not recipe.get("profile"):
+            raise RecipeError(f"{source}: profile_files requires a recipe profile")
+        if store == "heroic-epic" and checks.get("recorded_proton"):
+            raise RecipeError(f"{source}: recorded_proton is Steam-specific; Heroic reports its own selected runner")
         if checks.get("tracked_profile"):
             if not recipe.get("profile"):
                 raise RecipeError(f"{source}: tracked_profile requires a recipe profile")

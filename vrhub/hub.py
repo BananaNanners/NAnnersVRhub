@@ -130,6 +130,8 @@ def _extract(z: zipfile.ZipFile, anchor: str, base: Path) -> list[Path]:
 
 
 def _pfx(recipe: dict, steam_roots=None) -> Path:
+    if recipe.get("store") == "heroic-epic":
+        return get_handler(recipe).prefix(recipe)
     game = find_game(recipe["steam_appid"], steam_roots)
     if not game:
         raise RuntimeError(f"{recipe['name']}: not found in any Steam library.")
@@ -141,16 +143,29 @@ def _pfx(recipe: dict, steam_roots=None) -> Path:
 
 
 def _uevr_dir(recipe: dict, steam_roots=None) -> Path:
-    return _pfx(recipe, steam_roots) / "drive_c" / "uevr"
+    prefix = _pfx(recipe, steam_roots)
+    target = prefix / "drive_c" / "uevr"
+    if not target.resolve().is_relative_to(prefix.resolve()):
+        raise RuntimeError("UEVR folder resolves outside this game's prefix; installation was stopped.")
+    return target
+
+
+def profile_dir(recipe: dict, steam_roots=None) -> Path:
+    prefix = _pfx(recipe, steam_roots)
+    data = get_handler(recipe).appdata(recipe) if recipe.get("store") == "heroic-epic" else prefix / APPDATA
+    target = data / recipe["profile"]["dir"]
+    if not target.resolve().is_relative_to(prefix.resolve()):
+        raise RuntimeError("The VR profile resolves outside this game's prefix; installation was stopped.")
+    return target
 
 
 def install(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
     """Install a mod from a .pak file, or from a .zip containing one (or a UEVR zip)."""
     if not get_handler(recipe).install_supported(recipe):
         raise RuntimeError(f"{recipe['name']} is a guided workflow; it has no direct mod-file install step.")
-    game = find_game(recipe["steam_appid"], steam_roots)
+    game = game_path(recipe, steam_roots)
     if not game:
-        raise RuntimeError(f"{recipe['name']}: not found in any Steam library.")
+        raise RuntimeError(f"{recipe['name']}: game installation was not found. Review its setup guide and storefront settings.")
     if not mod_file.is_file():
         raise RuntimeError(f"File not found: {mod_file}")
     if recipe.get("method") == "uevr":
@@ -454,13 +469,19 @@ def preflight(recipe: dict, steam_roots=None) -> dict:
     rows = []
     game = game_path(recipe, steam_roots)
     store = recipe.get("store", "steam")
-    game_label = "Steam game" if store == "steam" else "Heroic/GOG game"
-    missing = "not found in any Steam library" if store == "steam" else "not found in Heroic's installed GOG games"
+    game_label = {"steam": "Steam game", "heroic-epic": "Heroic/Epic game", "heroic-gog": "Heroic/GOG game"}[store]
+    missing = "not found in any Steam library" if store == "steam" else "not found in Heroic's configured game installation"
     rows.append({"name": game_label, "ok": bool(game),
                  "detail": str(game) if game else missing})
     req = recipe.get("requirements", {})
     if req.get("proton_prefix"):
-        if recipe.get("store", "steam") != "steam":
+        if store == "heroic-epic":
+            try:
+                prefix = _pfx(recipe, steam_roots)
+                rows.append({"name": "Heroic Wine/Proton prefix", "ok": True, "detail": str(prefix)})
+            except RuntimeError as exc:
+                rows.append({"name": "Heroic Wine/Proton prefix", "ok": False, "detail": str(exc)})
+        elif store != "steam":
             rows.append({"name": "Proton prefix", "ok": False,
                          "detail": "store-specific handler must validate this prefix"})
         elif game:
@@ -522,7 +543,7 @@ def install_profile(recipe: dict, zip_file: Path, steam_roots=None) -> list[Path
     key = f"{recipe['id']}:profile"
     if key in _load_state():
         raise RuntimeError("A profile is already installed. Remove it first (uninstall-profile).")
-    dest = _pfx(recipe, steam_roots) / APPDATA / prof["dir"]
+    dest = profile_dir(recipe, steam_roots)
 
     stage = state_file().parent / "staging" / f"{recipe['id']}-{int(time.time())}"
     stage.mkdir(parents=True)
@@ -771,8 +792,9 @@ def diagnostics(recipe: dict, steam_roots=None) -> str:
     game = game_path(recipe, steam_roots)
     rep = verify(recipe)
     store = recipe.get("store", "steam")
-    store_line = (f"Steam app: {recipe['steam_appid']}" if store == "steam"
-                  else f"Heroic/GOG app: {recipe['heroic_appid']}")
+    store_line = (f"Steam app: {recipe['steam_appid']}" if store == "steam" else
+                  f"Heroic/Epic game: {recipe['heroic_title']}" if store == "heroic-epic" else
+                  f"Heroic/GOG app: {recipe['heroic_appid']}")
     lines = [f"Game: {recipe['name']}", f"Recipe: {recipe['id']}",
              store_line, f"Game path: {game or 'not found'}",
              f"State file: {state_file()}", f"Log file: {log_file()}"]
@@ -872,13 +894,21 @@ def details_html(recipe: dict, update_items: list[dict] | None = None, report: d
     return "".join(out)
 
 
-def launch_injector(recipe: dict, steam_roots=None) -> subprocess.Popen:
-    """Start UEVRInjector.exe inside the game's Proton prefix via protontricks-launch."""
+def injector_path(recipe: dict, steam_roots=None) -> Path:
     if recipe.get("method") != "uevr":
         raise RuntimeError("This game doesn't use the UEVR injector.")
     exe = _uevr_dir(recipe, steam_roots) / "UEVRInjector.exe"
     if not exe.is_file():
         raise RuntimeError("UEVR isn't installed for this game yet. Install the UEVR zip first.")
+    return exe
+
+
+def launch_injector(recipe: dict, steam_roots=None):
+    """Steam uses protontricks; native Heroic reuses its selected runner/prefix."""
+    exe = injector_path(recipe, steam_roots)
+    if recipe.get("store") == "heroic-epic":
+        from . import heroic_epic, heroic_injector
+        return heroic_injector.launch(heroic_epic.context(recipe), exe)
     tool = shutil.which("protontricks-launch")
     if not tool:
         raise RuntimeError("protontricks-launch not found. Install protontricks "

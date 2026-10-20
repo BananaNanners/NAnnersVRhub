@@ -1,5 +1,6 @@
 """NAnnersVRhub Qt window. Run with:  python -m vrhub.gui   (needs PySide6)"""
 import sys
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -10,11 +11,81 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QFile
                                QComboBox, QDialog, QDialogButtonBox, QFormLayout, QListWidget, QPlainTextEdit,
                                QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
-from . import __version__, compatibility, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
+from . import __version__, app_updates, compatibility, heroic_epic, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
 from .handlers import get_handler
 from .cli import _roots
 from .display_time import age_text, filename_stamp, local_time
 from .theme import BLUE, GREEN, LOGO_PATH, MUTED, RED, STYLESHEET, TEXT, YELLOW
+from .app_update_gui import HubUpdateController
+
+
+class HeroicInjectorDialog(QDialog):
+    def __init__(self, recipe, parent=None, *, launch=None, error=None):
+        super().__init__(parent)
+        self.info = heroic_epic.context(recipe)
+        exe = hub.injector_path(recipe)
+        self.setObjectName("heroicInjectorDialog")
+        self.setWindowTitle("UEVR injector — Hogwarts Legacy")
+        self.resize(690, 360)
+        layout = QVBoxLayout(self)
+        self.launch = launch
+        self.status = QLabel(error or ("Injector launch requested using Heroic's selected runner and prefix." if launch else "Use the manual Heroic route below."))
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
+        text = QLabel("Keep Hogwarts Legacy running after shader loading. In the injector, choose the HogwartsLegacy process and OpenXR, then Inject. Close the in-game overlay with Insert before checking immersion. Closing this Hub dialog leaves the injector and game running.")
+        text.setWordWrap(True)
+        layout.addWidget(text)
+        manual = QLabel("Manual fallback: in this game's Heroic Settings → Wine → Run EXE on prefix, select UEVRInjector.exe below. Use this route for Flatpak Heroic or if the one-click launch fails.")
+        manual.setWordWrap(True)
+        layout.addWidget(manual)
+        self.path = QLineEdit(str(exe))
+        self.path.setReadOnly(True)
+        layout.addWidget(self.path)
+        selected = QLabel(f"Epic app: {self.info['appid']}\nConfigured runner: {self.info['wine'].get('name', 'review in Heroic')}")
+        selected.setWordWrap(True)
+        layout.addWidget(selected)
+        self.copy = QPushButton("Copy injector path")
+        self.copy.clicked.connect(lambda: QApplication.clipboard().setText(self.path.text()))
+        self.folder = QPushButton("Open injector folder")
+        self.folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(exe.parent))))
+        self.open = QPushButton("Open Heroic")
+        self.open.clicked.connect(self.open_heroic)
+        row = QHBoxLayout()
+        for button in (self.copy, self.folder, self.open):
+            row.addWidget(button)
+        layout.addLayout(row)
+        self.output = QPlainTextEdit()
+        self.output.setReadOnly(True)
+        self.output.setMaximumHeight(140)
+        self.output.hide()
+        layout.addWidget(self.output)
+        close = QPushButton("Close")
+        close.clicked.connect(self.accept)
+        layout.addWidget(close)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.check_launch)
+        self.finished.connect(self.timer.stop)
+        if launch is not None:
+            self.timer.start(500)
+            self.check_launch()
+
+    def check_launch(self):
+        code = self.launch.poll()
+        if code is None:
+            return
+        self.timer.stop()
+        if code:
+            self.status.setText(f"Injector launcher exited with code {code}. Use the manual Heroic route below if no injector appeared.")
+            self.output.setPlainText(self.launch.output_tail()[-6000:])
+            self.output.show()
+        else:
+            self.status.setText("Launcher exited without an error. Check the UEVR window; this does not confirm injection or VR rendering.")
+
+    def open_heroic(self):
+        try:
+            subprocess.Popen(heroic_epic.command(self.info, play=False), start_new_session=True)
+        except (RuntimeError, OSError) as exc:
+            QMessageBox.warning(self, "Open Heroic manually", str(exc))
 
 
 class ScanWorker(QThread):
@@ -479,6 +550,12 @@ class HubWindow(QMainWindow):
         self.scan_report: dict | None = None
         self._closing = False
 
+        self.hub_updates = HubUpdateController(self)
+        self.hub_updates.idle.connect(self.close_when_idle)
+        self.hub_update_btn = QPushButton("Hub updates…")
+        self.hub_update_btn.clicked.connect(self.hub_updates.show)
+        self.hub_updates.changed.connect(self.update_hub_button)
+
         header = QFrame()
         header.setObjectName("brandHeader")
         header_row = QHBoxLayout(header)
@@ -511,7 +588,7 @@ class HubWindow(QMainWindow):
         self.live_status_label.setObjectName("liveStatus")
         self.live_status_label.hide()
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Game", "Steam install", "Mod", "Profile", "Updates"])
+        self.table.setHorizontalHeaderLabels(["Game", "Game install", "Mod", "Profile", "Updates"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -638,6 +715,7 @@ class HubWindow(QMainWindow):
         status_row.addWidget(self.runtime_label)
         status_row.addWidget(self.live_status_label)
         status_row.addStretch(1)
+        status_row.addWidget(self.hub_update_btn)
         root = QVBoxLayout()
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(9)
@@ -659,6 +737,17 @@ class HubWindow(QMainWindow):
         self.refresh()
         self.check_updates()  # quietly, in the background
         QTimer.singleShot(0, self.scan_setup)
+        QTimer.singleShot(0, self.hub_updates.startup)
+
+    def update_hub_button(self):
+        controller = self.hub_updates
+        if controller.installed:
+            text = "Hub update: restart ready"
+        elif controller.release and app_updates.newer(controller.release):
+            text = "Hub update ready…" if controller.ready_for_release() else "Hub update available…"
+        else:
+            text = "Hub updates…"
+        self.hub_update_btn.setText(text)
 
     def refresh_system_live(self):
         if self.auto_live.isChecked() and self.tabs.currentIndex() == 0 and self.scan_report:
@@ -720,7 +809,7 @@ class HubWindow(QMainWindow):
         self.close_when_idle()
 
     def close_when_idle(self):
-        if self._closing and not self.scan_worker and not (self.worker and self.worker.isRunning()):
+        if self._closing and not self.scan_worker and not (self.worker and self.worker.isRunning()) and not self.hub_updates.busy:
             self.close()
 
     def copy_system_report(self):
@@ -744,7 +833,8 @@ class HubWindow(QMainWindow):
         # Polling threads must finish before the window can destroy them.
         self._closing = True
         self.scan_timer.stop()
-        if self.scan_worker or (self.worker and self.worker.isRunning()):
+        self.hub_updates.shutdown()
+        if self.scan_worker or (self.worker and self.worker.isRunning()) or self.hub_updates.busy:
             event.ignore()
             return
         super().closeEvent(event)
@@ -787,6 +877,8 @@ class HubWindow(QMainWindow):
         self.install_btn.setEnabled(can_install)
         self.uninstall_btn.setEnabled(bool(r and r.get("method") != "guide"))
         self.inject_btn.setEnabled(bool(r and r.get("method") == "uevr"))
+        self.inject_btn.setText("Run UEVR injector")
+        self.copy_btn.setEnabled(bool(r and r.get("store", "steam") == "steam"))
         label = hub.game_launcher_label(r) if r else None
         self.game_launch_btn.setText(label or "Launch game tool")
         self.game_launch_btn.setVisible(bool(label))
@@ -999,6 +1091,14 @@ class HubWindow(QMainWindow):
         if not r:
             return
         try:
+            if r.get("store") == "heroic-epic":
+                try:
+                    launch = hub.launch_injector(r, _roots())
+                    dialog = HeroicInjectorDialog(r, self, launch=launch)
+                except (RuntimeError, OSError) as exc:
+                    dialog = HeroicInjectorDialog(r, self, error=str(exc))
+                dialog.exec()
+                return
             hub.launch_injector(r, _roots())
         except (RuntimeError, OSError) as e:
             QMessageBox.warning(self, "Could not start injector", str(e))
@@ -1032,7 +1132,7 @@ class HubWindow(QMainWindow):
             QMessageBox.warning(self, "Could not launch game", str(e))
             return
         store = r.get("store", "steam")
-        via = "Heroic" if store == "heroic-gog" else ("Steam/MO2" if r.get("handler") == "skyrim-vr" else "Steam")
+        via = "Heroic" if store.startswith("heroic-") else ("Steam/MO2" if r.get("handler") == "skyrim-vr" else "Steam")
         QMessageBox.information(self, "Launch request sent",
                                 f"{hub.game_play_label(r) or 'Game'} request sent through {via}.")
 

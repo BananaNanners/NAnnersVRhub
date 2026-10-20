@@ -93,6 +93,49 @@ class ManagedInstallTests(unittest.TestCase):
         self.assertFalse(self.root.exists())
         self.assertFalse((self.home / ".local/bin").exists())
 
+    def test_stale_in_app_update_cannot_replace_another_install(self):
+        self.install()
+        before = self.record()
+        self.new_version("0.5.3")
+        with self.assertRaisesRegex(RuntimeError, "active Hub version changed"):
+            installer.install(self.source, self.root, expected_current="stale-version-id")
+        self.assertEqual(self.record(), before)
+        self.assertEqual(len(list((self.root / "releases").iterdir())), 1)
+
+    def test_rollback_retains_the_new_recovery_manager(self):
+        self.install()
+        old = (self.root / "manage.py").read_bytes()
+        self.new_version("0.5.3")
+        source = self.source / "vrhub/self_install.py"
+        source.write_bytes(source.read_bytes() + b"\n# newer independent manager\n")
+        self.install()
+        new = (self.root / "manage.py").read_bytes()
+        self.assertNotEqual(old, new)
+        installer.rollback(self.root)
+        self.assertEqual((self.root / "manage.py").read_bytes(), new)
+        installer.rollback(self.root)
+        self.assertEqual((self.root / "manage.py").read_bytes(), new)
+
+    def test_missing_new_declared_recipe_is_rejected(self):
+        (self.source / "vrhub/recipes/hogwarts-legacy.toml").unlink()
+        with self.assertRaisesRegex(RuntimeError, "hogwarts-legacy"):
+            installer._source_files(self.source)
+
+    def test_legacy_four_recipe_archives_remain_verifiable(self):
+        (self.source / "vrhub/recipes/hogwarts-legacy.toml").unlink()
+        project = self.source / "pyproject.toml"
+        project.write_text(project.read_text().split("[tool.nannersvrhub]")[0])
+        version, files = installer._source_files(self.source)
+        self.assertEqual(version, __version__)
+        self.assertIn("vrhub/recipes/fatekeeper.toml", files)
+
+    def test_invalid_declared_recipe_path_is_rejected(self):
+        project = self.source / "pyproject.toml"
+        project.write_text(project.read_text().replace('"hogwarts-legacy"', '"../escape"'))
+        with self.assertRaisesRegex(RuntimeError, "recipe inventory"):
+            installer._source_files(self.source)
+        self.assertFalse(self.root.exists())
+
     def test_missing_dependency_creates_no_installation(self):
         with mock.patch.object(installer, "_probe", side_effect=RuntimeError("missing PySide6")):
             with self.assertRaisesRegex(RuntimeError, "PySide6"):

@@ -1,3 +1,63 @@
+# NAnnersVRhub 0.5.2
+
+- Adds stable Hub update checks, optional automatic source downloads, verified in-app installation, explicit restart and managed rollback. Stable official GitHub releases only; installation remains an explicit action.
+- Adds Hogwarts Legacy for Heroic/Epic with the matching HL_UEVR v2.0.6 injector/profile pair, complete script/plugin/model installation, backups, inventories, log diagnostics and local gameplay tests.
+- Adds one-click UEVR injector launch using native Heroic's selected runner and prefix, with the manual Heroic route retained for Flatpak and unsupported setups.
+- Records the October 19 dev4 user-reported one-click launch and VR rendering/tracking/controller/stereo success, plus short-session spell drawing and wrist-flick activation. Voice, body tracking, other gestures and longer sessions remain unverified.
+- Keeps existing game installs, mod state, saves, backups and gameplay history in place. Runtime behavior is unchanged from accepted dev4; this promotion updates version labels, bundled evidence and release documentation.
+
+# NAnnersVRhub 0.5.2-dev4
+
+- Hogwarts Legacy: Run UEVR injector now launches the installed injector with native Heroic's saved Wine/Proton runner and existing prefix, without selecting the EXE each time. Proton uses the installed umu launcher when enabled/available, or its established compatdata layout; it never uses a game-launch URI for the secondary executable.
+- Keeps the manual Heroic Run EXE on prefix guide for Flatpak, unsupported layouts and launch failures. Reports early exit codes and a bounded output tail; repeated clicks reuse a still-running launcher within this Hub process.
+- Pins the selected Proton build and prevents inherited Steam prefix/ID settings from redirecting the injector. Does not install runners, rewrite Heroic settings, stop the game or auto-inject.
+- Bundles the October 19 user-reported Hogwarts rendering/tracking/controller/stereo success using the manual Heroic route. Preserves historical local test snapshots. The new one-click route and optional body/gesture/voice features need separate live tests.
+
+# NAnnersVRhub 0.5.2-dev3
+
+- Correct Hogwarts Legacy to the user's Heroic/Epic storefront. Discover the
+  Epic identity, game directory and selected prefix/runner from read-only Heroic
+  metadata, supporting native and Flatpak configuration roots.
+- Install UEVR/profile files into that prefix, resolving direct and nested pfx
+  layouts and existing Windows AppData users. Reject ambiguous/missing installs,
+  users and out-of-prefix destinations; do not substitute a Steam prefix.
+- Add UEVR via Heroic guidance with copyable injector path and matching Heroic
+  client opening. Heroic's Run EXE on prefix owns injection launch; the Hub does
+  not rebuild its environment or invoke Steam protontricks for this game.
+- Route game launch through Heroic/Epic and keep compatibility, profile inventories
+  and log paths tied to the selected prefix. Preserve the original four Steam
+  workflows, Hub updates, saved records and Heroic configuration.
+- Test discovery, prefix/user layouts, metadata failures, isolation, GUI controls
+  and the actual author archives. Hogwarts gameplay remains unverified.
+
+# NAnnersVRhub 0.5.2-dev2
+
+- Add Hogwarts Legacy's Steam/WiVRn UEVR workflow using the maintainer's packaged
+  HL_UEVR v2.0.6 injector and complete HogwartsLegacy profile.
+- Add prefix-specific install/profile inventories, backend/script/plugin checks,
+  expected per-game UEVR log diagnostics and unverified gameplay evidence.
+- Preserve the existing four recipes and Hub update controls. Do not bundle mod
+  archives, change game settings or invent a successful Hogwarts gameplay test.
+- Declare packaged recipe requirements per release, probe each release's own
+  inventory, and preserve the current independent manager across app rollback.
+  This supports returning between four-game and five-game releases.
+
+# NAnnersVRhub 0.5.2-dev1
+
+- Add a separate Hub updates screen for official stable GitHub releases, daily
+  startup checks, optional automatic downloads, progress and cancellation.
+- Verify published checksums/digests, bounded archive contents and version/resource
+  completeness without importing downloaded code. Recheck cached contents before
+  explicit installation; reject older releases and source-mode activation.
+- Reuse managed installation, dependency checks, atomic activation and rollback.
+  Keep the running process pinned until explicit restart. Reject stale activation
+  if another window changed the installed version.
+- Preserve game files, runtime selection, mod inventories and saved gameplay tests.
+  Store updater preferences and downloaded archives separately.
+- Add network-failure, unsafe-archive, cache-tampering and real Qt/managed-upgrade
+  checks. Desktop/network acceptance is still required; no new gameplay evidence
+  is claimed.
+
 # NAnnersVRhub 0.5.1
 
 - Promote the accepted installer candidate to final with unchanged installer,

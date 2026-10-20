@@ -60,18 +60,19 @@ def _clean(value):
 
 def _sources(recipe, steam_roots):
     rid = recipe["id"]
-    if rid not in {"cyberpunk-2077", "fatekeeper"}:
+    if rid != "cyberpunk-2077" and not (recipe.get("method") == "uevr" and recipe.get("profile")):
         return [], "Automatic log paths are not configured for this game. Choose a log file to inspect OpenXR error signatures."
     game = hub.game_path(recipe, steam_roots)
     if not game:
-        return [], "Steam game directory was not found. Choose a log file, or check the game's installation."
+        return [], "Game directory was not found. Choose a log file, or check the game's storefront installation."
     if rid == "cyberpunk-2077":
         return [(game / "bin/x64/cyberpunkvrport.log", game)], "CyberpunkVR Port plugin log; other loader/CET logs require explicit file selection."
     try:
         prefix = hub._pfx(recipe, steam_roots)
+        profile = hub.profile_dir(recipe, steam_roots)
     except RuntimeError as exc:
         return [], str(exc)
-    return [(prefix / hub.APPDATA / recipe["profile"]["dir"] / "log.txt", prefix)], (
+    return [(profile / "log.txt", prefix)], (
         "Expected UEVR per-game log path. Community builds may log elsewhere; choose that file explicitly if needed.")
 
 

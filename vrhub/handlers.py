@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import heroic
+from . import heroic, heroic_epic
 
 
 class GameHandler:
@@ -705,6 +705,62 @@ class SkyrimVRHandler(GameHandler):
         ]
 
 
+class HeroicUEVRHandler(GameHandler):
+    name = "heroic-uevr"
+
+    def game_path(self, recipe):
+        try:
+            return heroic_epic.context(recipe)["game"]
+        except RuntimeError:
+            return None
+
+    def prefix(self, recipe):
+        return heroic_epic.prefix(heroic_epic.context(recipe))
+
+    def appdata(self, recipe):
+        return heroic_epic.appdata(heroic_epic.context(recipe))
+
+    def play_label(self, recipe):
+        return "Launch in Heroic"
+
+    def launch_play(self, recipe, game):
+        info = heroic_epic.context(recipe)
+        return subprocess.Popen(heroic_epic.command(info, play=True), start_new_session=True)
+
+    def preflight_rows(self, recipe, game):
+        try:
+            info = heroic_epic.context(recipe)
+        except RuntimeError as exc:
+            return [{"name": "Heroic/Epic discovery", "ok": False, "required": True, "detail": str(exc)}]
+        wine = info["wine"]
+        raw = wine.get("bin")
+        runner = Path(raw).expanduser() if isinstance(raw, str) and raw.strip() else None
+        rows = [{"name": "Heroic/Epic metadata", "ok": True, "required": True,
+                 "detail": f"Epic app {info['appid']}; {info['settings_path']} (read only)"},
+                {"name": "Heroic selected runner", "ok": bool(runner and runner.is_absolute() and runner.is_file()), "required": False,
+                 "detail": f"{wine.get('name', 'not named')}: {runner or 'not recorded'}; saved Heroic setting, not a running-process check. Review in Heroic if the binary is sandbox-internal."}]
+        try:
+            data = heroic_epic.appdata(info)
+            rows.append({"name": "Heroic Windows user", "ok": True, "required": True, "detail": str(data)})
+        except RuntimeError as exc:
+            rows.append({"name": "Heroic Windows user", "ok": False, "required": True, "detail": str(exc)})
+        return rows
+
+    def diagnostics(self, recipe, game):
+        try:
+            info = heroic_epic.context(recipe)
+            return ["Store: Heroic / Epic Games", f"Heroic config: {info['root']}", f"Epic app: {info['appid']}",
+                    f"Heroic selected runner: {info['wine'].get('name', 'not recorded')}",
+                    f"Heroic configured prefix: {info['settings'].get('winePrefix', 'not recorded')}",
+                    "Run UEVR injector reuses the native Heroic-selected runner and existing prefix. Run EXE on prefix in Heroic remains the manual fallback, including Flatpak."]
+        except RuntimeError as exc:
+            return ["Store: Heroic / Epic Games", str(exc)]
+
+    def detail_notes(self, recipe):
+        return [*self.diagnostics(recipe, None),
+                "Heroic environment setting to review: PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = 1 (name/value fields). Do not paste Steam's %command% into Heroic."]
+
+
 class HeroicGOGHandler(GameHandler):
     """Heroic/GOG workflow that keeps Heroic as the runner source of truth.
 
@@ -1046,6 +1102,7 @@ _HANDLERS: dict[str, GameHandler] = {
     "generic": GameHandler(),
     "skyrim-vr": SkyrimVRHandler(),
     "heroic-gog": HeroicGOGHandler(),
+    "heroic-uevr": HeroicUEVRHandler(),
 }
 
 
