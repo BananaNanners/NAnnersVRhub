@@ -1,4 +1,4 @@
-"""Recipe-driven local evidence for Steam mod and injector workflows.
+"""Recipe-driven local evidence for Steam and Heroic/Epic mod workflows.
 
 Only reads files and finds tool paths. It never executes a runner, parses launch
 options as shell code, or promotes file presence to gameplay validation.
@@ -9,7 +9,7 @@ import shutil
 
 from .schema import RecipeError
 
-PATH_KEYS = {"game_files", "prefix_files"}
+PATH_KEYS = {"game_files", "prefix_files", "profile_files"}
 BOOL_KEYS = {"recorded_proton", "tracked_install", "tracked_profile", "all_components"}
 
 
@@ -80,13 +80,22 @@ def rows(recipe, game):
     def add(name, status, detail):
         out.append(dict(name=name, status=status, detail=detail))
 
-    prefix = game.parents[1] / 'compatdata' / str(recipe['steam_appid']) / 'pfx' if game else None
+    try:
+        prefix = (game.parents[1] / 'compatdata' / str(recipe['steam_appid']) / 'pfx'
+                  if recipe.get('store', 'steam') == 'steam' else hub._pfx(recipe)) if game else None
+    except RuntimeError:
+        prefix = None
+    try:
+        profile = ((prefix / hub.APPDATA / recipe['profile']['dir']) if recipe.get('store', 'steam') == 'steam'
+                   else hub.profile_dir(recipe)) if recipe.get('profile') and prefix else None
+    except RuntimeError:
+        profile = None
     if checks.get('recorded_proton'):
         proton = _recorded_proton(prefix) if prefix and prefix.is_dir() else None
         add('Recorded Proton', 'ok' if proton else 'unknown',
             f'{proton}; recorded by prefix config_info, not a running-process or Steam selection check.' if proton else
             'No existing recorded Proton path resolved from this game prefix. Steam remains the runner source of truth; review its Compatibility setting.')
-    for key, base, title in [('game_files', game, 'Game file'), ('prefix_files', prefix, 'Prefix file')]:
+    for key, base, title in [('game_files', game, 'Game file'), ('prefix_files', prefix, 'Prefix file'), ('profile_files', profile, 'Profile file')]:
         for relative in checks.get(key, []):
             path = base / Path(relative.replace('\\', '/')) if base else None
             present = bool(path and _file_under(path, base))
@@ -106,7 +115,7 @@ def rows(recipe, game):
         status, detail = _inventory(state.get(recipe['id']), base, suffix) if base else ('unknown', 'Game/prefix unavailable.')
         add('Mod install inventory', status, detail)
     if checks.get('tracked_profile'):
-        base = prefix / hub.APPDATA / recipe['profile']['dir'] if prefix else None
+        base = profile
         status, detail = _inventory(state.get(recipe['id'] + ':profile'), base) if base else ('unknown', 'Game/prefix unavailable.')
         add('UEVR game-profile inventory', status, detail)
     if checks.get('all_components'):

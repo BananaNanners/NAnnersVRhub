@@ -91,14 +91,15 @@ class SteamWorkflowCompatibilityTests(unittest.TestCase):
     def row(self, recipe, name):
         return next(row for row in self.report(recipe)['checks'] if row['name'] == name)
 
-    def test_all_four_profiles_have_explicit_gameplay_evidence(self):
-        self.assertEqual(len(self.recipes),4)
+    def test_all_profiles_have_explicit_gameplay_evidence(self):
+        self.assertEqual(len(self.recipes),5)
         for recipe in self.recipes.values():
             self.assertIn('compatibility',recipe)
             self.assertIn('validation',recipe['compatibility'])
         self.assertEqual(self.recipes['cyberpunk-2077']['compatibility']['validation'],'user-reported-workaround')
         self.assertEqual(self.recipes['ready-or-not']['compatibility']['validation'],'user-reported')
         self.assertEqual(self.recipes['fatekeeper']['compatibility']['validation'],'user-reported')
+        self.assertEqual(self.recipes['hogwarts-legacy']['compatibility']['validation'],'user-reported')
 
     def test_skyrim_reference_records_latest_user_test(self):
         profile=self.recipes['skyrim-vr-mgo']['compatibility']

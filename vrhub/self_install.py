@@ -23,7 +23,8 @@ from pathlib import Path
 
 SCHEMA = 1
 OWNER = "NAnnersVRhub managed application files; schema=1\n"
-EXPECTED_RECIPES = {"skyrim-vr-mgo", "fatekeeper", "ready-or-not", "cyberpunk-2077"}
+CORE_RECIPES = {"skyrim-vr-mgo", "fatekeeper", "ready-or-not", "cyberpunk-2077"}
+EXPECTED_RECIPES = CORE_RECIPES | {"hogwarts-legacy"}
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}-[a-f0-9]{16}\Z")
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 
@@ -63,6 +64,7 @@ from vrhub import __version__, hub
 from vrhub.theme import LOGO_PATH
 from PySide6 import __version__ as qt_version
 from PySide6.QtWidgets import QApplication
+from vrhub.gui import HubWindow
 assert LOGO_PATH.is_file(), "Packaged icon is missing"
 print(json.dumps({"version":__version__, "recipes":sorted(hub.load_recipes()), "qt":qt_version}))
 '''
@@ -158,15 +160,25 @@ def _source_files(source: Path) -> tuple[str, dict[str, bytes]]:
             raise RuntimeError(f"Source package contains a symlink: {path}")
         if path.is_file() and path.suffix in {".py", ".png", ".toml"}:
             files[path.relative_to(source).as_posix()] = path.read_bytes()
-    required = {"vrhub/gui.py", "vrhub/cli.py", "vrhub/launcher.py", "vrhub/guard.py", "vrhub/self_install.py",
-                "vrhub/assets/bananananners.png", *{f"vrhub/recipes/{rid}.toml" for rid in EXPECTED_RECIPES}}
-    if missing := required - files.keys():
-        raise RuntimeError("Incomplete source folder: " + ", ".join(sorted(missing)))
     version = _version(package)
     project = tomllib.loads((source / "pyproject.toml").read_text())
     if project["project"]["version"] != version:
         raise RuntimeError("Project and runtime version labels do not match.")
-    for name in ("pyproject.toml", "README.md", "INSTALL-0.5.1.md", "TROUBLESHOOTING.md"):
+    # New releases declare their own inventory. Legacy four-game source ZIPs
+    # remain downloadable/verifiable, and future recipe additions need no cap.
+    tool = project.get("tool", {})
+    config = tool.get("nannersvrhub", {}) if isinstance(tool, dict) else None
+    if not isinstance(config, dict):
+        raise RuntimeError("Invalid packaged recipe inventory.")
+    recipes = config.get("required_recipes", sorted(CORE_RECIPES))
+    if (not isinstance(recipes, list) or any(not isinstance(rid, str) or not re.fullmatch(r"[a-z0-9-]+", rid) for rid in recipes)
+            or not CORE_RECIPES.issubset(recipes) or len(recipes) != len(set(recipes))):
+        raise RuntimeError("Invalid packaged recipe inventory.")
+    required = {"vrhub/gui.py", "vrhub/cli.py", "vrhub/launcher.py", "vrhub/guard.py", "vrhub/self_install.py",
+                "vrhub/assets/bananananners.png", *{f"vrhub/recipes/{rid}.toml" for rid in recipes}}
+    if missing := required - files.keys():
+        raise RuntimeError("Incomplete source folder: " + ", ".join(sorted(missing)))
+    for name in ("pyproject.toml", "README.md", "INSTALL-0.5.1.md", "TROUBLESHOOTING.md", "UPDATE-TESTING-0.5.2-dev1.md", "HOGWARTS-TESTING-0.5.2-dev2.md", "HOGWARTS-HEROIC-0.5.2-dev3.md", "HOGWARTS-ONECLICK-0.5.2-dev4.md", "RELEASE-NOTES-0.5.2.md", "UPDATE-TESTING-0.5.2.md"):
         path = source / name
         if path.is_symlink():
             raise RuntimeError(f"Source documentation must not be a symlink: {path}")
@@ -188,8 +200,9 @@ def _probe(source: Path, python: str) -> dict:
                            f"Run the installer with the Python that provides PySide6: {python}\n{detail}")
     try:
         info = json.loads(result.stdout)
-        if set(info["recipes"]) != EXPECTED_RECIPES:
-            raise ValueError("Expected four public game recipes")
+        expected = {path.stem for path in (source / "vrhub/recipes").glob("*.toml")}
+        if not CORE_RECIPES.issubset(expected) or set(info["recipes"]) != expected:
+            raise ValueError("Packaged recipe files do not match the loaded game recipes")
     except (ValueError, KeyError, TypeError) as exc:
         raise RuntimeError(f"Application resource check failed: {exc}") from exc
     return info
@@ -313,7 +326,7 @@ def _release(root: Path, release_id: str) -> tuple[Path, dict]:
     return directory, manifest
 
 
-def install(source: Path, root: Path, *, check_only=False) -> dict:
+def install(source: Path, root: Path, *, check_only=False, expected_current=None) -> dict:
     source = source.expanduser().resolve()
     root = Path(os.path.abspath(root.expanduser()))
     if root == Path.home() or root == source or root.is_relative_to(source) or source.is_relative_to(root):
@@ -334,6 +347,8 @@ def install(source: Path, root: Path, *, check_only=False) -> dict:
         return {"status": "CHECK PASSED", "version": version, "root": str(root), "python": python, **info}
     with _locked(root):
         old = _read_record(root)
+        if expected_current is not None and (not old or old["current"] != expected_current):
+            raise RuntimeError("The active Hub version changed. Restart the Hub before installing this update.")
         releases = root / "releases"
         if releases.is_symlink():
             raise RuntimeError("Release storage must not be a symlink.")
@@ -385,7 +400,11 @@ def rollback(root: Path) -> dict:
         _probe(directory, old["python"])
         files = {name: (directory / name).read_bytes() for name in manifest["files"]}
         record = {**old, "current": old["previous"], "previous": old["current"]}
-        _activate(root, record, _artifacts(root, old["python"], files))
+        artifacts = _artifacts(root, old["python"], files)
+        # Keep the current independent recovery manager across app rollback.
+        # Older managers assumed exactly four recipes and cannot return to five.
+        artifacts[root / "manage.py"] = ("file", (root / "manage.py").read_bytes(), 0o644)
+        _activate(root, record, artifacts)
     return {"status": "ROLLED BACK", "version": manifest["version"], "root": str(root)}
 
 

@@ -1,10 +1,71 @@
-# NAnnersVRhub 0.5.1
+# NAnnersVRhub 0.5.2
 
 **NAnnersVRhub — Linux VR Compatibility & Mod Manager**
 
-A Linux VR mod hub for Steam games, developed on CachyOS + WiVRn + Quest 3.
+A Linux VR mod hub for Steam and Heroic/Epic games, developed on CachyOS + WiVRn + Quest 3.
 
-Current recipes: Cyberpunk 2077, Fatekeeper, Ready or Not, and the first Skyrim VR / Mad God's Overhaul workflow.
+Current recipes: Cyberpunk 2077, Fatekeeper, Hogwarts Legacy, Ready or Not, and Skyrim VR / Mad God's Overhaul.
+
+## Hogwarts Legacy — Heroic/Epic + one-click injector
+
+Launch Hogwarts through Heroic and wait for shader loading. Select it in the Hub
+and click **Run UEVR injector**. Native Heroic installations reuse the game's saved
+Wine/Proton runner and existing prefix; no file picker is needed. In UEVR, choose
+**HogwartsLegacy**, select **OpenXR**, and click **Inject**. Close the in-game overlay
+with **Insert** before checking immersion.
+
+Flatpak Heroic and unsupported runner/prefix layouts retain the manual **Run EXE
+on prefix** guide, with copyable injector path and an **Open Heroic** button. Failed
+launches show their exit code and a bounded output tail. The Hub does not launch
+a second copy of the game or change Heroic's saved settings.
+
+The October 19 **user-reported** reference covers the one-click injector, rendering,
+tracking, controller input and stereo depth. A short follow-up also confirmed spell
+drawing and wrist-flick activation. Voice, body tracking, other gestures and longer
+sessions remain untested. Local historical snapshots stay unchanged. See
+[release notes](RELEASE-NOTES-0.5.2.md).
+
+The matching **UEVR.zip** and **HogwartsLegacy.zip** from HL_UEVR v2.0.6 are still
+installed separately through **Install mod file…** and **Install profile…**. The Hub
+does not bundle the mods. Existing profiles are backed up separately from saves.
+
+## In-app Hub updates
+
+Choose **Hub updates…** above the tabs to check the official stable GitHub release,
+download its source ZIP, and install a verified newer version without finding or
+extracting an archive yourself. Startup checks are enabled by default and limited
+to once per 24 hours; automatic downloads are optional and off by default.
+Installation and restart always require your action. Game-mod updates remain
+separate in Games.
+
+For a first installation or an upgrade from 0.5.1, use the offline installer.
+To test the in-app upgrade from dev4, keep dev4 installed and follow
+[UPDATE-TESTING-0.5.2.md](UPDATE-TESTING-0.5.2.md) after the stable release is published:
+
+```fish
+unzip -n ~/Downloads/NAnnersVRhub-0.5.2-source.zip -d ~/Downloads
+and cd ~/Downloads/NAnnersVRhub-0.5.2
+and python install.py
+and ~/.local/bin/nannersvrhub
+```
+
+Close the old Hub first. Downloads require HTTPS access to GitHub and its release
+asset servers. PySide6/Python dependencies still use your existing installation.
+The updater checks SHA256SUMS, GitHub asset digests when supplied, archive limits,
+safe paths, complete resources and matching versions. Only an explicitly chosen
+installation executes the downloaded application through the managed installer.
+The previous installed version remains available for rollback.
+
+The published stable release is currently **0.5.1**, older than this preview.
+It can be downloaded for a real connection/checksum check; installation as an
+update is disabled. A newer stable release will enable the install flow. Source
+and wheel launches support checks/downloads; open the managed application-menu
+entry for installation. See [UPDATE-TESTING-0.5.2-dev1.md](UPDATE-TESTING-0.5.2-dev1.md)
+for acceptance checks, failure behavior and updater storage.
+
+Dev2 keeps the newest independent recovery manager when rolling the application
+back. It checks each release's own recipe inventory, so rollback from the new
+five-game build to a four-game build and return both remain possible.
 
 ## Install 0.5.1
 
@@ -29,7 +90,7 @@ App copies live in a permanent folder; saved tests, mod records and backups
 stay in their existing location. Future extracted builds use `python install.py`
 to upgrade. Close the Hub before switching versions. To select the previous
 managed version, run `~/.local/bin/nannersvrhub-manage rollback`; repeating it
-switches back. Automatic Hub downloads are outside this release.
+switches back. Automatic Hub downloads were outside the 0.5.1 release.
 
 Recipes live in `vrhub/recipes/`. Regular wheel builds also include the recipes,
 icon and app/CLI/guard/manager entry points. The source installer is the
