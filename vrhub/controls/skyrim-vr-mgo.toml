@@ -1,0 +1,173 @@
+id = "skyrim-vr-mgo"
+title = "Skyrim VR — Mad God’s Overhaul"
+scope = "MGO 3.8: right-handed Vanilla Quest / Touch layout with the user-confirmed trigger-ready exception. Triggers do not draw or ready sheathed weapons; normal combat and casting remain available once weapons or spells are readied."
+version = "MGO 3.8 · Vanilla + trigger-ready exception"
+reviewed = "2026-10-20"
+notes = ["This reference replaces the previous VRIK V2.1.0 example with the Vanilla layout reviewed and approved by the user on October 20, 2026.", "Trigger-ready exception: pressing either trigger while weapons are sheathed must not draw or ready them. Once readied, triggers retain their normal combat, power-attack and spell-casting actions.", "This is the requested guide layout, not a scan or automatic change of the installed game bindings. Keep the separate active MGO/OpenComposite preset and mod settings consistent with your chosen layout.", "Plain Vanilla is different from Vanilla + Oculus Touch, VRIK, Kvite, Cangar and VR Safe. Other presets or left-handed settings may differ.", "The successful MGO test confirmed VR/controllers overall. This review does not create a new gameplay test or certify every listed action."]
+
+[sources.local]
+label = "User-reviewed layout · Oct 20, 2026"
+detail = "The user approved the Vanilla controls table and confirmed that triggers cannot ready sheathed weapons but retain normal combat/casting once readied. This is configuration guidance, not a new live test."
+user_report = true
+
+[sources.upstream]
+label = "MGO OpenComposite preset guide"
+detail = "Documents plain Vanilla as a separate preset; does not establish the active preset or the custom trigger exception."
+url = "https://synergyvr.org/mgo/performance/open-composite/index.html"
+
+[sources.higgs]
+label = "HIGGS author guide"
+detail = "Hand interaction is affected by HIGGS configuration and selected controller bindings."
+url = "https://www.nexusmods.com/skyrimspecialedition/mods/43930"
+
+[[sections]]
+name = "Movement · Vanilla"
+
+[[sections.bindings]]
+input = "Left thumbstick"
+action = "Move"
+note = "Vanilla baseline; movement orientation follows game settings."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Right thumbstick left / right"
+action = "Turn"
+note = "Vanilla baseline; turn settings apply."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Right thumbstick up / down"
+action = "Jump / sneak"
+note = "Vanilla baseline; physical sneaking settings may affect behavior."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "L3 · left stick click"
+action = "Sprint"
+note = "Vanilla baseline. Sprint is not assigned to left grip in this guide."
+evidence = "dependent"
+source = "local"
+
+[[sections]]
+name = "Combat and interaction · Vanilla"
+
+[[sections.bindings]]
+input = "A · right hand"
+action = "Activate / interact"
+note = "Vanilla baseline; right grip is reserved for shout / power."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "B · right hand"
+action = "Favorites"
+note = "During gameplay; menu context differs."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "X · left hand"
+action = "Items / magic / map / skills menu"
+note = "Opens the tween menu. Does not ready weapons in this guide."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Y · left hand"
+action = "Journal / wait"
+note = "Press for journal; hold for wait."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Left grip"
+action = "Ready / sheathe weapons"
+note = "Vanilla ready / sheathe control, retained alongside the trigger-ready exception."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Right grip"
+action = "Shout / power"
+note = "Uses the equipped shout or power."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Left / right trigger · weapons sheathed"
+action = "Does not draw or ready weapons"
+note = "User-confirmed exception to the Vanilla trigger-ready behavior."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Left / right trigger · weapons or spells readied"
+action = "Normal combat / spell casting"
+note = "Corresponding-hand attack/casting remains available after readying."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Hold trigger + swing · weapon readied"
+action = "Power attack"
+note = "Normal combat behavior remains; triggers cannot ready a sheathed weapon."
+evidence = "dependent"
+source = "local"
+
+[[sections]]
+name = "Menus · Vanilla"
+
+[[sections.bindings]]
+input = "A or trigger"
+action = "Accept / select"
+note = "Menu input remains available; the trigger-ready exception concerns sheathed weapons."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Grip"
+action = "Back / cancel"
+note = "Menu context only."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "B · right hand"
+action = "Favorite item"
+note = "Inventory menu context."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "X · left hand"
+action = "Drop item"
+note = "Inventory menu context."
+evidence = "dependent"
+source = "local"
+
+[[sections.bindings]]
+input = "Right thumbstick in item menu"
+action = "Zoom item"
+note = "Vanilla item zoom; replaces the VRIK example’s right-grip zoom."
+evidence = "dependent"
+source = "local"
+
+[[sections]]
+name = "Physical interaction"
+
+[[sections.bindings]]
+input = "HIGGS grab input"
+action = "Grab / pull nearby objects"
+note = "Check HIGGS settings and the active preset for grip/trigger selection."
+evidence = "dependent"
+source = "higgs"
+
+[[sections.bindings]]
+input = "VRIK / Spell Wheel gestures"
+action = "Holsters, spells and quick selection"
+note = "These mod-specific assignments remain controlled by the installed profile and MCM settings."
+evidence = "dependent"
+source = "local"

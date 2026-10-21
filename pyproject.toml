@@ -1,6 +1,6 @@
 [project]
 name = "nannersvrhub"
-version = "0.5.2"
+version = "0.5.3"
 description = "NAnnersVRhub: Linux VR mod hub (CachyOS / WiVRn / Quest 3)"
 requires-python = ">=3.11"
 dependencies = []
@@ -22,7 +22,12 @@ build-backend = "setuptools.build_meta"
 packages = ["vrhub"]
 
 [tool.setuptools.package-data]
-vrhub = ["assets/*.png", "recipes/*.toml"]
+vrhub = ["assets/*.png", "recipes/*.toml", "controls/*.toml"]
+
+[tool.setuptools.exclude-package-data]
+vrhub = ["**/__pycache__/*", "**/*.pyc", "**/*.pyo"]
 
 [tool.nannersvrhub]
-required_recipes = ["cyberpunk-2077", "fatekeeper", "hogwarts-legacy", "ready-or-not", "skyrim-vr-mgo"]
+required_kharvox_installer = "0.2.0"
+required_recipes = ["cyberpunk-2077", "doom-2016-gog", "elden-ring", "fatekeeper", "hogwarts-legacy", "ready-or-not", "skyrim-vr-mgo", "subnautica", "valheim"]
+required_controller_guides = ["cyberpunk-2077", "doom-2016-gog", "elden-ring", "fatekeeper", "hogwarts-legacy", "ready-or-not", "skyrim-vr-mgo", "subnautica", "valheim"]

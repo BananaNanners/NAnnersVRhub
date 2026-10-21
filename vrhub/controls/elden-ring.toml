@@ -1,0 +1,153 @@
+id = "elden-ring"
+title = "Elden Ring — ERVR"
+scope = "Quest / Touch defaults from the inspected ERVR 0.4.0 archive. Physical first-person combat and button mode differ; no local Linux gameplay test is recorded."
+version = "ERVR 0.4.0 · experimental Steam / Proton / WiVRn"
+reviewed = "2026-10-20"
+notes = ["Offline / EAC-disabled play only. This controller reference does not configure or verify the launch route.", "Full stereo is evaluated in a loaded offline save; title screens, menus, loading and cutscenes intentionally use cinema.", "ERVR.ini has no in-headset settings menu in this version. Review [Buttons], [MenuNav], [Movement] and [Combat] for customization. The confusingly named LeftGripPlusStickIsDpad setting is documented in this archive as left-stick click + tilt, not grip + tilt.", "Normal game menus suppress physical swing combat and use the left stick for navigation. Mount, full-body, weapon-specific and gesture behavior need separate local tests."]
+
+[sources.archive]
+label = "Inspected ERVR 0.4.0 archive"
+detail = "README.md and ERVR.ini from the user-supplied Nexus ZIP; controls are documented defaults, not local gameplay evidence."
+url = "https://www.nexusmods.com/eldenring/mods/10711"
+
+[[sections]]
+name = "Movement"
+
+[[sections.bindings]]
+input = "Left thumbstick"
+action = "Move"
+note = "Head-relative by default; [Movement] Forward changes orientation."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Right thumbstick"
+action = "Turn"
+note = "Smooth or snap turning follows ERVR.ini."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "B · right hand"
+action = "Dodge / sprint"
+note = "Hold for sprint; native game mappings apply."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "L3 · left stick click · tap"
+action = "Crouch"
+note = "Hold and tilt has a different role."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "L3 held + left stick tilt"
+action = "Quick-slot D-pad"
+note = "Switch spells, weapons or items according to the game’s D-pad mapping."
+evidence = "default"
+source = "archive"
+
+[[sections]]
+name = "Interaction and menus"
+
+[[sections.bindings]]
+input = "A · right hand"
+action = "Interact / confirm"
+note = "Default gamepad A action; no jump claim is made."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "X · left hand"
+action = "Use item"
+note = "Default gamepad X action."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Y · left hand"
+action = "Event / manual two-hand modifier"
+note = "Default gamepad Y action."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "R3 · right stick click"
+action = "Lock-on"
+note = "Default gamepad RS action."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Left menu button · tap / hold"
+action = "Menu / map"
+note = "Hold threshold defaults to 0.45 seconds."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "L3 held still · 0.5 seconds"
+action = "Toggle menu-navigation override"
+note = "No tilt; haptic feedback confirms the mode."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Left stick in menu"
+action = "Navigate / auto-repeat"
+note = "Automatic menu mode; physical swings are muted while a menu is open."
+evidence = "default"
+source = "archive"
+
+[[sections]]
+name = "Combat"
+
+[[sections.bindings]]
+input = "Right-hand swing"
+action = "Physical melee attack"
+note = "Swing speed and weapon weight affect the attack; heavier swing can become heavy attack."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Left-hand swing / shield posture"
+action = "Offhand attack / parry / guard"
+note = "Physical first-person mode; equipment and shield posture matter."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Free hand near hilt + fresh grip squeeze"
+action = "Two-hand weapon"
+note = "Hold grip to stay attached; release to let go."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Right trigger while two-handing"
+action = "Ash of War"
+note = "The first activation may play normally while the mod records the skill."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Right trigger / right grip"
+action = "Light / heavy attack in button mode"
+note = "Physical first-person melee uses swings instead; right grip also modifies hand aim."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Left trigger / left grip"
+action = "Guard / skill in button mode"
+note = "Context and physical combat settings can change routing."
+evidence = "default"
+source = "archive"
+
+[[sections.bindings]]
+input = "Casting hand direction"
+action = "Aim supported spells / bows / ranged skills"
+note = "CastAim=true; weapon-specific behavior remains locally unverified."
+evidence = "default"
+source = "archive"

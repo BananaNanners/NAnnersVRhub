@@ -1,0 +1,130 @@
+id = "subnautica"
+title = "Subnautica — SubmersedVR"
+scope = "Stock Oculus Touch / Quest bindings. The user reverted the experimental Menu/PDA override and prefers this layout."
+version = "SubmersedVR 0.2.1"
+reviewed = "2026-10-20"
+notes = ["The in-game binding editor was reported to get stuck waiting for input without a working cancel. Keep stock bindings for this tested setup.", "Y → UIAssign did not work in the external-binding experiment. Use the tested A-drag method instead.", "The Meta system button is reserved by the headset. The failed system-button PDA experiment is not part of this guide."]
+
+[sources.upstream]
+label = "SubmersedVR 0.2.1 bindings"
+detail = "Author-supplied Oculus action bindings; action names are contextual."
+url = "https://github.com/Okabintaro/SubmersedVR/blob/0.2.1/SubmersedVR/StreamingAssets/SteamVR/bindings_oculus_touch.json"
+
+[sources.local]
+label = "User report · Oct 19–20, 2026"
+detail = "Quest 3 / CachyOS / WiVRn / xrizer. Y/PDA, A and trigger interaction, and A-drag quick-slot assignment were reported working."
+user_report = true
+
+[[sections]]
+name = "Movement"
+
+[[sections.bindings]]
+input = "Left thumbstick"
+action = "Move / swim"
+note = "Direction follows the selected movement settings."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right thumbstick"
+action = "Turn / look"
+note = "Outside menus and builder context."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "L3 · left stick click"
+action = "Jump"
+note = "Stock jump action."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left grip / right grip"
+action = "Swim down / swim up"
+note = "Both grips also have a contextual sprint action."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Interaction and inventory"
+
+[[sections.bindings]]
+input = "Y · left hand"
+action = "Open / close PDA"
+note = "Keep the stock mapping."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "A · right hand"
+action = "Confirm / interact"
+note = "Also has contextual alternate-tool / left-hand actions."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "Right trigger"
+action = "Interact / confirm"
+note = "Primary right-hand action and UI submit."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "Hold A + drag item"
+action = "Assign an inventory item to a quick slot"
+note = "Hold A on the item, drag to the slot, then release."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "Right stick click · R3"
+action = "Open quick-slot wheel"
+note = "Choose a tool from the wheel."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "X · left hand"
+action = "Reload / clear UI selection"
+note = "Depends on the selected tool or menu."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "B · right hand"
+action = "Back / cancel / exit"
+note = "Context depends on the current screen."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right thumbstick"
+action = "Scroll inventory UI"
+note = "When a scrollable UI is active."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Building"
+
+[[sections.bindings]]
+input = "Left grip / right grip"
+action = "Rotate build preview left / right"
+note = "Builder context only; documented defaults, not separately tested."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right thumbstick left / right"
+action = "Rotate build preview"
+note = "Builder context; the same stick controls look elsewhere."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right thumbstick down"
+action = "Deconstruct"
+note = "Builder context; review the in-game prompt."
+evidence = "default"
+source = "upstream"

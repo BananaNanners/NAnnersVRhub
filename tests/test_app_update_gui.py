@@ -51,7 +51,7 @@ class QtUpdateTests(unittest.TestCase):
         c.start("check", True)
         self.wait()
         c.show()
-        self.assertIn("0.5.3", c.dialog.versions.text())
+        self.assertIn("0.5.4", c.dialog.versions.text())
         self.assertEqual(c.dialog.notes.toPlainText(), self.fixture.metadata["body"])
         self.assertFalse(c.dialog.install.isEnabled())  # Source run.
         c.dialog.automatic.setChecked(True)
@@ -167,9 +167,9 @@ with mock.patch.object(HubWindow,'check_updates'), mock.patch.object(HubWindow,'
    app.processEvents(); time.sleep(.005)
   assert not c.busy,c.message
   app.processEvents()
- assert w.table.rowCount()==5
+ assert w.table.rowCount()==9
  c.dialog.check.click(); wait()
- assert c.release['version']=='0.5.3',c.message
+ assert c.release['version']=='0.5.4',c.message
  c.dialog.download.click(); wait()
  assert c.dialog.install.isEnabled(),c.message
  with mock.patch.object(QMessageBox,'question',return_value=QMessageBox.Yes):
@@ -187,11 +187,11 @@ print('Real managed GUI: check -> download -> verify -> install -> restart: OK')
 '''
         output = run(sys.executable, "-I", "-B", "-c", probe, root / "releases" / first, fixture.base, __version__)
         self.assertIn("restart: OK", output)
-        self.assertIn("0.5.3", run(root / "bin/nannersvrhub", "--version"))
+        self.assertIn("0.5.4", run(root / "bin/nannersvrhub", "--version"))
         self.assertIn("Fatekeeper", run(root / "bin/nannersvrhub", "info", "fatekeeper"))
         after = json.loads((root / "installation.json").read_text())
         self.assertEqual(after["previous"], first)
         run(root / "bin/nannersvrhub-manage", "rollback")
         self.assertIn(__version__, run(root / "bin/nannersvrhub", "--version"))
         run(root / "bin/nannersvrhub-manage", "rollback")
-        self.assertIn("0.5.3", run(root / "bin/nannersvrhub", "--version"))
+        self.assertIn("0.5.4", run(root / "bin/nannersvrhub", "--version"))

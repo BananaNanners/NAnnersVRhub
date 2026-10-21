@@ -42,7 +42,7 @@ def validate_recipe(recipe: dict, source: str = "recipe") -> dict:
             raise RecipeError(f"{source}: Heroic/Epic currently requires the heroic-uevr handler and method='uevr'")
 
     method = recipe.get("method", "file")
-    if method not in {"file", "gameroot", "uevr", "guide"}:
+    if method not in {"file", "gameroot", "uevr", "guide", "bepinex", "ervr"}:
         raise RecipeError(f"{source}: unsupported method '{method}'")
 
     if method == "file":
@@ -63,6 +63,29 @@ def validate_recipe(recipe: dict, source: str = "recipe") -> dict:
         raise RecipeError(f"{source}: unknown handler '{handler}'")
     if handler == "heroic-uevr" and store != "heroic-epic":
         raise RecipeError(f"{source}: heroic-uevr requires store='heroic-epic'")
+    if handler == "kharvox-gog" and (store != "heroic-gog" or method != "guide" or
+            recipe.get("id") != "doom-2016-gog" or str(recipe.get("heroic_appid")) != "1390579243"):
+        raise RecipeError(f"{source}: kharvox-gog requires the guided DOOM 2016 GOG identity")
+    pinned_games = {"submersed-vr": ("subnautica", 264710, {"loader", "submersedvr"}),
+                    "valheim-vr": ("valheim", 892970, {"loader", "vhvr"}),
+                    "elden-ring-vr": ("elden-ring", 1245620, {"ervr"})}
+    if method in {"bepinex", "ervr"} or handler in pinned_games:
+        expected = pinned_games.get(handler)
+        if (method != ("ervr" if handler == "elden-ring-vr" else "bepinex") or not expected or store != "steam" or
+                recipe.get("id") != expected[0] or recipe.get("steam_appid") != expected[1]):
+            raise RecipeError(f"{source}: pinned packages require a supported Steam game/handler pair")
+        import re
+        packages = recipe.get("packages")
+        if not isinstance(packages, list) or len(packages) != len(expected[2]) or {p.get("id") for p in packages if isinstance(p, dict)} != expected[2]:
+            raise RecipeError(f"{source}: pinned loader and game VR packages are required")
+        for p in packages:
+            if not isinstance(p, dict) or not all(isinstance(p.get(k), str) and p[k] for k in ("name", "page", "sha256")) or not re.fullmatch(r"[a-f0-9]{64}", p["sha256"]):
+                raise RecipeError(f"{source}: invalid pinned package metadata")
+            paths = p.get("required_files")
+            if not isinstance(paths, list) or not paths or any(not isinstance(x, str) or not x or Path(x).is_absolute() or ".." in Path(x).parts or ":" in x or "\\" in x for x in paths):
+                raise RecipeError(f"{source}: unsafe package required_files")
+    elif recipe.get("packages"):
+        raise RecipeError(f"{source}: packages require a supported pinned installer method")
 
     links = recipe.get("links", [])
     if links and (not isinstance(links, list) or any(

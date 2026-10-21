@@ -84,6 +84,9 @@ def load_recipes() -> dict[str, dict]:
         if r["id"] in out:
             raise RecipeError(f"{f.name}: duplicate recipe id '{r['id']}'")
         out[r["id"]] = r
+    if 'doom-2016-gog' in out:
+        from . import kharvox_bridge
+        kharvox_bridge.require_binaries()
     return out
 
 
@@ -130,7 +133,7 @@ def _extract(z: zipfile.ZipFile, anchor: str, base: Path) -> list[Path]:
 
 
 def _pfx(recipe: dict, steam_roots=None) -> Path:
-    if recipe.get("store") == "heroic-epic":
+    if recipe.get("store") == "heroic-epic" or recipe.get("handler") == "kharvox-gog":
         return get_handler(recipe).prefix(recipe)
     game = find_game(recipe["steam_appid"], steam_roots)
     if not game:
@@ -172,6 +175,9 @@ def install(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
         return _install_uevr(recipe, mod_file, steam_roots)
     if recipe.get("method") == "gameroot":
         return _install_gameroot(recipe, [mod_file], steam_roots)
+    if recipe.get("method") in {"bepinex", "ervr"}:
+        from . import bepinex
+        return bepinex.install(recipe, [mod_file], steam_roots)
     rule = recipe["files"][0]
     ext = f".{rule['kind']}"
     dest_dir = game / rule["dest"]
@@ -421,6 +427,14 @@ def inspect_archive(recipe: dict, archive: Path) -> dict:
     """Stage one archive without touching the game and report what would be installed."""
     if not archive.is_file():
         raise RuntimeError(f"File not found: {archive}")
+    if recipe.get("method") in {"bepinex", "ervr"}:
+        from . import bepinex
+        package, names = bepinex.inventory(archive, recipe)
+        with zipfile.ZipFile(archive) as z:
+            archive_files = sum(not item.is_dir() for item in z.infolist())
+        return {"archive": archive.name, "component": package["name"], "nexus_mod": None,
+                "archive_files": archive_files, "install_files": len(names),
+                "required_files": package["required_files"], "sample": names[:12]}
     if recipe.get("method") != "gameroot":
         raise RuntimeError("Archive inspection is currently available for game-root recipes.")
     comp = _component_for(recipe, archive.name) if recipe.get("components") else None
@@ -451,7 +465,7 @@ def inspect_archive(recipe: dict, archive: Path) -> dict:
 def inspect_text(report: dict) -> str:
     lines = [f"Archive: {report['archive']}"]
     if report.get("component"):
-        lines.append(f"Component: {report['component']} (#{report['nexus_mod']})")
+        lines.append(f"Component: {report['component']}" + (f" (#{report['nexus_mod']})" if report.get("nexus_mod") else ""))
     lines += [f"Files in archive: {report['archive_files']}",
               f"Files that would be installed: {report['install_files']}"]
     if report.get("roots"):
@@ -475,7 +489,7 @@ def preflight(recipe: dict, steam_roots=None) -> dict:
                  "detail": str(game) if game else missing})
     req = recipe.get("requirements", {})
     if req.get("proton_prefix"):
-        if store == "heroic-epic":
+        if store == "heroic-epic" or recipe.get("handler") == "kharvox-gog":
             try:
                 prefix = _pfx(recipe, steam_roots)
                 rows.append({"name": "Heroic Wine/Proton prefix", "ok": True, "detail": str(prefix)})
@@ -500,7 +514,7 @@ def preflight(recipe: dict, steam_roots=None) -> dict:
             ok = bool(path and lib)
             detail = f"{lib or path}" if ok else "no active OpenXR runtime found"
         rows.append({"name": "OpenXR", "ok": ok, "detail": detail})
-    rep = verify(recipe)
+    rep = verify(recipe, steam_roots)
     if rep:
         rows.append({"name": "Required mods", "ok": rep["ready"], "required": True,
                      "detail": f"{rep['ok']}/{rep['total']} components OK"})
@@ -520,11 +534,14 @@ def preflight_text(report: dict) -> str:
 
 
 def install_many(recipe: dict, mod_files: list[Path], steam_roots=None) -> list[Path]:
-    """Install one or several downloaded files (several only for 'gameroot' games)."""
+    """Install downloaded files, including paired game-root packages."""
     if not get_handler(recipe).install_supported(recipe):
         raise RuntimeError(f"{recipe['name']} is a guided workflow; it has no direct mod-file install step.")
     if recipe.get("method") == "gameroot":
         return _install_gameroot(recipe, mod_files, steam_roots)
+    if recipe.get("method") in {"bepinex", "ervr"}:
+        from . import bepinex
+        return bepinex.install(recipe, mod_files, steam_roots)
     if len(mod_files) != 1:
         raise RuntimeError(f"{recipe['name']} takes one file at a time.")
     return install(recipe, mod_files[0], steam_roots)
@@ -573,6 +590,9 @@ def install_profile(recipe: dict, zip_file: Path, steam_roots=None) -> list[Path
 def uninstall(recipe_id: str) -> list[Path]:
     """Remove what we installed under this key (use '<game>:profile' for a profile)."""
     state = _load_state()
+    if state.get(recipe_id, {}).get("installer") in {"submersed-vr-1", "vhvr-1", "ervr-1"}:
+        from . import bepinex
+        return bepinex.uninstall(recipe_id)
     entry = state.pop(recipe_id, {})
     removed = []
     for p in entry.get("files", []):
@@ -611,7 +631,7 @@ def uninstall(recipe_id: str) -> list[Path]:
 def launch_options(recipe: dict) -> str:
     env = " ".join(f"{k}={v}" for k, v in recipe.get("launch", {}).get("env", {}).items())
     args = recipe.get("launch", {}).get("args", "")
-    guard = f'{shlex.quote(str(guard_path()))} {shlex.quote(recipe["id"])}' if recipe.get("components") else ""
+    guard = f'{shlex.quote(str(guard_path()))} {shlex.quote(recipe["id"])}' if recipe.get("components") or recipe.get("packages") else ""
     return " ".join(x for x in (env, guard, "%command%", args) if x)
 
 
@@ -658,7 +678,8 @@ def launch_game_tool(recipe: dict, steam_roots=None) -> subprocess.Popen:
 def launch_game_play(recipe: dict, steam_roots=None) -> subprocess.Popen:
     """Launch the handler-configured game path through its owning storefront/tool."""
     game = game_path(recipe, steam_roots)
-    rep = preflight(recipe, steam_roots)
+    # The flat DOOM fallback belongs to Heroic and needs no KHARVOX/runtime.
+    rep = {"rows": []} if recipe.get("handler") == "kharvox-gog" else preflight(recipe, steam_roots)
     bad = [r for r in rep["rows"] if r.get("required", True) and not r["ok"]]
     if bad:
         detail = "; ".join(f"{r['name']}: {r['detail']}" for r in bad)
@@ -672,9 +693,12 @@ def component_label(comp: dict, names: dict | None = None) -> str:
     return names.get(str(comp["nexus_mod"]), {}).get("name") or comp["name"]
 
 
-def verify(recipe: dict) -> dict | None:
+def verify(recipe: dict, steam_roots=None) -> dict | None:
     """Check every listed component: installed through the hub, and its files still on disk.
     Phase-1 components are required to start the game; phase-2 (the VR port) is not."""
+    if recipe.get("method") in {"bepinex", "ervr"}:
+        from . import bepinex
+        return bepinex.verify(recipe, steam_roots)
     comps = recipe.get("components")
     if not comps:
         return None
@@ -718,7 +742,7 @@ def verify_text(rep: dict, quiet: bool = False) -> str:
         for r in rep["rows"]:
             tag = {"ok": "[ok]     ", "missing": "[MISSING]", "damaged": "[DAMAGED]"}[r["status"]]
             note = "" if r["phase"] == 1 else "  (installed last, after one test launch)"
-            label = r["name"] if f"#{r['id']}" in r["name"] else f"{r['name']} (#{r['id']})"
+            label = r["name"] if isinstance(r["id"], str) or f"#{r['id']}" in r["name"] else f"{r['name']} (#{r['id']})"
             lines.append(f"{r['n']:>2}. {tag} {label}: {r['detail']}{note}")
         lines.append("")
     if not rep["ready"]:

@@ -1,0 +1,121 @@
+id = "fatekeeper"
+title = "Fatekeeper — FK UEVR profile"
+scope = "Stock UEVR controller translation plus FK profile 1.0.0. Review remaps if your community build differs."
+version = "FK_UEVR 1.0.0"
+reviewed = "2026-10-20"
+notes = ["Button-by-button FK defaults are source-derived, not a claim that every listed action passed a local test.", "Input Config controls movement orientation and turn settings. Menu and interactive UI modes can change button behavior."]
+
+[sources.upstream]
+label = "FK 1.0.0 input script"
+detail = "Profile keyboard/action translation; paired with UEVR’s default Quest button translation."
+url = "https://github.com/jbusfield/FK_UEVR/blob/1.0.0/scripts/main.lua"
+
+[sources.uevr]
+label = "UEVR default bindings"
+detail = "Generic controller defaults; community profiles can remap game actions."
+url = "https://docs.uevr.io/usage/vr_controller_bindings.html"
+
+[sources.local]
+label = "User report · Oct 18, 2026"
+detail = "Insert closed the in-game overlay and restored immersion with 2D Screen Mode off. The controller overlay combination also opened WayVR. The user corrected the combination to L2 + R3 on October 20."
+user_report = true
+
+[[sections]]
+name = "Movement"
+
+[[sections.bindings]]
+input = "Left thumbstick"
+action = "Move"
+note = "FK profile translates this to movement keys."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right thumbstick left / right"
+action = "Turn"
+note = "UEVR snap / smooth-turn settings apply."
+evidence = "default"
+source = "uevr"
+
+[[sections.bindings]]
+input = "L3 · left stick click"
+action = "Toggle sprint"
+note = "Profile stops sprinting when movement stops."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right stick up / down"
+action = "Jump / dodge"
+note = "FK profile default."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "R3 · right stick click"
+action = "Secondary interaction / kick"
+note = "Uses the game’s mapped SecondaryInteract action."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Combat and interaction"
+
+[[sections.bindings]]
+input = "A · right hand"
+action = "Interact"
+note = "Uses the game’s mapped Interact action."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left grip / right grip"
+action = "Cast selected spell / block or parry"
+note = "Assumes stock UEVR grip → shoulder-button mapping."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "B · right hand · tap / hold"
+action = "Switch weapon / alternate switch action"
+note = "Stock UEVR maps right B to XInput X; FK sends C / T."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Y · left hand"
+action = "Change spell"
+note = "Stock UEVR maps this to XInput Y."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Weapon swing"
+action = "Melee attack"
+note = "Profile detects swipe gestures; target and trigger state affect the attack."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "VR overlay and menus"
+
+[[sections.bindings]]
+input = "Insert · keyboard"
+action = "Open / close in-game UEVR overlay"
+note = "Preferred local shortcut. This does not close the desktop injector."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "2D Screen Mode OFF + Insert"
+action = "Return to full VR"
+note = "Turn 2D off, then close the in-game overlay."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "Controller overlay shortcut"
+action = "Can also open WayVR menu"
+note = "The user’s L2 + R3 combination conflicted. Use Insert on this setup."
+evidence = "tested"
+source = "local"

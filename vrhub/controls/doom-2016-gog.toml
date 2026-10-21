@@ -1,0 +1,159 @@
+id = "doom-2016-gog"
+title = "DOOM (2016) — KHARVOX"
+scope = "Quest / Touch author defaults for KHARVOX 1.4; General controller input passed in the October 21 rc1 Import/Test/Launch gameplay report; individual mappings remain author defaults."
+version = "KHARVOX 1.4 · GOG/Heroic experimental"
+reviewed = "2026-10-21"
+notes = ["These are author defaults. A user reported both controllers working; individual mappings are not separately verified.", "Keep the DOOM window focused. Test loaded campaign gameplay separately from the VR intro.", "Handedness, Swap Jump/Crouch and physical Glory Kill settings can change these references."]
+[sources.author]
+label = "KHARVOX author guide"
+detail = "Upstream main README controller and gameplay settings reviewed October 20, 2026; documented defaults only."
+url = "https://github.com/CactusVRStudios/KHARVOX#controller-bindings"
+
+[[sections]]
+name = "Movement and menus"
+
+[[sections.bindings]]
+input = "Left stick"
+action = "Move"
+note = "Head-relative by default; off-hand direction is available in the launcher."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Right stick left / right"
+action = "Turn"
+note = "Smooth, snap or artificial turning off follows the launcher selection."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "A / B · right hand"
+action = "Crouch / jump"
+note = "Swap Jump/Crouch changes gameplay buttons. In menus A confirms and B goes back."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "L3 · left stick click"
+action = "Menu / pause"
+note = "Default right-handed layout; handedness options can swap stick clicks."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "X · left hand"
+action = "Dossier"
+note = "Default right-handed layout."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Y · left hand"
+action = "Switch weapon modification"
+note = "Default right-handed layout."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Raise both hands"
+action = "Jump gesture"
+note = "Hands Jump is enabled by default; launcher can disable it. Menus/cinematics are excluded."
+evidence = "default"
+source = "author"
+
+[[sections]]
+name = "Weapons and equipment"
+
+[[sections.bindings]]
+input = "Right trigger"
+action = "Fire"
+note = "Default weapon hand."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Right grip in front"
+action = "Weapon modification / alternate fire"
+note = "Default right-handed layout."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Right grip behind matching shoulder"
+action = "Shoulder weapon"
+note = "Make a fresh grip press; availability and ammo still apply."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Right stick up"
+action = "Chainsaw"
+note = "Default right-handed layout."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Right stick down · tap / hold"
+action = "Switch weapon / weapon wheel"
+note = "With the wheel open, aim the selection using the left stick."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "R3 · right stick click"
+action = "Use / melee / Glory Kill"
+note = "Default right-handed layout."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Left trigger"
+action = "Equipment / grenade"
+note = "Default support hand."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Left grip near support point"
+action = "Two-hand support"
+note = "Place the support hand near the weapon support point."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Left grip tap away from support point"
+action = "Next equipment"
+note = "Separate from two-hand support."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Left grip hold"
+action = "BFG"
+note = "When not holding a weapon with two hands."
+evidence = "default"
+source = "author"
+
+[[sections.bindings]]
+input = "Forward punch"
+action = "Physical melee / Glory Kill"
+note = "Follows the launcher hand setting and speed threshold; no local gesture test recorded."
+evidence = "default"
+source = "author"
+
+[[sections]]
+name = "Handedness options"
+
+[[sections.bindings]]
+input = "Left Hand · Button swap"
+action = "Swap weapon/support triggers, grips and stick clicks"
+note = "Face buttons and stick axes stay in their standard physical positions."
+evidence = "dependent"
+source = "author"
+
+[[sections.bindings]]
+input = "Left Hand · Button and Stick swap"
+action = "Right stick moves; left stick turns and selects weapons"
+note = "Left Y jumps / X crouches; right A opens Dossier / B switches modification. Review current preset."
+evidence = "dependent"
+source = "author"

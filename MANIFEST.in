@@ -2,4 +2,6 @@ include install.py vrhub-check
 include *.md
 recursive-include tests *.py
 recursive-include vrhub/assets *.png
+global-exclude *.pyc *.pyo
 recursive-include vrhub/recipes *.toml
+recursive-include vrhub/controls *.toml

@@ -1,0 +1,107 @@
+id = "subnautica"
+name = "Subnautica (SubmersedVR)"
+steam_appid = 264710
+handler = "submersed-vr"
+method = "bepinex"
+manual_download = true
+mod_page = "https://github.com/Okabintaro/SubmersedVR/releases/tag/0.2.1"
+
+setup = [
+  "Use Steam's default Subnautica branch, not legacy/experimental. Select your existing working Proton build, start the plain game once, then close it before installing mods.",
+  "Download SubmersedVR_0.2.1.zip and Tobey.s.BepInEx.Pack.for.Subnautica.zip from the two pinned author release pages below. Do not choose Source code ZIPs, Below Zero files, or a generic BepInEx build.",
+  "Click Install mod file… and select BOTH downloaded ZIPs together. The Hub checks their release hashes, installs the complete Windows payloads and controller bindings, and backs up overwritten files outside the game directory. It does not bundle the mods.",
+  "An already recorded Hub install must be removed before replacement. The older BepInEx/patchers/Tobey folder, when present, is backed up and retired during installation as recommended by the current loader release. Unrelated plugins are retained.",
+  "Remove VR Enhancements or the older SN1MC/Motion Controls mod with their existing installer before using SubmersedVR. The Hub recognizes VREnhancements.dll/SN1MC.dll, but does not detect every possible conflict.",
+  "Use xrizer as the host OpenVR adapter with WiVRn. Copy the Hub launch options into Steam Properties -> General. Review the winhttp override, runtime import and WiVRn comp_ipc exposure there; the Hub does not edit Steam settings.",
+]
+play = [
+  "Connect the Quest through WiVRn first. Keep xrizer selected, then choose Launch Subnautica in Steam VR Mode in Steam (or select it when Steam asks). Keep the copied launch options; the regular Play Subnautica choice was used in the earlier flat-screen failure.",
+  "Load a save and check full headset rendering, stereo depth, head tracking, movement, turning, PDA/inventory, tool aiming and interaction. This game does not use a separate UEVR injector.",
+  "Keep the stock Touch bindings: Y opens/closes the PDA. In the PDA, hold A and drag an item into a quick slot. The October 19 test reported both A and trigger interaction working flawlessly; this is one user setup, not a guarantee for other sessions.",
+  "Avoid the in-game binding editor: the user reported it gets stuck waiting for a button and cannot cancel. The user preferred stock bindings over the external Menu-button layout for comfort and requested its reversal; Y -> UIAssign was not successful.",
+  "Record a live test in the Hub. If it remains flat or controllers fail, open Game log diagnostics for BepInEx/LogOutput.log and retain the compatibility report.",
+]
+good_to_know = [
+  "The bundled reference records the October 19 user-reported core VR SUCCESS, plus October 20 control follow-ups. Stock bindings are preferred. This historical evidence does not verify your current session or a full playthrough.",
+  "The loader archive also ships macOS files. The Hub skips libdoorstop.dylib and run_bepinex.sh for this Windows/Proton route; all Windows loader files and every SubmersedVR file are installed, preserving case.",
+  "The two archives were inspected on October 19, 2026. New releases require recipe review before installation; the normal update checker can notify you but does not silently substitute a newer package.",
+  "Backups are kept under the Hub data folder. Removal restores original game files and the retired legacy patcher folder; changed settings files are preserved in the backup before removal. Changed binaries require manual review. Game saves and unrelated mods are not installation targets.",
+]
+
+[[links]]
+label = "Download Tobey's BepInEx pack (pack.3.1.1)"
+url = "https://github.com/toebeann/BepInEx.Subnautica/releases/tag/v5.4.23-pack.3.1.1"
+[[links]]
+label = "Download SubmersedVR 0.2.1"
+url = "https://github.com/Okabintaro/SubmersedVR/releases/tag/0.2.1"
+[[links]]
+label = "SubmersedVR setup and Linux guidance"
+url = "https://github.com/Okabintaro/SubmersedVR#linux-setup"
+
+[[packages]]
+id = "loader"
+name = "Tobey's BepInEx pack 5.4.23-pack.3.1.1"
+page = "https://github.com/toebeann/BepInEx.Subnautica/releases/tag/v5.4.23-pack.3.1.1"
+sha256 = "21a1fd6ec22253a6cf05ccf1f6407f6055c95971a7dda7545b33481069a4dd3e"
+required_files = ["winhttp.dll", "doorstop_config.ini", "BepInEx/core/BepInEx.dll", "BepInEx/core/BepInEx.Preloader.dll", "steam_appid.txt"]
+[[packages]]
+id = "submersedvr"
+name = "SubmersedVR 0.2.1"
+page = "https://github.com/Okabintaro/SubmersedVR/releases/tag/0.2.1"
+sha256 = "66837e5e61d4abfe93e3e18101bd6a03bbcdbc7b1f6c8d24ee118d3eedcc0c55"
+required_files = ["BepInEx/plugins/SubmersedVR.dll", "Subnautica_Data/Managed/SteamVR.dll", "Subnautica_Data/Managed/SteamVR_Actions.dll", "Subnautica_Data/StreamingAssets/SteamVR/actions.json", "Subnautica_Data/StreamingAssets/SteamVR/bindings_oculus_touch.json", "Subnautica_Data/StreamingAssets/SteamVR/bindings_knuckles.json", "Subnautica_Data/StreamingAssets/SteamVR/bindings_holographic.json"]
+
+[launch]
+args = "-vrmode openvr"
+env = { WINEDLLOVERRIDES = "winhttp=n,b", PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1", PRESSURE_VESSEL_FILESYSTEMS_RW = '"$XDG_RUNTIME_DIR/wivrn/comp_ipc"' }
+
+[[updates]]
+name = "SubmersedVR (pinned build; review before updating)"
+github = "Okabintaro/SubmersedVR"
+tracks = ["subnautica"]
+[[updates]]
+name = "Tobey's BepInEx pack (pinned build; review before updating)"
+github = "toebeann/BepInEx.Subnautica"
+tracks = ["subnautica"]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
+
+[compatibility]
+runtime = "WiVRn"
+validation = "user-reported"
+proton = "Reuse the Steam-selected Proton build and Subnautica's own prefix. The successful test snapshot recorded proton-cachyos-slr in config_info; the exact build and running Steam selection were not inspected."
+adapter = "SubmersedVR OpenVR bindings -> host xrizer -> WiVRn/OpenXR. Host configuration and installed files do not prove which libraries Steam/game loads."
+launch = "Connect WiVRn -> Steam Launch Subnautica in Steam VR Mode with winhttp override, runtime visibility and -vrmode openvr -> loaded gameplay. No UEVR injector step."
+requirements = [
+  "Use the default Windows Steam game branch and its existing Proton prefix.",
+  "Install the matching pinned loader and SubmersedVR archives together, including all controller bindings.",
+  "Select host xrizer and connect the headset through WiVRn before launch.",
+  "Choose Launch Subnautica in Steam VR Mode; review the copied Steam launch options and remove incompatible older VR plugins.",
+  "Use stock Touch bindings: Y for the PDA; hold A and drag items into quick slots. Avoid the in-game binding editor.",
+]
+manual_checks = [
+  "Review Steam's actual Proton selection, default game branch, winhttp override, runtime import, comp_ipc exposure, xrizer and VR launch choice; these are not verified from the Hub environment.",
+  "Test headset rendering, stereo depth, head tracking, movement/turning, both controllers, PDA/tool use and interaction in a loaded save. Confirm stock Y/PDA and hold-A-and-drag quick-slot use. The binding editor remains a known limitation.",
+]
+notes = [
+  "October 19 23:00:22 PDT user-reported SUCCESS in dev1: VR rendering, head tracking, controller input and stereo depth PASSED. A and trigger interaction worked flawlessly. The local configuration snapshot remained REVIEW REQUIRED; existing historical test entries are unchanged.",
+  "October 20 follow-ups confirmed hold A and drag to a quick slot. The user preferred stock Y/PDA bindings and requested reverting the external Menu-button override for comfort. Y -> UIAssign did not work and is not a supported success claim.",
+  "The in-game binding editor reportedly becomes stuck waiting for input and cannot cancel. Keep stock bindings; longer sessions and other setups remain unverified.",
+  "Archive digests are checked at installation. File inventories establish presence, not current versions or successful loader/plugin execution.",
+]
+[compatibility.checks]
+recorded_proton = true
+tracked_install = true
+game_files = ["winhttp.dll", "BepInEx/core/BepInEx.dll", "BepInEx/plugins/SubmersedVR.dll", "Subnautica_Data/Managed/SteamVR.dll", "Subnautica_Data/Managed/SteamVR_Actions.dll", "Subnautica_Data/StreamingAssets/SteamVR/actions.json", "Subnautica_Data/StreamingAssets/SteamVR/bindings_oculus_touch.json"]
+
+
+[compatibility.reference]
+tested_on = "2026-10-19"
+source = "User-reported local gameplay SUCCESS recorded at 23:00:22 PDT in 0.5.3-dev1, with control follow-ups on October 20."
+system = "CachyOS; WiVRn active; host xrizer configured at /opt/xrizer. Runtime/adapter versions and loaded library paths were not captured."
+headset = "Meta Quest 3 (established project setup)"
+modlist = "SubmersedVR 0.2.1 and Tobey's BepInEx pack 5.4.23-pack.3.1.1; 45 recorded installed files present."
+proton = "proton-cachyos-slr (prefix config_info snapshot; exact build and running Steam selection unverified)"
+result = "User reported VR rendering, head tracking, controller input and stereo depth PASSED. A and trigger interaction worked flawlessly. Stock bindings are preferred: Y opens/closes the PDA; hold A and drag items into quick slots. Use Steam's Launch Subnautica in Steam VR Mode choice. The in-game binding editor gets stuck and cannot cancel; Y -> UIAssign did not work in the external-binding test. Longer-session stability remains unverified."
