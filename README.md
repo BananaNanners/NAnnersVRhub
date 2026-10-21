@@ -1,6 +1,6 @@
-## NAnnersVRhub — VR Mod Hub for Linux
+# NAnnersVRhub — VR Mod Hub for Linux
 
-# NAnnersVRhub 0.5.3
+Current release: **0.5.3** · [Download](https://github.com/BananaNanners/NAnnersVRhub/releases/tag/v0.5.3)
 
 A Linux VR mod hub with runtime/headset diagnostics, per-game compatibility,
 controller references, install inventories, gameplay-test history and managed
@@ -31,19 +31,21 @@ and python3 install.py
 and ~/.local/bin/nannersvrhub
 ```
 
-Both releases are live now 0.5.3, existing managed 0.5.2 users can use
+NAnnersVRhub 0.5.3 is available now. Existing managed 0.5.2 installations can use
 Hub updates -> Check now -> Download source ZIP -> Install update -> Restart.
-The actual 0.5.2 updater accepted a synthetic stable candidate in container
-tests. A real published-endpoint update remains a separate final user check.
+The published 0.5.2 updater successfully discovered, downloaded, verified and
+extracted the public 0.5.3 release in development checks. The full desktop
+installation and restart remain a separate final user acceptance check.
 
 ## DOOM bridge
 
-The companion is NAnners KHARVOX Bridge 0.2.0 (experimental). Install VR 
-runner obtains and verifies its exact custom source
-archive, then reuses your verified isolated runner or obtains the exact base.
-Download the companion archive alongside this package
-and choose **Import bridge package…** in DOOM. Select
-NAnners-KHARVOX-Bridge-0.2.0-source.tar.gz. This verifies and installs the
+The companion is [NAnners KHARVOX Bridge 0.2.0](https://github.com/BananaNanners/NAnners-KHARVOX-Bridge/releases/tag/v0.2.0)
+(experimental). **Install VR runner** downloads and verifies its exact custom
+source archive, then reuses your verified isolated runner or obtains the exact base.
+
+For an offline alternative, download the companion archive separately and
+choose **Import bridge package…** in DOOM. Select
+`NAnners-KHARVOX-Bridge-0.2.0-source.tar.gz`. This verifies and installs the
 component, then runs the same runner installer. Existing runner state and
 matching probe results are reused; do not remove the working runner to test.
 
@@ -68,4 +70,13 @@ Historical logs/configuration snapshots never establish
 a current gameplay session. Cyberpunk's reported menu passthrough limitation
 and UEVR overlay behavior remain documented in their profiles.
 
-Read RELEASE-NOTES-0.5.3.md and VALIDATION-0.5.3.md for scope and checks.
+## AI-assisted development and user testing
+
+NAnnersVRhub was created with AI assistance for coding, documentation and
+troubleshooting, alongside hands-on user testing and automated checks. The
+software may contain errors. Compatibility and gameplay reports describe
+specific tested versions and setups; they do not guarantee the same result
+on every system or verify a current gameplay session.
+
+Read [Release notes](RELEASE-NOTES-0.5.3.md) and
+[Validation](VALIDATION-0.5.3.md) for scope and checks.
