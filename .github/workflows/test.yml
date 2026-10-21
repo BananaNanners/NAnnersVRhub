@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       QT_QPA_PLATFORM: offscreen
-      NANNERS_TEST_BRIDGE_PAYLOAD: ${{ runner.temp }}/bridge-state/components/NAnners-KHARVOX-Bridge-0.2.0/payload
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,3 +27,5 @@ jobs:
       - run: python3 -m pip install PySide6
       - run: python3 -m vrhub.kharvox_component fetch --state "${{ runner.temp }}/bridge-state"
       - run: python3 -m unittest discover -s tests -v
+        env:
+          NANNERS_TEST_BRIDGE_PAYLOAD: ${{ runner.temp }}/bridge-state/components/NAnners-KHARVOX-Bridge-0.2.0/payload
