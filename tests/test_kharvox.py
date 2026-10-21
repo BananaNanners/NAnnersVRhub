@@ -223,8 +223,15 @@ class KharvoxTests(unittest.TestCase):
                     start.assert_called_once()
                     self.assertTrue(any('installation completed' in x.text() for x in window.kharvox_dialog.findChildren(QLabel)))
                 window.kharvox_dialog.close()
+                self.assertFalse(window.doom_import_btn.isHidden())
+                with mock.patch('vrhub.gui.QFileDialog.getOpenFileName',return_value=('/downloads/bridge.tar.gz','')), \
+                     mock.patch('vrhub.kharvox_bridge.start',return_value=process) as imported:
+                    window.import_kharvox_bridge();app.processEvents()
+                    self.assertEqual(imported.call_args.kwargs,{'bridge_archive':'/downloads/bridge.tar.gz'})
+                    self.assertEqual(imported.call_args.args[2],'prepare')
+                window.kharvox_dialog.close()
                 window.table.selectRow(next(i for i in range(9) if 'Subnautica' in window.table.item(i,0).text()))
                 app.processEvents();self.assertTrue(window.kharvox_folder_btn.isHidden())
-                self.assertTrue(window.doom_prepare_btn.isHidden());self.assertTrue(window.doom_probe_btn.isHidden())
+                self.assertTrue(window.doom_prepare_btn.isHidden());self.assertTrue(window.doom_probe_btn.isHidden());self.assertTrue(window.doom_import_btn.isHidden())
                 self.assertFalse(window.install_btn.isHidden())
             finally:window.close();app.processEvents()
