@@ -1,3 +1,91 @@
+## 0.5.3-rc1 — public release preparation
+
+- Separate the full bridge component into its own pinned 0.2.0 source release;
+  keep the Hub source ZIP compatible with published 0.5.2 update limits.
+- Install the component only on explicit DOOM installation. Allow offline
+  bridge import; verify archive size/hash, paths and all payload hashes before
+  activating it. Other profiles load without the optional component.
+- Preserve the tested lab engine/runner, local history and rollback behavior.
+- Validate the actual 0.5.2 updater against a synthetic stable candidate.
+- Prepare bridge 0.2.0 and Hub 0.5.3 release notes. Public publishing is pending
+  the RC check and the connected tool's repository/release creation capability.
+
+## 0.5.3-dev10 — standalone bridge and automatic runner installation
+
+- Share the standalone NAnners KHARVOX Bridge 0.2.0-dev1 installer with the Hub.
+- Install VR runner reuses a validated isolated runner or obtains the exact supported upstream base; source file hashes must match before patching a separate copy.
+- Use one process lock across the new Hub and standalone actions. Keep the lab 0.1.6 engine and payload unchanged.
+- Add bounded downloads/extraction, offline archive support and a standalone owned-runner uninstall that preserves games, prefixes, saves and logs.
+- Record the user's successful October 21 dev9 Hub test including stereo depth, separately from the earlier 40-minute standalone test. Local histories are not rewritten.
+- Preserve all nine profiles. Publishing and additional platform/game-store support remain pending.
+
+## 0.5.3-dev9 — DOOM VR tested-runner integration
+
+- Add Prepare VR runner and Test VR bridge actions to the DOOM profile; launch through the unchanged lab 0.1.6 engine after its matching full pass.
+- Reuse existing standalone runner and result state. Verify bundled files, source runner pins, module hashes and the fresh-result identity before launch.
+- Include full bridge binaries, licenses and corresponding source in source, wheel and managed installations. Reject incomplete packages before activation.
+- Add launch/probe diagnostics and SFS state-lookup recognition. Keep historical logs separate from gameplay evidence.
+- Record the October 21 user-reported 40-minute DOOM VR session with head tracking and both controllers. Individual mappings and stereo depth remain unconfirmed.
+- Keep all nine game profiles and existing local test histories. The flat DOOM route stays with Heroic.
+- Raise bounded update archive/per-file limits to carry the bundled source. Older installed versions require this build's included installer; they cannot safely install this larger preview through their older in-app updater.
+
+## 0.5.3-dev8 — DOOM GOG/Heroic + KHARVOX 1.4 retest
+
+- Restore DOOM as a ninth experimental guided profile using KHARVOX 1.4's GOG adapter and the supported Vulkan executable. Add a sourced Quest/Touch controller reference without claiming a Linux gameplay pass.
+- Add an explicit external-package folder selector, 112-file inventory, eight pinned binary hashes, launcher/runtime PE version checks and the documented GOG executable digest. Keep the mod external and bundle no third-party binaries.
+- Launch through umu-run using native Heroic's saved Proton/prefix, isolate inherited Steam IDs/prefix settings, pass runtime import and WiVRn IPC visibility, and retain bounded launch output. The flat fallback remains owned by Heroic independently of VR readiness.
+- Add prefix log discovery and GOG CVar/layer failure diagnostics. Correct the old prototype interpretation of nativeAttempt=False: this is a retired Native-renderer flag, not proof that SFS/AER failed.
+- Keep Elden Ring's unsupported-version launch check, prior eight profiles, existing install inventories, settings, saves and test histories.
+
+## 0.5.3-dev7 — Elden Ring reinstall fix
+
+- Allow installation into the empty Game/ERVR directory left by Uninstall mod, including a directory containing only the regular ERVR.log file. Preserve that historical log through reinstall and removal.
+- Continue blocking foreign ERVR payloads/settings, unknown files/directories, symlinks, case collisions and other loader conflicts. Change no package pins, launch behavior, existing histories or game saves.
+- Cover install → uninstall → reinstall with both empty and log-only residue, alongside the existing conflict and transaction tests.
+
+## 0.5.3-dev6 — Elden Ring experimental profile
+
+- Add Steam Elden Ring with the inspected ERVR 0.4.0 archive, pinned SHA-256 and complete ten-file installation under Game. Normalize its Windows ZIP separators with the existing transactional backup/removal engine; preserve the seven older recipes and inventories.
+- Reject known conflicting VR loaders, unsafe archive paths and changed installed binaries. Read executable PE version metadata without loading the game; require the documented 2.6.2.0 or 2.7.1.0 builds for launch.
+- Add an executable adapter for copied Steam launch options that substitutes eldenring.exe and retains the selected Proton/prefix. Unknown commands, missing adapter code or unsupported builds stop launch. Steam/game offline settings remain manual prerequisites; anti-cheat files are not changed.
+- Add a sourced controller guide, saved ERVR configuration checks and ERVR/ReShade log discovery. Mark Linux/WiVRn gameplay unverified and document intentional cinema menus/loading. Bundle no mod binaries and create no gameplay success records.
+
+## 0.5.3-dev5 — Reviewed controller-guide corrections
+
+- Correct the Fatekeeper overlay conflict combination from L2 + L3 to L2 + R3; retain Insert as the recommended shortcut on this setup.
+- Replace Skyrim MGO’s VRIK example with the user-reviewed Vanilla Quest / Touch layout: A activates, right grip shouts, left grip readies/sheathes, L3 sprints, and X opens the tween menu.
+- State the confirmed exception explicitly: neither trigger readies sheathed weapons; normal trigger combat/casting and power attacks remain once readied. Preserve menu trigger input and Vanilla right-stick item zoom.
+- These are reference-guide edits. They do not change installed bindings, mod settings, local test history or saves.
+
+## 0.5.3-dev4 — Controller references
+
+- Add Games → Controller bindings for all seven recipes with a local Quest / Touch button-location diagram, search, section filters and full-guide clipboard export.
+- Link control rows to author references and distinguish user reports from documented defaults and preset-dependent mappings. Keep uncertain combinations unconfirmed.
+- Include Subnautica stock Y/PDA and tested A-drag quick slots, UEVR overlay behavior, Hogwarts spell gestures, Cyberpunk context changes and VHVR building combinations.
+- Record the October 20 user-reported Valheim pass (at least 30 minutes); leave piece rotation unconfirmed. Clarify that per-game Steam Linux Runtime overrides global Proton preference.
+- Package all seven offline guides in source, wheel and managed installs, validate their inventory, and preserve prior test history and game data.
+
+# NAnnersVRhub 0.5.3-dev3
+
+- Adds Steam Valheim's Windows/Proton workflow with pinned VHVR 0.11.2 and BepInExPack Valheim 5.4.2351. Installs the complete VR payload, strips the loader wrapper and maps Valheim_Data to valheim_Data for Linux.
+- Reuses the transactional BepInEx installer for Valheim and Subnautica, preserving old Subnautica inventories/backups. Keeps both games' package pins, validation and rollback separate; unrelated mods, settings, worlds/characters and local histories remain outside their installation targets.
+- Supplies explicit VHVR VR-mode/motion-control command-line options and Direct3D 11/WiVRn/xrizer guidance without editing Steam or VHVR settings. Documents the upstream game-version range and SteamVR-process auto-mode limitation.
+- Adds Valheim archive inspection, verification, compatibility checks, BepInEx log discovery and gameplay recording. Seven-game managed upgrades/rollback retain earlier data. Valheim gameplay remains unverified; no third-party binaries are bundled.
+
+# NAnnersVRhub 0.5.3-dev2
+
+- Records the October 19 dev1 user-reported Subnautica core VR SUCCESS, with October 20 stock-control follow-ups. Keeps the local historical FAILURE and SUCCESS records untouched.
+- Makes Steam's Launch Subnautica in Steam VR Mode choice explicit. Documents stock Y/PDA and hold-A-and-drag quick-slot use, plus working A/trigger interaction on the tested setup.
+- Documents the stuck in-game binding editor and unsuccessful Y/UIAssign test. Keeps stock bindings as preferred; installs no custom binding overrides and does not change game files during a Hub upgrade.
+- Changes bundled evidence and guidance only. Configuration checks remain separate from dated gameplay evidence; longer sessions and other setups remain unverified.
+
+# NAnnersVRhub 0.5.3-dev1
+
+- Adds Steam Subnautica with SubmersedVR 0.2.1 and Tobey's BepInEx pack 5.4.23-pack.3.1.1. Pins the inspected author ZIP hashes and installs both Windows payloads together, preserving case and complete controller bindings.
+- Backs up replaced files and retires the obsolete Tobey patcher directory. Failed installs/removals restore the previous file state; removal restores originals, saves changed settings in the backup, and stops for review when binaries changed.
+- Adds WiVRn/xrizer Steam launch guidance, package inventories, archive inspection, compatibility checks, BepInEx log discovery and local gameplay recording. Does not bundle third-party mods, edit Steam options or claim a local Subnautica gameplay pass.
+- Keeps all five existing recipes and existing user data. Managed deployment supports the new six-recipe inventory and rollback to 0.5.2.
+
 # NAnnersVRhub 0.5.2
 
 - Adds stable Hub update checks, optional automatic source downloads, verified in-app installation, explicit restart and managed rollback. Stable official GitHub releases only; installation remains an explicit action.

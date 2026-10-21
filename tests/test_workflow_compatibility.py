@@ -92,7 +92,7 @@ class SteamWorkflowCompatibilityTests(unittest.TestCase):
         return next(row for row in self.report(recipe)['checks'] if row['name'] == name)
 
     def test_all_profiles_have_explicit_gameplay_evidence(self):
-        self.assertEqual(len(self.recipes),5)
+        self.assertEqual(len(self.recipes),9)
         for recipe in self.recipes.values():
             self.assertIn('compatibility',recipe)
             self.assertIn('validation',recipe['compatibility'])

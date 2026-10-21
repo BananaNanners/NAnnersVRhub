@@ -2,10 +2,14 @@
 # NAnnersVRhub launch guard. Use in a game's Steam launch options:
 #   "/path/to/vrhub/vrhub-check" <game-id> %command%
 # Starts the game only if every required mod is installed; otherwise says what is missing and stops.
-# Set VRHUB_SKIP_CHECK=1 to bypass. If python itself is broken, the game starts anyway.
+# Other games allow VRHUB_SKIP_CHECK=1 / broken-checker fallback.
+# Elden Ring always stops on adapter failure and never bypasses its launch checks.
 game="$1"
 shift
 here="$(cd "$(dirname "$0")" && pwd)"
+if [ "$game" = "elden-ring" ]; then
+  PYTHONPATH="$here" exec python3 -m vrhub.elden_ring "$@"
+fi
 if [ -z "$VRHUB_SKIP_CHECK" ]; then
   out="$(PYTHONPATH="$here" python3 -m vrhub.cli verify "$game" --quiet 2>&1)"
   rc=$?

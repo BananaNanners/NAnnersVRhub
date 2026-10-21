@@ -1098,11 +1098,178 @@ class HeroicGOGHandler(GameHandler):
         ]
 
 
+class KharvoxGOGHandler(HeroicGOGHandler):
+    """Reviewed KHARVOX 1.4 workflow, separate from the retired prototype."""
+    name = "kharvox-gog"
+
+    def prefix(self, recipe):
+        from . import kharvox
+        return kharvox.prefix(recipe)
+
+    def _kharvox_dir(self, recipe):
+        from . import kharvox
+        return kharvox.directory()
+
+    def _prefix_temp_dir(self, recipe):
+        from . import kharvox
+        return kharvox.temp_dir(recipe)
+
+    def bridge_log(self, recipe):
+        from . import kharvox
+        try:
+            return kharvox.logs(recipe)['main']
+        except (RuntimeError,OSError):
+            return None
+
+    def launch(self, recipe, game):
+        from . import kharvox
+        return kharvox.launch(recipe,game)
+
+    def preflight_rows(self, recipe, game):
+        from . import kharvox
+        settings = self._settings(recipe)
+        wine = settings.get('wineVersion',{})
+        binary = wine.get('bin') if isinstance(wine,dict) else None
+        runner = Path(binary).expanduser() if isinstance(binary,str) and binary else None
+        runner_ok = bool(runner and runner.is_absolute() and runner.is_file() and os.access(runner,os.X_OK)
+                         and runner.name == 'proton' and wine.get('type') == 'proton')
+        rows = [{'name':'Heroic GOG metadata','ok':bool(game),'required':True,
+                 'detail':f'GOG app {self._appid(recipe)}; read-only native Heroic settings.'},
+                {'name':'Heroic selected Proton','ok':runner_ok,'required':True,
+                 'detail':f'{wine.get("name","runner") if isinstance(wine,dict) else "runner"}: {runner or "unavailable"}; saved setting, not a running-process check.'},
+                kharvox.game_row(game)]
+        try:
+            prefix = kharvox.prefix(recipe)
+            rows.append({'name':'Heroic DOOM prefix','ok':True,'required':True,'detail':str(prefix)})
+        except RuntimeError as exc:
+            rows.append({'name':'Heroic DOOM prefix','ok':False,'required':True,'detail':str(exc)})
+        try:
+            rows.extend(kharvox.package_rows(kharvox.directory()))
+        except (OSError,RuntimeError) as exc:
+            rows.append({'name':'KHARVOX folder selection','ok':False,'required':True,'detail':str(exc)})
+        umu = shutil.which('umu-run')
+        rows.append({'name':'KHARVOX launch tool','ok':bool(umu),'required':True,'detail':umu or 'umu-run not found in PATH.'})
+        from . import kharvox_bridge
+        rows.extend(kharvox_bridge.rows())
+        return rows
+
+    def detail_notes(self, recipe):
+        return ['Extract KHARVOX-v1.4.zip completely into a fresh folder outside DOOM. Choose KHARVOX folder… saves only the Hub selection.',
+                'Install VR runner verifies an isolated Proton copy or downloads the exact supported base. Test VR bridge checks it with WiVRn connected. Launch DOOM VR requires its matching full probe pass.',
+                'A user reported 40 minutes of VR gameplay with both controllers and head tracking on October 21, 2026 using KHARVOX 1.4 and lab 0.1.6. This is a dated reference for one setup.',
+                'The original Heroic runner and game prefix are preserved. Launch DOOM (flat) remains owned by Heroic. Other Proton builds are not silently substituted.',
+                'nativeAttempt=False refers to the retired Native renderer, not SFS/AER success or failure. Log evidence never establishes a live VR pass.',
+                'Keep Windows Vulkan-layer activation in the launcher; do not force KharvoxLayer.dll into the host Linux Vulkan loader.']
+
+    def diagnostics(self, recipe, game):
+        from . import kharvox
+        lines = self.detail_notes(recipe)
+        for row in self.preflight_rows(recipe,game):
+            lines.append(f'{row["name"]}: {row["detail"]}')
+        try:
+            lines.extend(f'Historical {key} log: {path}' for key,path in kharvox.logs(recipe).items())
+        except RuntimeError as exc:
+            lines.append(str(exc))
+        return lines
+
+
+class PinnedBepInExHandler(GameHandler):
+    def preflight_rows(self, recipe, game):
+        from . import bepinex
+        cfg = bepinex.policy(recipe)
+        windows = bool(game and (game / cfg["exe"]).is_file() and (game / cfg["data"]).is_dir())
+        rows = [{"name": cfg["title"] + " Windows layout", "ok": windows, "required": True,
+                 "detail": str(game) if windows else f"Select Proton and launch the Windows Steam copy once; {cfg['exe']}/{cfg['data']} were not found."}]
+        if game:
+            bad = bepinex.conflicts(game, recipe)
+            description = ("No duplicate ValheimVRMod.dll found outside the expected root plugin path; other mod conflicts are not scanned."
+                           if recipe["id"] == "valheim" else
+                           "No VREnhancements.dll or SN1MC.dll found in BepInEx/plugins; other conflicts are not scanned.")
+            rows.append({"name": "Known conflicting VR plugins", "ok": not bad, "required": True,
+                         "detail": ", ".join(str(p) for p in bad) if bad else description})
+        return rows
+
+    def compatibility_rows(self, recipe, game):
+        from . import system_scan, bepinex
+        paths, source = system_scan._adapter_paths()
+        xrizer = [p for p in paths if system_scan._adapter_name(p) == "xrizer" and system_scan._has_adapter(p)]
+        rows = [{"name": "Host OpenVR adapter", "status": "ok" if xrizer else "warning",
+                 "detail": ("xrizer configured: " + ", ".join(str(p) for p in xrizer) if xrizer else
+                            "Review host xrizer selection for this WiVRn/OpenVR workflow.") +
+                           f" Host evidence from {source}; Steam/game DLL loading is unverified."}]
+        for row in bepinex.verify(recipe, game=game)["rows"]:
+            rows.append({"name": bepinex.policy(recipe)["title"] + " package: " + row["name"],
+                         "status": "ok" if row["status"] == "ok" else "error", "detail": row["detail"]})
+        return rows
+
+    def detail_notes(self, recipe):
+        return ["Install BOTH pinned release ZIPs together with Install mod file…. Archive hashes identify packages even if the downloads were renamed.",
+                "This workflow uses the installed VR mod with host xrizer -> WiVRn; it does not use UEVR injection.",
+                "Removal restores backed-up game files. Changed binary files stop removal for review so game updates are not overwritten."]
+
+
+class SubmersedVRHandler(PinnedBepInExHandler):
+    name = "submersed-vr"
+
+
+class ValheimVRHandler(PinnedBepInExHandler):
+    name = "valheim-vr"
+
+
+class EldenRingVRHandler(GameHandler):
+    name = "elden-ring-vr"
+
+    def play_label(self, recipe):
+        # The generic Steam button could use the protected launch without the
+        # reviewed launch options. Initial launches stay in the documented route.
+        return None
+
+    def preflight_rows(self, recipe, game):
+        from . import bepinex, elden_ring
+        exe = game / "Game/eldenring.exe" if game else None
+        present = bool(exe and exe.is_file() and not exe.is_symlink())
+        version = elden_ring.file_version(exe) if present else None
+        rows = [{"name": "Elden Ring Windows executable", "ok": present, "required": True,
+                 "detail": str(exe) if present else "Launch the Windows Steam game once; Game/eldenring.exe must be present."},
+                {"name": "ERVR executable version", "ok": version in elden_ring.SUPPORTED, "required": True,
+                 "detail": f"PE file version: {version or 'unknown'}; ERVR 0.4.0 documents 2.6.2.0 / 2.7.1.0. Presence/version is not a live VR test."}]
+        if game:
+            bad = bepinex.conflicts(game, recipe)
+            rows.append({"name": "ERVR loader conflicts", "ok": not bad, "required": True,
+                         "detail": ", ".join(str(p) for p in bad) if bad else "No known conflicting root loader/config found; arbitrary mod compatibility is not scanned."})
+        return rows
+
+    def compatibility_rows(self, recipe, game):
+        from . import bepinex, elden_ring
+        rows = [{"name": "ERVR package: " + r["name"], "status": "ok" if r["status"] == "ok" else "error",
+                 "detail": r["detail"]} for r in bepinex.verify(recipe, game=game)["rows"]]
+        config = elden_ring.configuration(game) if game else None
+        if config:
+            enabled = config['enabled'].casefold() == 'true'
+            native = config['runtime'].casefold() == 'openxr'
+            stereo = config['stereo'].casefold()
+            rows.append({"name": "ERVR saved configuration", "status": "ok" if enabled and native and stereo == 'full' else "warning",
+                         "detail": f"Enabled={config['enabled']}; VRRuntime={config['runtime']}; StereoMode={config['stereo']}. Saved settings only; menus/loading intentionally use cinema."})
+        else:
+            rows.append({"name": "ERVR saved configuration", "status": "warning", "detail": "ERVR.ini could not be read safely. Review the installed config manually."})
+        return rows
+
+    def detail_notes(self, recipe):
+        return ["Install the single pinned ERVR 0.4.0 ZIP. Windows archive separators are normalized; all ten files are installed under Game with backups.",
+                "Use Steam offline mode and the game's offline setting, then paste the Hub launch options. The adapter targets eldenring.exe directly; it does not verify network state or change anti-cheat files.",
+                "Launch from Steam after reviewing those options. The generic Hub Launch game button is hidden to avoid using an unreviewed protected default.",
+                "Linux/WiVRn gameplay is UNVERIFIED. No UEVR injector, external xrizer adapter, .NET installer or R.E.A.L. VR package is used."]
+
+
 _HANDLERS: dict[str, GameHandler] = {
     "generic": GameHandler(),
     "skyrim-vr": SkyrimVRHandler(),
     "heroic-gog": HeroicGOGHandler(),
+    "kharvox-gog": KharvoxGOGHandler(),
     "heroic-uevr": HeroicUEVRHandler(),
+    "submersed-vr": SubmersedVRHandler(),
+    "valheim-vr": ValheimVRHandler(),
+    "elden-ring-vr": EldenRingVRHandler(),
 }
 
 

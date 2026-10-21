@@ -148,7 +148,7 @@ def main(argv=None) -> int:
                   if a.json else live_tests.history_text(r, entries))
             return 0
         if a.cmd == "verify":
-            if not r.get("components"):
+            if not (r.get("components") or r.get("packages")):
                 raise RuntimeError(f"{r['name']} has no component checklist.")
             if a.names:
                 hub.refresh_component_names(r)

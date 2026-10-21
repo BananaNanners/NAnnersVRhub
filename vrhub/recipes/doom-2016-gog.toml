@@ -1,0 +1,62 @@
+id = "doom-2016-gog"
+name = "DOOM (2016) (GOG/Heroic + KHARVOX, experimental)"
+store = "heroic-gog"
+heroic_appid = "1390579243"
+method = "guide"
+handler = "kharvox-gog"
+manual_download = true
+mod_page = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"
+setup = [
+ "Launch the flat GOG game once through native Heroic. Keep its existing prefix. DOOMx64vk.exe is the supported Vulkan executable; DOOMx64.exe is OpenGL.",
+ "Extract the complete KHARVOX 1.4 release outside DOOM, then use Choose KHARVOX folder…. The Hub checks the package and supported GOG executable before launching.",
+ "Close DOOM and KHARVOX, then click Install VR runner. This reuses the verified isolated runner or obtains the pinned Proton-CachyOS11.0-20260703-slr x86_64 release from upstream and applies the lab 0.1.6 bridge. The separate bridge component archive and all payload files are verified first; the base archive and seven baseline files are then checked. Heroic runner selection stays unchanged.",
+ "Connect the headset through WiVRn and click Test VR bridge. A full matching lab 0.1.6 pass is required. Existing standalone lab state is reused from ~/.local/share/nanners-kharvox-lab/0.1.0.",
+ "The Hub installs its separate pinned bridge component only when requested. Before its public release, use Import bridge package with the matching 0.2.0 source archive. This keeps ordinary Hub updates small.",
+]
+play = [
+ "Connect WiVRn and use Launch DOOM VR. The Hub starts the tested isolated runner through umu-run, using the existing native Heroic GOG prefix. No original runner or game files are replaced.",
+ "In KHARVOX select the complete GOG DOOM installation, keep SFS selected, enable Extended Logging if troubleshooting, and choose Launch Game. Shift+left-click Made by Cactus exposes the developer controls.",
+ "Load a campaign save to evaluate VR gameplay. The user reported 40 minutes with both controllers and head tracking working on October 21, 2026. Stereo depth and individual control actions were not separately reported in that session.",
+ "Open DOOM diagnostics opens the launch/probe/audit log folder and probe-results subfolder. Game log diagnostics also reads the KHARVOX main log and bridge logs as historical evidence.",
+ "Keep the DOOM window focused. Review upstream guidance before changing graphics quality in a loaded level.",
+]
+good_to_know = [
+ "The dated gameplay reference covers KHARVOX 1.4, SFS and isolated lab 0.1.6 on one CachyOS/WiVRn/NVIDIA setup. A synthetic bridge pass does not verify current headset rendering or gameplay.",
+ "Launch DOOM (flat) remains a normal Heroic launch. Other games and local gameplay-test history are not rewritten by this profile.",
+ "Windows Vulkan-layer activation stays in KHARVOX's child process. Do not add its Windows DLL to host Linux Vulkan layer paths.",
+]
+[[links]]
+label = "KHARVOX 1.4 download"
+url = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"
+[[links]]
+label = "Upstream GOG release and testing scope"
+url = "https://github.com/CactusVRStudios/KHARVOX/blob/main/Docs/RELEASE_1_4.md"
+[[links]]
+label = "Author controls and settings"
+url = "https://github.com/CactusVRStudios/KHARVOX#controller-bindings"
+[handler_config]
+executable = "DOOMx64vk.exe"
+play_label = "Launch DOOM (flat)"
+launcher_label = "Launch DOOM VR"
+status_label = "DOOM / KHARVOX (experimental)"
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
+[compatibility]
+runtime = "WiVRn"
+validation = "user-reported-workaround"
+proton = "Use the isolated lab 0.1.6 runner based on Proton-CachyOS11.0-20260703-slr x86_64. Heroic's original runner and selection are preserved. Installation obtains or reuses the exact pinned base; another Proton build is not silently substituted."
+adapter = "KHARVOX 1.4 Windows Vulkan/OpenXR layer with SFS, through the patched isolated runner and WineOpenXR. Host xrizer selection is separate."
+launch = "WiVRn connected -> Install VR runner -> full Test VR bridge pass -> Launch DOOM VR -> KHARVOX SFS -> loaded campaign save."
+workarounds = ["Use the isolated lab 0.1.6 runner and its full matching probe pass. The unpatched Heroic runner is not the tested VR route.", "Select SFS in the complete KHARVOX 1.4 launcher/runtime pair."]
+requirements = ["Keep KHARVOX outside DOOM and reuse the existing native Heroic GOG prefix.", "Connect WiVRn before testing or launching.", "Install and test the separately versioned bridge; existing standalone lab 0.1.6 results are reused only after validation."]
+manual_checks = ["Review the selected GOG installation and SFS in KHARVOX; these saved selections are not scanned.", "Verify headset rendering, stereo depth, tracking, both controllers, movement, weapons and menu return in a loaded campaign. A dated reference does not verify the current session."]
+notes = ["The October 21 dev9 Hub report passed rendering, head tracking, controller input and stereo depth. The preceding standalone session lasted 40 minutes. Individual mappings remain author defaults.", "Bridge checks are synthetic historical evidence. Local test records, prior failure snapshots and other game histories remain unchanged.", "nativeAttempt=False is a legacy Native-renderer flag and does not establish SFS failure."]
+[compatibility.reference]
+tested_on = "2026-10-21"
+source = "User-reported standalone lab 0.1.6 gameplay (40 minutes), followed by a successful dev9 Hub report recorded October 21 at 03:38:48 PDT."
+system = "CachyOS; WiVRn; NVIDIA GeForce RTX 5070 Ti (established test setup). Exact live runtime version was not supplied with this gameplay report."
+headset = "Meta Quest 3 (established project setup)"
+modlist = "GOG DOOM (2016), KHARVOX 1.4, SFS, isolated NAnners KHARVOX lab 0.1.6"
+proton = "Isolated patched Proton-CachyOS11.0-20260703-slr x86_64 runner pinned by lab 0.1.6; Heroic original preserved."
+result = "Standalone session: 40 minutes with both controllers and head tracking. Subsequent dev9 Hub Prepare/Test/Launch workflow passed VR rendering, head tracking, controller input and stereo depth. The dev10 automatic downloader/installer still needs an on-PC test; individual bindings were not separately evaluated."

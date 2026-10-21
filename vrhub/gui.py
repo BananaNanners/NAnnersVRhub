@@ -17,6 +17,7 @@ from .cli import _roots
 from .display_time import age_text, filename_stamp, local_time
 from .theme import BLUE, GREEN, LOGO_PATH, MUTED, RED, STYLESHEET, TEXT, YELLOW
 from .app_update_gui import HubUpdateController
+from .controller_gui import ControllerBindingsPage
 
 
 class HeroicInjectorDialog(QDialog):
@@ -620,6 +621,8 @@ class HubWindow(QMainWindow):
         self.game_details_tabs = QTabWidget()
         self.game_details_tabs.addTab(self.details, "Setup guide")
         self.game_details_tabs.addTab(compat_page, "Compatibility profile")
+        self.controller_bindings = ControllerBindingsPage()
+        self.game_details_tabs.addTab(self.controller_bindings, "Controller bindings")
         self.game_details_tabs.currentChanged.connect(
             lambda index: self.refresh_compatibility() if index == 1 else None)
         self.install_btn = QPushButton("Install mod file…")
@@ -638,6 +641,11 @@ class HubWindow(QMainWindow):
         self.inspect_btn = QPushButton("Inspect archive…")
         self.diag_btn = QPushButton("Copy diagnostics")
         self.bridge_log_btn = QPushButton("Open bridge log")
+        self.kharvox_folder_btn = QPushButton("Choose KHARVOX folder…")
+        self.doom_prepare_btn = QPushButton("Install VR runner")
+        self.doom_probe_btn = QPushButton("Test VR bridge")
+        self.doom_logs_btn = QPushButton("Open DOOM diagnostics")
+        self.doom_import_btn = QPushButton("Import bridge package…")
         self.bridge_log_btn.setObjectName("secondaryAction")
         refresh_btn = QPushButton("Refresh")
         self.install_btn.clicked.connect(self.install)
@@ -659,6 +667,11 @@ class HubWindow(QMainWindow):
         self.inspect_btn.clicked.connect(self.inspect_archive)
         self.diag_btn.clicked.connect(self.copy_diagnostics)
         self.bridge_log_btn.clicked.connect(self.open_bridge_log)
+        self.kharvox_folder_btn.clicked.connect(self.choose_kharvox_folder)
+        self.doom_prepare_btn.clicked.connect(lambda: self.run_kharvox_bridge('prepare'))
+        self.doom_probe_btn.clicked.connect(lambda: self.run_kharvox_bridge('probe'))
+        self.doom_logs_btn.clicked.connect(self.open_doom_diagnostics)
+        self.doom_import_btn.clicked.connect(self.import_kharvox_bridge)
         refresh_btn.clicked.connect(self.refresh)
 
         left = QVBoxLayout()
@@ -666,7 +679,9 @@ class HubWindow(QMainWindow):
         left.addLayout(_row(self.install_btn, self.uninstall_btn, self.profile_btn, self.unprofile_btn))
         left.addLayout(_row(self.copy_btn, self.inject_btn, self.game_launch_btn, self.game_play_btn, self.verify_btn, self.preflight_btn))
         left.addLayout(_row(self.inspect_btn, self.diag_btn, self.bridge_log_btn, self.check_btn, self.mark_btn))
-        left.addLayout(_row(self.key_btn, refresh_btn))
+        left.addLayout(_row(self.key_btn, self.kharvox_folder_btn, refresh_btn))
+        left.addLayout(_row(self.doom_prepare_btn, self.doom_probe_btn, self.doom_logs_btn))
+        left.addLayout(_row(self.doom_import_btn))
         main = QHBoxLayout()
         main.setSpacing(10)
         main.addLayout(left, 5)
@@ -871,6 +886,14 @@ class HubWindow(QMainWindow):
 
     def show_details(self):
         r = self.current()
+        kharvox = bool(r and r.get('handler') == 'kharvox-gog')
+        self.kharvox_folder_btn.setVisible(kharvox)
+        for button in (self.doom_prepare_btn, self.doom_probe_btn, self.doom_logs_btn, self.doom_import_btn):
+            button.setVisible(kharvox)
+        for button in [self.install_btn,self.uninstall_btn,self.profile_btn,self.unprofile_btn,
+                       self.copy_btn,self.inject_btn,self.verify_btn,self.inspect_btn,self.key_btn]:
+            button.setVisible(not kharvox)
+        self.controller_bindings.set_recipe(r)
         self.refresh_compatibility()
         self.details.setHtml(hub.details_html(r, self.update_results.get(r["id"]), hub.verify(r)) if r else "")
         can_install = bool(r and get_handler(r).install_supported(r))
@@ -887,9 +910,9 @@ class HubWindow(QMainWindow):
         self.game_play_btn.setText(play_label or "Launch game")
         self.game_play_btn.setVisible(bool(play_label))
         self.game_play_btn.setEnabled(bool(play_label))
-        self.verify_btn.setEnabled(bool(r and r.get("components")))
+        self.verify_btn.setEnabled(bool(r and (r.get("components") or r.get("packages"))))
         self.preflight_btn.setEnabled(bool(r))
-        self.inspect_btn.setEnabled(bool(r and r.get("method") == "gameroot"))
+        self.inspect_btn.setEnabled(bool(r and r.get("method") in {"gameroot", "bepinex", "ervr"}))
         has_profile = bool(r and "profile" in r)
         self.profile_btn.setEnabled(has_profile)
         self.unprofile_btn.setEnabled(has_profile)
@@ -1075,9 +1098,13 @@ class HubWindow(QMainWindow):
 
     def uninstall(self):
         r = self.current()
-        if r and QMessageBox.question(self, "Uninstall", f"Remove the mod files for {r['name']}?") == QMessageBox.Yes:
-            hub.uninstall(r["id"])
-            self.refresh()
+        if not r:
+            return
+        message = (f"Remove the mod files for {r['name']} and restore backed-up originals?"
+                   if r.get("method") in {"bepinex", "ervr"} else f"Remove the mod files for {r['name']}?")
+        if QMessageBox.question(self, "Uninstall", message) == QMessageBox.Yes:
+            self._run(lambda: hub.uninstall(r["id"]), "Removed",
+                      lambda out: f"Removed or restored {len(out)} recorded files.")
 
     def uninstall_profile(self):
         r = self.current()
@@ -1112,6 +1139,9 @@ class HubWindow(QMainWindow):
         except (RuntimeError, OSError) as e:
             QMessageBox.warning(self, "Could not launch", str(e))
             return
+        if r.get('handler') == 'kharvox-gog':
+            self.show_kharvox_launch(proc)
+            return
         store = r.get("store", "steam")
         if store == "heroic-gog":
             via = "Heroic's configured prefix through umu-run"
@@ -1121,6 +1151,90 @@ class HubWindow(QMainWindow):
             via = "the configured launcher"
         QMessageBox.information(self, "Launch request sent",
                                 f"{hub.game_launcher_label(r) or 'Game launcher'} started through {via}.")
+
+    def choose_kharvox_folder(self):
+        from . import kharvox
+        path = QFileDialog.getExistingDirectory(self,'Choose the extracted KHARVOX 1.4 folder',str(Path.home()/'Games'))
+        if not path:
+            return
+        try:
+            kharvox.choose_directory(path,hub.game_path(self.current(),_roots()))
+        except (RuntimeError,OSError) as exc:
+            QMessageBox.warning(self,'KHARVOX folder not saved',str(exc))
+            return
+        self.refresh()
+
+    def import_kharvox_bridge(self):
+        path, _ = QFileDialog.getOpenFileName(self, 'Import the matching NAnners KHARVOX Bridge source package', str(Path.home()/'Downloads'), 'Bridge source archive (*.tar.gz)')
+        if path:
+            self.run_kharvox_bridge('prepare', bridge_archive=path)
+
+    def run_kharvox_bridge(self, action, bridge_archive=None):
+        from . import kharvox_bridge
+        recipe = self.current()
+        if not recipe or recipe.get('handler') != 'kharvox-gog':
+            return
+        try:
+            launch = (kharvox_bridge.start(recipe, hub.game_path(recipe, _roots()), action, bridge_archive=bridge_archive)
+                      if bridge_archive is not None else kharvox_bridge.start(recipe, hub.game_path(recipe, _roots()), action))
+        except (RuntimeError, OSError) as exc:
+            QMessageBox.warning(self, 'DOOM VR bridge', str(exc))
+            return
+        self.show_kharvox_launch(launch, action)
+
+    def open_doom_diagnostics(self):
+        from . import kharvox_bridge
+        path = kharvox_bridge.state_dir() / 'logs'
+        if path.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        else:
+            QMessageBox.information(self, 'DOOM diagnostics', 'Install or test the DOOM VR runner to create its diagnostics folder.')
+
+    def show_kharvox_launch(self, launch, action='doom'):
+        previous = getattr(self,'kharvox_dialog',None)
+        if previous and previous.isVisible():
+            if getattr(previous, 'bridge_launch', None) is launch:
+                previous.raise_()
+                return
+            previous.close()
+        dialog = QDialog(self)
+        dialog.bridge_launch = launch
+        names = {'prepare':'Install VR runner', 'probe':'Test VR bridge', 'doom':'Launch KHARVOX'}
+        dialog.setWindowTitle('DOOM — ' + names[action])
+        dialog.resize(800,480)
+        layout = QVBoxLayout(dialog)
+        messages = {'prepare':'Installing or verifying the isolated DOOM runner. The pinned base is downloaded if needed. Keep DOOM and KHARVOX closed.',
+                    'probe':'Testing the DOOM VR bridge. Keep WiVRn connected; the JSON destination appears below.',
+                    'doom':'KHARVOX is running through the tested isolated runner. Select DOOM and SFS in its window.'}
+        status = QLabel(messages[action])
+        status.setWordWrap(True)
+        layout.addWidget(status)
+        output = QPlainTextEdit()
+        output.setReadOnly(True)
+        layout.addWidget(output)
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(dialog.close)
+        layout.addWidget(buttons)
+        timer = QTimer(dialog)
+        def refresh():
+            code = launch.poll()
+            tail = launch.output_tail()[-12000:]
+            output.setPlainText(tail or 'No console output yet. Game log diagnostics reads the prefix logs separately.')
+            if code is not None:
+                if code == 0 and action == 'prepare':
+                    status.setText('Runner installation completed. Connect WiVRn, then use Test VR bridge.')
+                elif code == 0 and action == 'probe':
+                    status.setText('Bridge test passed. You can now Launch DOOM VR. This synthetic test does not verify gameplay.')
+                else:
+                    status.setText(f'{names[action]} exited with code {code}. Review the output and game logs; an exit code does not verify VR gameplay.')
+                timer.stop()
+                self.refresh()
+        timer.timeout.connect(refresh)
+        dialog.finished.connect(timer.stop)
+        timer.start(1000)
+        refresh()
+        self.kharvox_dialog = dialog
+        dialog.show()
 
     def launch_game_play(self):
         r = self.current()

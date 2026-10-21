@@ -1,0 +1,124 @@
+id = "hogwarts-legacy"
+title = "Hogwarts Legacy — HL UEVR"
+scope = "Heroic/Epic workflow with the matching HL profile. Gesture features are optional; enable them in the profile before using them."
+version = "HL_UEVR v2.0.6"
+reviewed = "2026-10-20"
+notes = ["Glyph drawing requires the spell to have been learned. Gesture-cast spells need not occupy the four active spell slots.", "Voice casting, mount steering, healing, Protego/Stupefy gestures and body tracking remain unverified on this Linux setup.", "The tested Heroic one-click injector route is unchanged. This guide does not alter the installed profile or its settings."]
+
+[sources.upstream]
+label = "HL v2.0.6 gesture guide"
+detail = "Maintainer instructions for glyph casting, wrist recasting, custom gestures and mounts."
+url = "https://github.com/jbusfield/HL_UEVR/blob/v2.0.6/README.md"
+
+[sources.uevr]
+label = "UEVR default bindings"
+detail = "Generic controller defaults; community profiles can remap game actions."
+url = "https://docs.uevr.io/usage/vr_controller_bindings.html"
+
+[sources.local]
+label = "User report · Oct 19, 2026"
+detail = "Core VR, both controllers, spell drawing and wrist-flick activation worked during a short gameplay test."
+user_report = true
+
+[[sections]]
+name = "Movement"
+
+[[sections.bindings]]
+input = "Left thumbstick"
+action = "Move"
+note = "UEVR default; review the game/profile’s movement orientation."
+evidence = "default"
+source = "uevr"
+
+[[sections.bindings]]
+input = "Right thumbstick"
+action = "Turn"
+note = "Snap / smooth behavior is set in the profile."
+evidence = "default"
+source = "uevr"
+
+[[sections]]
+name = "Spell gestures"
+
+[[sections.bindings]]
+input = "Hold left trigger + draw with wand"
+action = "Draw a spell glyph"
+note = "Release the trigger when finished. Gesture casting must be enabled."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Spell drawing + wrist flick"
+action = "Cast / reactivate a recognized spell"
+note = "These features were reported working; exact trigger timing follows the maintainer guide."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "Flick wand wrist down"
+action = "Recast the recognized spell"
+note = "The glyph symbol on the right hand identifies the remembered spell."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Flick wand wrist up"
+action = "Deactivate Lumos / applicable sustained spell"
+note = "Applies to supported spells such as Lumos and pulling with Accio."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Raise left hand · palm outward"
+action = "Protego; hold for Stupefy"
+note = "Optional custom gesture; not locally confirmed."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left grip near mouth"
+action = "Heal"
+note = "Optional gesture; not locally confirmed."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left grip near ear"
+action = "Open inventory"
+note = "Optional gesture; not locally confirmed."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Mounts"
+
+[[sections.bindings]]
+input = "Grip mount with either / both hands"
+action = "Enable physical mount steering"
+note = "Optional feature; not locally tested."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Tilt gripping hands"
+action = "Steer mount"
+note = "Forward/back changes elevation where supported; side tilt turns."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "VR overlay and menus"
+
+[[sections.bindings]]
+input = "Insert · keyboard"
+action = "Open / close in-game UEVR overlay"
+note = "Close it before checking full immersion."
+evidence = "default"
+source = "uevr"
+
+[[sections.bindings]]
+input = "Profile/game button prompts"
+action = "Standard button-based spells and menus"
+note = "Use the active profile’s prompts; a complete face-button map has not been verified for this release."
+evidence = "dependent"
+source = "uevr"

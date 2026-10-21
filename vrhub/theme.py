@@ -26,7 +26,7 @@ QWidget {{
     color: {TEXT};
     font-size: 10.5pt;
 }}
-QWidget#systemDashboard, QWidget#gamesPage, QDialog#liveTestDialog, QDialog#testHistoryDialog, QDialog#logDiagnosticsDialog, QDialog#supportReportDialog, QDialog#hubUpdateDialog, QDialog#heroicInjectorDialog {{
+QWidget#systemDashboard, QWidget#gamesPage, QDialog#liveTestDialog, QDialog#testHistoryDialog, QDialog#logDiagnosticsDialog, QDialog#supportReportDialog, QDialog#hubUpdateDialog, QDialog#heroicInjectorDialog, QDialog#controllerBindingsDialog {{
     background: {BG};
 }}
 QTabWidget::pane {{

@@ -1,0 +1,105 @@
+id = "ready-or-not"
+title = "Ready or Not — VRO"
+scope = "VRO controls, not the separate Ready or Not UEVR profile. Right-handed defaults; tablet settings can change handedness."
+version = "VRO maintainer guide (1031 page)"
+reviewed = "2026-10-20"
+notes = ["The full trigger, grip, face-button and reload map depends on the installed VRO build and handedness options. Use its tablet prompts for actions not listed here.", "Only the VR-entry/exit workflow has a specific local success reference here; the other combinations are author-documented defaults.", "The Hub’s VRO launch/setup guidance remains in Setup guide. Do not substitute bindings from the unrelated UEVR mod."]
+
+[sources.upstream]
+label = "VRO author guide"
+detail = "Maintainer Nexus description/changelog; installed package version is not inferred from this guide."
+url = "https://www.nexusmods.com/readyornot/mods/6914?tab=description"
+
+[sources.local]
+label = "User report · Oct 18, 2026"
+detail = "User reported success after mission VR-entry/exit and controller test instructions."
+user_report = true
+
+[[sections]]
+name = "VR entry and exit"
+
+[[sections.bindings]]
+input = "U · keyboard"
+action = "Enter VR after mission loads"
+note = "Focus the game window so it receives controller input."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "Home · keyboard"
+action = "Exit VR"
+note = "Author notes that the mission must be restarted after using Home."
+evidence = "tested"
+source = "local"
+
+[[sections]]
+name = "Squad commands"
+
+[[sections.bindings]]
+input = "Hold Y · left hand"
+action = "Open squad command wheel"
+note = "Move your hand to select a sector, then click trigger to confirm."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Gaze at target"
+action = "Choose squad-command target"
+note = "The command target follows gaze."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Weapons"
+
+[[sections.bindings]]
+input = "Trigger at charging handle"
+action = "Grab rifle charging handle"
+note = "Author’s current base-game rifle handling; modded guns may differ."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Y while two-handing rifle"
+action = "Cycle laser mode"
+note = "Regular / IR / off, where fitted."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Trigger while two-handing rifle"
+action = "Toggle flashlight"
+note = "Where fitted; author’s contextual trigger control."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right stick up / down while aiming"
+action = "Change magnified-scope zoom"
+note = "Magnified scopes may have a substantial performance cost."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Equipment locations"
+
+[[sections.bindings]]
+input = "Right shoulder / right hip"
+action = "Primary weapon / pistol"
+note = "Default holster positions."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left shoulder / left hip"
+action = "Long tactical / tablet"
+note = "Tablet contains objectives and VR settings."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Lower back pouch"
+action = "Tools / accessories"
+note = "Tablet/handedness settings can change the layout."
+evidence = "default"
+source = "upstream"

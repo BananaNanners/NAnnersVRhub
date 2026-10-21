@@ -1,0 +1,77 @@
+id = "elden-ring"
+name = "Elden Ring (ERVR / Steam + Proton, experimental)"
+steam_appid = 1245620
+method = "ervr"
+handler = "elden-ring-vr"
+manual_download = true
+mod_page = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
+
+setup = [
+  "Launch the flat Steam game once using your selected Proton to create its own prefix. This recipe requires Game/eldenring.exe, PE file version 2.6.2.0 (patch 1.16.2) or 2.7.1.0 (patch 1.17.1). Other builds need review before launch.",
+  "Back up your saves using your normal game-save workflow. Set the game's startup network setting to offline, quit, and put Steam in offline mode. ERVR requires offline / EAC-disabled play; its author does not support multiplayer.",
+  "Download ERVR V0.4.0 from the author's Nexus Files page. Select that single ZIP with Install mod file…. This recipe accepts the inspected archive digest, including the renamed Nexus download, and installs all ten files directly under Game.",
+  "Existing dxgi.dll, dinput8.dll, ReShade.ini, an untracked ERVR folder or known R.E.A.L. VR files block installation for manual review. Use their original installer to remove them first. Do not overwrite another loader or combine VR frameworks.",
+  "Copy launch options into Steam Properties -> General. Review dxgi/dinput8 native overrides, runtime import and WiVRn IPC exposure. The Hub's adapter replaces only the recognized game-executable argument with Game/eldenring.exe, preserving Steam's selected Proton and prefix.",
+  "Connect through WiVRn before launch. ERVR's Windows OpenXR loader uses Proton's WineOpenXR bridge; host runtime selection alone does not prove that bridge or D3D12 interop works. This Linux route needs a live test.",
+]
+play = [
+  "Keep Steam and the game configured offline. Launch through Steam only after applying the copied options. The adapter stops unrecognized shell/wrapper commands and unsupported/unknown executable versions; it does not rename or patch game/anti-cheat files.",
+  "If a protected/Easy Anti-Cheat launch appears, close it and review the actual Steam options. Offline network settings remain manual; targeting eldenring.exe does not certify network isolation.",
+  "The title screen, menus, cutscenes and loading use a cinema panel by design. Load an offline save and assess full stereo, head tracking, both controllers and movement in gameplay. A flat menu alone is not a failure.",
+  "Start with the archive's settings, then reduce GameResScale or graphics if required. ERVR.ini is editable; there is no in-headset settings menu in this release. Do not change diagnostic/address settings for the initial test.",
+  "Use Log diagnostics for Game/ERVR/ERVR.log and Game/ReShade.log. The author expects an OpenXR backend and ReShade add-on registration; those messages alone are historical loading evidence, not a gameplay pass. Record the actual result with Record live test….",
+]
+good_to_know = [
+  "UNVERIFIED on Linux/WiVRn. The bundled archive was inspected, not executed. The ReShade DLL digest matches the archive's own THIRD_PARTY.md; its upstream provenance was not independently attested. The author's linked GitHub repository returned 404 during review.",
+  "Native OpenXR / D3D12 workflow, not UEVR or OpenComposite. Keep other games' working adapters unchanged. No VR binary is bundled with the Hub.",
+  "The Hub preserves original files and edited text settings in its backup on removal. Changed binaries stop removal. Untracked ERVR logs/cache files remain; graphics settings changed by ERVR itself may need its GraphicsConfig_ervr_backup.xml restored manually. Saves are not install targets.",
+]
+
+[[links]]
+label = "ERVR author guide and controls"
+url = "https://www.nexusmods.com/eldenring/mods/10711"
+[[links]]
+label = "ERVR 0.4.0 download"
+url = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
+[[links]]
+label = "Proton WineOpenXR bridge (upstream)"
+url = "https://github.com/ValveSoftware/Proton/tree/proton_11.0/wineopenxr"
+
+[[packages]]
+id = "ervr"
+name = "ERVR 0.4.0 + bundled ReShade 6.8.0"
+page = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
+sha256 = "851221c337d2a365df547b34435246486f4e390a77999b1fe712e764ef33a21a"
+required_files = ["Game/dxgi.dll", "Game/dinput8.dll", "Game/ReShade.ini", "Game/LICENSE-ReShade.txt", "Game/ERVR/ERVR.dll", "Game/ERVR/ERVR.ini", "Game/ERVR/README.md", "Game/ERVR/CHANGELOG.md", "Game/ERVR/LICENSE.txt", "Game/ERVR/THIRD_PARTY.md"]
+
+[launch]
+args = ""
+env = { WINEDLLOVERRIDES = '"dxgi,dinput8=n,b"', PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1", PRESSURE_VESSEL_FILESYSTEMS_RW = '"$XDG_RUNTIME_DIR/wivrn/comp_ipc"' }
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
+
+[compatibility]
+runtime = "WiVRn"
+validation = "unverified"
+proton = "Keep this game's existing Steam-selected Proton and prefix. No successful Linux runner build is recorded for ERVR."
+adapter = "ERVR's own OpenXR session and bundled ReShade D3D12 add-on through Proton WineOpenXR -> WiVRn; no host xrizer/OpenComposite selection is required by this recipe. Actual loading is unverified."
+launch = "Game + Steam offline settings -> WiVRn connected -> Steam with reviewed copied options -> Hub executable adapter -> Game/eldenring.exe -> loaded offline save."
+requirements = [
+  "Keep Steam/game offline and use the unprotected executable route. No multiplayer/EAC-enabled testing.",
+  "Use an inspected ERVR 0.4.0 archive and a documented executable version (2.6.2.0 or 2.7.1.0).",
+  "Review both native DLL overrides, WineOpenXR runtime import and WiVRn IPC exposure in the actual Steam settings.",
+]
+manual_checks = [
+  "Review Steam offline mode, the game's offline startup setting and the actual launch options. The Hub does not inspect network isolation or certify an EAC state.",
+  "Verify the WineOpenXR/D3D12 session, full stereo after loading a save, tracking, both controllers, movement, interactions and combat. Menus/cutscenes intentionally use cinema.",
+]
+notes = [
+  "The inspected user-supplied 0.4.0 ZIP contains ten files. Hash checks establish archive identity; inventory checks establish file presence, not current versions or plugin loading.",
+  "No dated gameplay reference is recorded. Source/gameplay claims in the mod's documentation are not a local Linux success result.",
+]
+[compatibility.checks]
+recorded_proton = true
+tracked_install = true
+game_files = ["Game/eldenring.exe", "Game/dxgi.dll", "Game/dinput8.dll", "Game/ERVR/ERVR.dll", "Game/ERVR/ERVR.ini"]

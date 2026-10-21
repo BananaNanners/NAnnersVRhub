@@ -120,7 +120,7 @@ class PublicRecipeSetDev13Tests(unittest.TestCase):
         from vrhub.hub import load_recipes
         self.assertEqual(
             set(load_recipes()),
-            {"cyberpunk-2077", "fatekeeper", "ready-or-not", "skyrim-vr-mgo", "hogwarts-legacy"},
+            {"cyberpunk-2077", "fatekeeper", "ready-or-not", "skyrim-vr-mgo", "hogwarts-legacy", "subnautica", "valheim", "elden-ring", "doom-2016-gog"},
         )
 
 if __name__ == "__main__":

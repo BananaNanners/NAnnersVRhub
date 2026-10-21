@@ -12,6 +12,9 @@ def main(argv=None) -> int:
         print("Usage: nannersvrhub-check GAME COMMAND [ARG ...]", file=sys.stderr)
         return 2
     game, command = args[0], args[1:]
+    if game == "elden-ring":
+        from .elden_ring import main as launch_elden_ring
+        return launch_elden_ring(command)
     if not os.environ.get("VRHUB_SKIP_CHECK"):
         env = os.environ.copy()
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)

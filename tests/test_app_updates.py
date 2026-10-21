@@ -48,7 +48,7 @@ class UpdateTests(unittest.TestCase):
                                                 "_NANNERSVRHUB_ROOT": ""})
         self.env.start()
         self.addCleanup(self.env.stop)
-        self.version = "0.5.3"
+        self.version = "0.5.4"
         self.name = f"NAnnersVRhub-{self.version}-source.zip"
         version, files = self_install._source_files(REPO)
         self.files = files
@@ -106,7 +106,7 @@ class UpdateTests(unittest.TestCase):
 
     def test_reject_unexpected_release_and_assets(self):
         mutations = [lambda d: d.update(draft=True), lambda d: d.update(prerelease=True),
-                     lambda d: d.update(tag_name="v0.5.3-rc1"), lambda d: d.update(html_url="https://github.com/other/repo"),
+                     lambda d: d.update(tag_name="v0.5.4-rc1"), lambda d: d.update(html_url="https://github.com/other/repo"),
                      lambda d: d.update(assets=[]), lambda d: d["assets"].append(d["assets"][0]),
                      lambda d: d["assets"][0].update(size=updates.MAX_ARCHIVE + 1),
                      lambda d: d["assets"][0].update(browser_download_url="https://evil.example/update.zip"),
@@ -173,7 +173,7 @@ class UpdateTests(unittest.TestCase):
             bundle = self.download()
             recovered = updates.saved_download()
         self.assertEqual(bundle, recovered)
-        self.assertEqual(Path(bundle["source"]).name, "NAnnersVRhub-0.5.3")
+        self.assertEqual(Path(bundle["source"]).name, "NAnnersVRhub-0.5.4")
         self.assertEqual(Path(bundle["directory"]).stat().st_mode & 0o777, 0o700)
 
     def test_checksum_mismatch_discards_download(self):
@@ -211,7 +211,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(list(updates.cache_root().iterdir()), [])
 
     def test_unsafe_zip_paths_and_symlinks(self):
-        prefix = "NAnnersVRhub-0.5.3/"
+        prefix = "NAnnersVRhub-0.5.4/"
         symlink = zipfile.ZipInfo(prefix + "link")
         symlink.create_system = 3
         symlink.external_attr = (stat.S_IFLNK | 0o777) << 16
@@ -228,8 +228,8 @@ class UpdateTests(unittest.TestCase):
                 self.download()
 
     def test_version_mismatch_rejected_without_execution(self):
-        self.files["vrhub/__init__.py"] = self.files["vrhub/__init__.py"].replace(b"0.5.3", b"0.5.4")
-        self.files["pyproject.toml"] = self.files["pyproject.toml"].replace(b"0.5.3", b"0.5.4")
+        self.files["vrhub/__init__.py"] = self.files["vrhub/__init__.py"].replace(b"0.5.4", b"0.5.5")
+        self.files["pyproject.toml"] = self.files["pyproject.toml"].replace(b"0.5.4", b"0.5.5")
         self.make_release()
         with self.assertRaisesRegex(updates.UpdateError, "version"):
             self.download()

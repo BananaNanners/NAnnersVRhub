@@ -1,0 +1,161 @@
+id = "cyberpunk-2077"
+title = "Cyberpunk 2077 — CyberpunkVR Port"
+scope = "Right-handed on-foot defaults from the port. Native Controller remaps and mod settings can override them."
+version = "CyberpunkVR Port 0.1.7"
+reviewed = "2026-10-20"
+notes = ["Successful local workaround: F10 → General → VR menu quad OFF; HUD → Enable HUD panel OFF; World-space interactions / dialogs OFF. Close F10 completely.", "The menu/passthrough limitation remains. The presence of this guide does not change the experimental compatibility status.", "Consult the port’s Bindings page and native Controller settings for the active mapping."]
+
+[sources.upstream]
+label = "Port 0.1.7 control guide"
+detail = "Maintainer README: on-foot and driving defaults. Individual mappings have not all been tested locally."
+url = "https://github.com/dariulone/cyberpunk-vr-port/blob/0.1.7/README.md"
+
+[sources.local]
+label = "User report · Oct 18, 2026"
+detail = "Immersive rendering, tracking, controllers and stereo passed; menu/HUD workaround required."
+user_report = true
+
+[[sections]]
+name = "Movement"
+
+[[sections.bindings]]
+input = "Left thumbstick"
+action = "Move"
+note = "On foot."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left stick fully forward · hold 0.2 s"
+action = "Sprint"
+note = "On foot; push to full deflection."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right stick left / right"
+action = "Turn"
+note = "Snap or smooth setting."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right stick fully up / down"
+action = "Dash / crouch"
+note = "On foot."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "A · right hand"
+action = "Jump"
+note = "On foot."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Combat and interaction"
+
+[[sections.bindings]]
+input = "Right trigger / left trigger"
+action = "Fire / aim or block"
+note = "On foot; left trigger also blocks in melee."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "X / Y · left hand"
+action = "Reload or interact / switch weapon"
+note = "Native controller remaps still apply."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "B · right hand"
+action = "Drop magazine / back"
+note = "Magazine drop with weapon drawn; backs out of phone/list screens."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left grip at left ear"
+action = "Toggle scanner"
+note = "Squeeze again to close."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left grip at magazine"
+action = "Grab magazine for physical reload"
+note = "Context matters: ear gesture uses the same grip."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right grip near holster"
+action = "Equip / unequip weapon"
+note = "Immersive holster context."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "R3 · right stick click"
+action = "Rack weapon / slide release"
+note = "Physical reload context."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Driving"
+
+[[sections.bindings]]
+input = "Grip at wheel + tilt hands"
+action = "Grab wheel and steer"
+note = "Vehicle and hand position matter."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right trigger / left trigger"
+action = "Throttle / brake"
+note = "With weapon drawn, right trigger fires instead."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Hold X"
+action = "Exit vehicle"
+note = "A hold, not a tap."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "VR overlay and menus"
+
+[[sections.bindings]]
+input = "F10 · keyboard"
+action = "Open / close port settings"
+note = "Close the overlay completely before checking immersion."
+evidence = "tested"
+source = "local"
+
+[[sections.bindings]]
+input = "Hold L3 + R3 · 1 second"
+action = "Toggle port settings"
+note = "Documented controller shortcut; keyboard F10 was used in the local workaround."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "F7 · keyboard"
+action = "Recenter headset"
+note = "Documented shortcut."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Close game menu"
+action = "Return from passthrough to immersive gameplay"
+note = "Reported limitation; opening the game menu can show passthrough."
+evidence = "tested"
+source = "local"

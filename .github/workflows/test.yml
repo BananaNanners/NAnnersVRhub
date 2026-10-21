@@ -1,0 +1,30 @@
+name: Hub checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install PySide6
+      - run: python3 -m unittest discover -s tests -v
+  bridge-integration:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      NANNERS_TEST_BRIDGE_PAYLOAD: ${{ runner.temp }}/bridge-state/components/NAnners-KHARVOX-Bridge-0.2.0/payload
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install PySide6
+      - run: python3 -m vrhub.kharvox_component fetch --state "${{ runner.temp }}/bridge-state"
+      - run: python3 -m unittest discover -s tests -v

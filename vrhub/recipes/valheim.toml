@@ -1,0 +1,102 @@
+id = "valheim"
+name = "Valheim (VHVR / Steam + Proton)"
+steam_appid = 892970
+handler = "valheim-vr"
+method = "bepinex"
+manual_download = true
+mod_page = "https://github.com/brandonmousseau/vhvr-mod/releases/tag/v0.11.2"
+
+setup = [
+  "In this game’s Steam Properties -> Compatibility, explicitly force your selected Proton build, wait for the Windows download, launch once and close it. A per-game Steam Linux Runtime choice overrides a global Proton preference. This recipe requires valheim.exe and valheim_Data; it does not install into a native Linux-only copy or a dedicated server.",
+  "Review your game version before installing. VHVR 0.11.0 documents Valheim 1.0.15–1.0.17; the pinned 0.11.2 follow-up does not publish a new compatibility range. Another game version requires review, not a local compatibility claim.",
+  "Download vhvr.zip from the GitHub v0.11.2 release and denikson-BepInExPack_Valheim-5.4.2351.zip from the linked Thunderstore package. Do not choose Source code ZIPs or substitute the older Thunderstore VHVR release.",
+  "Select BOTH ZIPs together using Install mod file…. The Hub verifies their pinned hashes, strips the loader wrapper, installs its Windows payload and the entire VHVR archive, and maps archive Valheim_Data to game valheim_Data. Original files are backed up outside the game folder.",
+  "Close the game and any external mod manager first. Review existing mods separately; duplicate ValheimVRMod.dll locations block installation. Unrelated mods are retained, not certified compatible. Remove a recorded Hub install before replacing it.",
+  "Connect through WiVRn with host xrizer selected. Copy launch options into Steam Properties -> General and review the winhttp override, runtime import, comp_ipc visibility and VHVR flags. The Hub does not edit Steam or VHVR configuration files.",
+]
+play = [
+  "Connect the headset before launch. In Steam use Play Valheim with Proton and Direct3D 11; avoid the Vulkan launch choice for this first test. The copied -force-d3d11 selects the game's D3D11 renderer under Proton.",
+  "Keep -flatScreenMode=false in the copied launch options: VHVR's default auto setting checks whether SteamVR is running, which does not establish WiVRn readiness. -ModEnabled=true and -UseVRControls=true request the mod and motion controls; -UseOverlayGui=false requests the controller-compatible GUI. These are upstream command-line options, not a verified gameplay session.",
+  "No separate UEVR injector is used. Load a character/world and test full VR rendering, stereo depth, head tracking, both controllers, movement/turning, inventory, tool use, building and combat. Use the in-game Compendium for the current mod's motion-control guidance.",
+  "Record a live test in the Hub. If the game remains flat or initialization fails, capture Game log diagnostics (BepInEx/LogOutput.log) and the Compatibility report. Presence of files or clean log signatures does not prove successful VR loading.",
+]
+good_to_know = [
+  "October 20 user-reported SUCCESS: at least 30 minutes of VR with rendering, tracking, stereo, both controllers and basic building working. Building-piece rotation was not found and remains unconfirmed. Multiplayer, trackers, gestures, bHaptics and longer sessions need separate tests.",
+  "All VHVR release files, including Unity XR subsystem files, assets and controller bindings, are installed. Loader archive documentation/Thunderstore metadata and Linux/macOS startup files are excluded from the Windows/Proton payload. Third-party mods are downloaded separately, not bundled with the Hub.",
+  "Backups live in the Hub data folder. Removal restores replaced files and preserves edited text/config files in its backup. Changed binaries or missing/corrupted backups stop removal for review. Game worlds, characters and Steam Cloud data are not installation targets.",
+  "The release pair was inspected on October 20, 2026. VHVR updates are checked on GitHub; review the loader version on its Thunderstore page manually. New mod builds need recipe review. Keep game saves backed up through your normal Valheim workflow; the Hub does not import, migrate or edit them.",
+]
+
+[[links]]
+label = "Download VHVR 0.11.2 (vhvr.zip)"
+url = "https://github.com/brandonmousseau/vhvr-mod/releases/tag/v0.11.2"
+[[links]]
+label = "Download BepInExPack Valheim 5.4.2351"
+url = "https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/v/5.4.2351/"
+[[links]]
+label = "VHVR project and requirements"
+url = "https://github.com/brandonmousseau/vhvr-mod"
+[[links]]
+label = "VHVR 0.11.0 game compatibility notes"
+url = "https://github.com/brandonmousseau/vhvr-mod/releases/tag/v0.11.0"
+
+[[packages]]
+id = "loader"
+name = "BepInExPack Valheim 5.4.2351"
+page = "https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/v/5.4.2351/"
+sha256 = "bce631497976a93977ceb08e166712e6c31d15244956f89f17df092a9b62e29f"
+required_files = ["winhttp.dll", "doorstop_config.ini", "BepInEx/config/BepInEx.cfg", "BepInEx/core/BepInEx.dll", "BepInEx/core/BepInEx.Preloader.dll"]
+[[packages]]
+id = "vhvr"
+name = "VHVR 0.11.2"
+page = "https://github.com/brandonmousseau/vhvr-mod/releases/tag/v0.11.2"
+sha256 = "118fca4c797298cc41eb0667aff89b329801a31ee65ef72878fb876858196dae"
+required_files = ["BepInEx/plugins/ValheimVRMod.dll", "valheim_Data/Managed/SteamVR.dll", "valheim_Data/Managed/Unity.XR.OpenVR.dll", "valheim_Data/Managed/Unity.XR.Management.dll", "valheim_Data/Plugins/x86_64/openvr_api.dll", "valheim_Data/Plugins/x86_64/XRSDKOpenVR.dll", "valheim_Data/UnitySubsystems/XRSDKOpenVR/UnitySubsystemsManifest.json", "valheim_Data/StreamingAssets/SteamVR/actions.json", "valheim_Data/StreamingAssets/SteamVR/bindings_oculus_touch.json", "valheim_Data/StreamingAssets/steamvr_player_prefabs", "valheim_Data/StreamingAssets/xrmanager"]
+
+[launch]
+args = "-force-d3d11 -flatScreenMode=false -ModEnabled=true -UseVRControls=true -UseOverlayGui=false"
+env = { WINEDLLOVERRIDES = "winhttp=n,b", PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1", PRESSURE_VESSEL_FILESYSTEMS_RW = '"$XDG_RUNTIME_DIR/wivrn/comp_ipc"' }
+
+[[updates]]
+name = "VHVR (pinned GitHub build; review newer releases)"
+github = "brandonmousseau/vhvr-mod"
+tracks = ["valheim"]
+
+[requirements]
+openxr = "wivrn"
+proton_prefix = true
+
+[compatibility]
+runtime = "WiVRn"
+validation = "user-reported"
+proton = "Use the Windows Steam build through the game's selected Proton and its own prefix. The October 20 successful report records proton-cachyos-slr from prefix config_info; exact build and running Steam selection were not captured."
+adapter = "VHVR's installed Unity/OpenVR backend -> host xrizer -> WiVRn/OpenXR. Host selection and installed payloads do not prove which runtime libraries the game loads."
+launch = "WiVRn connected -> Steam Play Valheim with Proton/D3D11 and copied VHVR flags -> loaded character/world. No UEVR injector."
+requirements = [
+  "Select Proton for the Windows game and review current game/mod version compatibility.",
+  "Install the pinned Valheim loader and complete VHVR release ZIPs together.",
+  "Connect WiVRn with host xrizer selected before launching.",
+  "Review Steam's actual winhttp override, runtime visibility and VHVR -flatScreenMode=false / motion-control flags.",
+]
+manual_checks = [
+  "Review the actual Steam-selected Proton, Windows game version, Direct3D 11 choice, launch arguments and existing mod conflicts; these are not verified from the Hub environment.",
+  "Verify headset rendering, head tracking, stereo depth, both controllers, movement, inventory, building and combat in a loaded world. Multiplayer, gestures, trackers and long-session behavior need their own tests.",
+]
+notes = [
+  "VHVR 0.11.0 names Valheim 1.0.15–1.0.17; v0.11.2 is a follow-up release without a new explicit game-version range. Review other versions before proceeding.",
+  "Upstream flatScreenMode defaults to auto and checks SteamVR process state. The recipe supplies its documented false override to request VR under WiVRn; these flags are source/configuration evidence; the separate October 20 user report records successful gameplay.",
+  "Archive hashes are checked at installation. Inventories check presence, not current file versions or successful DLL/plugin loading. A dated user-reported test is bundled. Its NOT READY runtime snapshot records scan-time state and is not rewritten by this reference.",
+]
+[compatibility.checks]
+recorded_proton = true
+tracked_install = true
+game_files = ["winhttp.dll", "BepInEx/plugins/ValheimVRMod.dll", "valheim_Data/Managed/Unity.XR.OpenVR.dll", "valheim_Data/Plugins/x86_64/XRSDKOpenVR.dll", "valheim_Data/UnitySubsystems/XRSDKOpenVR/UnitySubsystemsManifest.json", "valheim_Data/StreamingAssets/SteamVR/actions.json", "valheim_Data/StreamingAssets/SteamVR/bindings_oculus_touch.json"]
+
+[compatibility.reference]
+tested_on = "2026-10-20"
+source = "User-reported local gameplay SUCCESS recorded at 13:17:16 PDT in 0.5.3-dev3, plus an accompanying report of at least 30 minutes played."
+system = "CachyOS; WiVRn / host xrizer configured at /opt/xrizer. Runtime was not selected in the later scan-time snapshot; loaded runtime versions were not captured."
+headset = "Meta Quest 3 (established project setup)"
+modlist = "VHVR 0.11.2 and BepInExPack Valheim 5.4.2351; all 135 recorded files present."
+proton = "proton-cachyos-slr (prefix config_info path; exact build and running selection unverified)"
+result = "Rendering, head tracking, controller input and stereo depth PASSED. User played for at least 30 minutes; both controllers and basic building worked. Rotation of foundations/roofs was not found and remains unconfirmed. The runtime was absent in the saved local configuration snapshot; that historical NOT READY snapshot is retained unchanged."

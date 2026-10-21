@@ -1,0 +1,130 @@
+id = "valheim"
+title = "Valheim — VHVR"
+scope = "Default Oculus Touch / Quest layout. Right-handed build controls; custom bindings or handedness settings can differ."
+version = "VHVR 0.11.2"
+reviewed = "2026-10-20"
+notes = ["User reported successful basic building and both controllers during at least 30 minutes of gameplay; this does not establish that every listed combination works.", "Rotation remains a follow-up test. If the right-grip + stick combination does not work, report it; do not replace the tested bindings blindly.", "Steam Compatibility must select Proton for this game. Steam Linux Runtime uses the native Linux build even if a global Proton preference is set."]
+
+[sources.upstream]
+label = "VHVR 0.11.2 bindings"
+detail = "Author binding JSON, including grip + stick building chords. Rotation is documented, not yet user-confirmed on WiVRn/xrizer."
+url = "https://github.com/brandonmousseau/vhvr-mod/blob/v0.11.2/Unity/ValheimVR/Assets/StreamingAssets/SteamVR/bindings_oculus_touch.json"
+
+[sources.local]
+label = "User report · Oct 20, 2026"
+detail = "At least 30 minutes; rendering, tracking, stereo and controllers passed; basic building worked, piece rotation was not found."
+user_report = true
+
+[[sections]]
+name = "Movement"
+
+[[sections.bindings]]
+input = "Left thumbstick"
+action = "Move"
+note = "Default walk action."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right thumbstick left / right"
+action = "Turn"
+note = "Snap / smooth behavior depends on VHVR settings."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right thumbstick up / down"
+action = "Toggle run / crouch"
+note = "Outside menus and building-modifier context."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "A · right hand"
+action = "Jump"
+note = "Outside building modifier context."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Interaction and inventory"
+
+[[sections.bindings]]
+input = "X · left hand"
+action = "Toggle inventory"
+note = "Default Oculus mapping."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Y · left hand"
+action = "Quick actions"
+note = "Contextual right-click action is also bound here."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "B · right hand"
+action = "Quick switch / right-click"
+note = "Contextual action."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "L3 · left stick click"
+action = "Toggle map"
+note = "Default map action."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "R3 · right stick click"
+action = "Toggle menu"
+note = "Default menu action."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Grip · either hand"
+action = "Grab"
+note = "Hand and nearby object determine the interaction."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Trigger · either hand"
+action = "Use / UI select"
+note = "Contextual use and left-click actions."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
+name = "Building"
+
+[[sections.bindings]]
+input = "Hold right grip + right stick left / right"
+action = "Rotate the selected piece"
+note = "Equip hammer, choose a piece and close the selection menu. NOT YET confirmed on this WiVRn/xrizer setup."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Hold right grip + right stick up / down"
+action = "Face piece away / toward you"
+note = "Documented direction chords; not separately tested."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Hold right grip + A"
+action = "Remove piece"
+note = "Building context. Check the preview before using."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "In-game Compendium"
+action = "Motion and advanced building guidance"
+note = "Use the installed version’s instructions for snapping, gestures and advanced rotation."
+evidence = "dependent"
+source = "upstream"

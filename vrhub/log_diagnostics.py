@@ -60,13 +60,28 @@ def _clean(value):
 
 def _sources(recipe, steam_roots):
     rid = recipe["id"]
-    if rid != "cyberpunk-2077" and not (recipe.get("method") == "uevr" and recipe.get("profile")):
+    if recipe.get('handler') == 'kharvox-gog':
+        from . import kharvox
+        try:
+            root = kharvox.prefix(recipe)
+            from . import kharvox_bridge
+            prefix_logs = kharvox.logs(recipe)
+            candidates = [(prefix_logs[key],root) for key in ('main','errors')]
+            candidates += [(path,kharvox_bridge.state_dir()) for key,path in kharvox_bridge.log_paths().items() if key in {'launch','probe'}]
+            return candidates, 'KHARVOX main/error logs plus isolated runner launch/probe logs. Audit, intro and renderer logs can be selected explicitly. Historical evidence only; nativeAttempt=False is a legacy renderer flag.'
+        except RuntimeError as exc:
+            return [], str(exc)
+    if rid not in {"cyberpunk-2077", "subnautica", "valheim", "elden-ring"} and not (recipe.get("method") == "uevr" and recipe.get("profile")):
         return [], "Automatic log paths are not configured for this game. Choose a log file to inspect OpenXR error signatures."
     game = hub.game_path(recipe, steam_roots)
     if not game:
         return [], "Game directory was not found. Choose a log file, or check the game's storefront installation."
     if rid == "cyberpunk-2077":
         return [(game / "bin/x64/cyberpunkvrport.log", game)], "CyberpunkVR Port plugin log; other loader/CET logs require explicit file selection."
+    if rid == "elden-ring":
+        return [(game / "Game/ERVR/ERVR.log", game), (game / "Game/ReShade.log", game)], "ERVR and ReShade logs. Menu/cinema fallback is expected; file presence or recognized log text does not verify current stereo gameplay."
+    if rid in {"subnautica", "valheim"}:
+        return [(game / "BepInEx/LogOutput.log", game)], "Expected BepInEx loader/plugin log. A missing or clean log does not verify VR rendering or input."
     try:
         prefix = hub._pfx(recipe, steam_roots)
         profile = hub.profile_dir(recipe, steam_roots)
@@ -173,6 +188,29 @@ def _analyze(lines, recipe):
                           "action": "Close both the game menu and F10 before evaluating loaded gameplay. Compare a fresh log if passthrough persists.",
                           "sources": [CP_SOURCE],
                           "excerpts": [{"tail_line": i, "text": _clean(line)[:300]} for i, line in hits[-3:]]})
+    if recipe.get('handler') == 'kharvox-gog':
+        rules = [
+            ('kh-sfs-command-state','ERROR',r'\[SFS\].*invalid unordered_map.*key','SFS state lookup failed',
+             'SFS reported missing tracked state. The lab 0.1.5 DOOM run saw this after queue acquisition; a command allocation bypass was corrected in lab 0.1.6. The line alone does not identify which map failed.',
+             'Use the bundled lab 0.1.6 runner and matching full bridge test. Compare fresh logs if errors persist; historical matches do not invalidate a later successful session.'),
+            ('kh-legacy-native','INFO',r'\bnativeAttempt=False\b','Legacy Native renderer flag',
+             'The launcher did not select the retired Native renderer. SFS and AER can use this value; it does not establish a rendering failure or success.',
+             'Review the selected SFS/AER renderer and a fresh gameplay log, then test actual headset output in a loaded campaign.'),
+            ('kh-cvar-identity','ERROR',r'native render CVar identity changed','KHARVOX CVar identity guard refusal',
+             'The runtime refused an engine control-variable identity. Upstream documents this GOG failure in the initial 1.4 builds.',
+             'Use the complete final 1.4 package with launcher 1.4.0.1404 and runtime 1.4.0.1402 in a fresh folder. Preserve the log if the refusal persists.'),
+            ('kh-layer-not-loaded','ERROR',r'KHARVOX layer was not loaded','KHARVOX Vulkan layer not loaded',
+             'The launcher reported that its Windows Vulkan layer was not loaded. This line does not establish the Wine/Proton cause.',
+             'Keep the launcher/runtime pair together and capture its Vulkan-loader log. Do not force the Windows DLL into the host Linux Vulkan layer chain.'),
+        ]
+        for key,severity,pattern,title,explanation,action in rules:
+            hits = [(i,line) for i,line in enumerate(lines,1) if re.search(pattern,line)]
+            if hits:
+                found.append({'id':key,'severity':severity,'title':title,'count':len(hits),
+                              'explanation':explanation,'action':action,
+                              'sources':['https://github.com/CactusVRStudios/KHARVOX/blob/main/Docs/RELEASE_1_4_GOG_FIX2.md',
+                                         'https://github.com/CactusVRStudios/KHARVOX/blob/main/launcher/KharvoxLauncher/RendererSelection.cs'],
+                              'excerpts':[{'tail_line':i,'text':_clean(line)[:300]} for i,line in hits[-3:]]})
     # These refer to file order within the inspected tail, not chronological
     # sorting or proof of a current session. Missing zones are never guessed.
     by_number = dict(enumerate(lines, 1))

@@ -24,7 +24,7 @@ from pathlib import Path
 SCHEMA = 1
 OWNER = "NAnnersVRhub managed application files; schema=1\n"
 CORE_RECIPES = {"skyrim-vr-mgo", "fatekeeper", "ready-or-not", "cyberpunk-2077"}
-EXPECTED_RECIPES = CORE_RECIPES | {"hogwarts-legacy"}
+EXPECTED_RECIPES = CORE_RECIPES | {"hogwarts-legacy", "subnautica", "valheim", "elden-ring", "doom-2016-gog"}
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}-[a-f0-9]{16}\Z")
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 
@@ -43,13 +43,19 @@ try:
     if release.parent != (root / "releases").resolve():
         raise RuntimeError("Invalid active release path")
     sys.path.insert(0, str(release))
-    if mode == "guard":
+    if mode == "guard" and args and args[0] == "elden-ring":
+        # An older release's generic guard may pass unknown games through.
+        # Resolve this adapter explicitly so rollback cannot start EAC instead.
+        from vrhub.elden_ring import main as launch_elden_ring
+        def main():
+            return launch_elden_ring(args[1:])
+    elif mode == "guard":
         from vrhub.guard import main
     else:
         from vrhub.launcher import main
 except Exception as exc:
     print(f"NAnnersVRhub launcher unavailable: {exc}", file=sys.stderr)
-    if mode == "guard" and len(args) >= 2:
+    if mode == "guard" and len(args) >= 2 and args[0] != "elden-ring":
         os.execvp(args[1], args[1:])
     print("Use nannersvrhub-manage status or rollback from a terminal.", file=sys.stderr)
     raise SystemExit(1)
@@ -66,6 +72,10 @@ from PySide6 import __version__ as qt_version
 from PySide6.QtWidgets import QApplication
 from vrhub.gui import HubWindow
 assert LOGO_PATH.is_file(), "Packaged icon is missing"
+if (Path(sys.argv[1]) / "vrhub/controller_bindings.py").is_file():
+    from vrhub import controller_bindings
+    for rid in hub.load_recipes():
+        assert controller_bindings.load(rid), "Packaged controller guide is missing: " + rid
 print(json.dumps({"version":__version__, "recipes":sorted(hub.load_recipes()), "qt":qt_version}))
 '''
 
@@ -158,7 +168,9 @@ def _source_files(source: Path) -> tuple[str, dict[str, bytes]]:
     for path in sorted(package.rglob("*")):
         if path.is_symlink():
             raise RuntimeError(f"Source package contains a symlink: {path}")
-        if path.is_file() and path.suffix in {".py", ".png", ".toml"}:
+        if '__pycache__' in path.relative_to(package).parts or path.suffix in {'.pyc', '.pyo'}:
+            continue
+        if path.is_file() and (path.suffix in {".py", ".png", ".toml"}):
             files[path.relative_to(source).as_posix()] = path.read_bytes()
     version = _version(package)
     project = tomllib.loads((source / "pyproject.toml").read_text())
@@ -176,9 +188,19 @@ def _source_files(source: Path) -> tuple[str, dict[str, bytes]]:
         raise RuntimeError("Invalid packaged recipe inventory.")
     required = {"vrhub/gui.py", "vrhub/cli.py", "vrhub/launcher.py", "vrhub/guard.py", "vrhub/self_install.py",
                 "vrhub/assets/bananananners.png", *{f"vrhub/recipes/{rid}.toml" for rid in recipes}}
+    guides = config.get("required_controller_guides")
+    if guides is not None:
+        if not isinstance(guides, list) or any(not isinstance(rid, str) for rid in guides) or sorted(guides) != sorted(recipes):
+            raise RuntimeError("Invalid packaged controller guide inventory.")
+        required.update({"vrhub/controller_bindings.py", "vrhub/controller_gui.py",
+                         *{f"vrhub/controls/{rid}.toml" for rid in guides}})
     if missing := required - files.keys():
         raise RuntimeError("Incomplete source folder: " + ", ".join(sorted(missing)))
-    for name in ("pyproject.toml", "README.md", "INSTALL-0.5.1.md", "TROUBLESHOOTING.md", "UPDATE-TESTING-0.5.2-dev1.md", "HOGWARTS-TESTING-0.5.2-dev2.md", "HOGWARTS-HEROIC-0.5.2-dev3.md", "HOGWARTS-ONECLICK-0.5.2-dev4.md", "RELEASE-NOTES-0.5.2.md", "UPDATE-TESTING-0.5.2.md"):
+    if config.get('required_kharvox_installer'):
+        bridge_files = {'vrhub/bridge_installer.py', 'vrhub/kharvox_component.py', 'vrhub/kharvox_bridge.py'}
+        if config['required_kharvox_installer'] != '0.2.0' or not bridge_files.issubset(files):
+            raise RuntimeError('Incomplete source folder: DOOM bridge installer modules are missing.')
+    for name in ("pyproject.toml", "README.md", "INSTALL-0.5.1.md", "TROUBLESHOOTING.md", "UPDATE-TESTING-0.5.2-dev1.md", "HOGWARTS-TESTING-0.5.2-dev2.md", "HOGWARTS-HEROIC-0.5.2-dev3.md", "HOGWARTS-ONECLICK-0.5.2-dev4.md", "RELEASE-NOTES-0.5.2.md", "UPDATE-TESTING-0.5.2.md", "SUBNAUTICA-TESTING-0.5.3-dev1.md", "SUBNAUTICA-SUCCESS-0.5.3-dev2.md", "VALHEIM-TESTING-0.5.3-dev3.md", "CONTROLLER-GUIDES-0.5.3-dev4.md", "ELDEN-RING-TESTING-0.5.3-dev6.md", "DOOM-TESTING-0.5.3-dev8.md", "DOOM-HUB-TESTING-0.5.3-dev9.md", "BRIDGE-INSTALL-TESTING-0.5.3-dev10.md", "RELEASE-NOTES-0.5.3.md", "UPDATE-TESTING-0.5.3-rc1.md", "VALIDATION-0.5.3-rc1.md"):
         path = source / name
         if path.is_symlink():
             raise RuntimeError(f"Source documentation must not be a symlink: {path}")
@@ -231,6 +253,8 @@ def _artifacts(root: Path, python: str, files: dict[str, bytes]) -> dict[Path, t
         content = "#!/bin/sh\nexport _NANNERSVRHUB_ROOT=" + shlex.quote(str(root)) + "\n"
         if name == "nannersvrhub-check":
             content += "if [ ! -x " + shlex.quote(python) + " ]; then\n"
+            content += '  if [ "$1" = "elden-ring" ]; then\n'
+            content += '    echo "Elden Ring launch stopped: Hub Python unavailable." >&2\n    exit 1\n  fi\n'
             content += '  echo "NAnnersVRhub Python unavailable; starting game without verification." >&2\n'
             content += '  [ "$#" -ge 2 ] || exit 2\n  shift\n  exec "$@"\nfi\n'
         content += "exec "
