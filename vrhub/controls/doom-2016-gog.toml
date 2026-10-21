@@ -1,6 +1,6 @@
 id = "doom-2016-gog"
 title = "DOOM (2016) — KHARVOX"
-scope = "Quest / Touch author defaults for KHARVOX 1.4; Both controllers worked in a 40-minute Linux/WiVRn lab 0.1.6 session; individual mappings remain author defaults."
+scope = "Quest / Touch author defaults for KHARVOX 1.4; General controller input passed in the October 21 rc1 Import/Test/Launch gameplay report; individual mappings remain author defaults."
 version = "KHARVOX 1.4 · GOG/Heroic experimental"
 reviewed = "2026-10-21"
 notes = ["These are author defaults. A user reported both controllers working; individual mappings are not separately verified.", "Keep the DOOM window focused. Test loaded campaign gameplay separately from the VR intro.", "Handedness, Swap Jump/Crouch and physical Glory Kill settings can change these references."]

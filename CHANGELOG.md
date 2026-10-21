@@ -1,3 +1,13 @@
+## 0.5.3
+
+- Accept the October 21 rc1 gameplay report: bridge import/test/launch,
+  rendering, tracking, controller input and stereo depth passed, with local
+  configuration checks also passed.
+- Finalize the stable Hub version and dated compatibility reference. Retain
+  the exact accepted bridge 0.2.0 artifact and all runtime behavior.
+- Keep publication and the real stable-endpoint update as explicit remaining
+  release steps. Local historical test records are not rewritten.
+
 ## 0.5.3-rc1 — public release preparation
 
 - Separate the full bridge component into its own pinned 0.2.0 source release;

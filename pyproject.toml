@@ -1,6 +1,6 @@
 [project]
 name = "nannersvrhub"
-version = "0.5.3-rc1"
+version = "0.5.3"
 description = "NAnnersVRhub: Linux VR mod hub (CachyOS / WiVRn / Quest 3)"
 requires-python = ">=3.11"
 dependencies = []
