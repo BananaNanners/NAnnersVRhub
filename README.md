@@ -31,17 +31,17 @@ and python3 install.py
 and ~/.local/bin/nannersvrhub
 ```
 
-After the 0.5.3 release is published, existing managed 0.5.2 users can use
+Both releases are live now 0.5.3, existing managed 0.5.2 users can use
 Hub updates -> Check now -> Download source ZIP -> Install update -> Restart.
 The actual 0.5.2 updater accepted a synthetic stable candidate in container
 tests. A real published-endpoint update remains a separate final user check.
 
 ## DOOM bridge
 
-The companion is NAnners KHARVOX Bridge 0.2.0 (experimental). Once its release
-is published, Install VR runner obtains and verifies its exact custom source
+The companion is NAnners KHARVOX Bridge 0.2.0 (experimental). Install VR 
+runner obtains and verifies its exact custom source
 archive, then reuses your verified isolated runner or obtains the exact base.
-Before publication, download the companion archive alongside this package
+Download the companion archive alongside this package
 and choose **Import bridge package…** in DOOM. Select
 NAnners-KHARVOX-Bridge-0.2.0-source.tar.gz. This verifies and installs the
 component, then runs the same runner installer. Existing runner state and
