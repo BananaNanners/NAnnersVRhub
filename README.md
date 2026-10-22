@@ -6,6 +6,14 @@ A Linux VR mod hub with runtime/headset diagnostics, per-game compatibility,
 controller references, install inventories, gameplay-test history and managed
 updates. The October 21 rc1 Import/Test/Launch gameplay check passed on the user setup.
 
+## Screenshots
+
+![Main game library](docs/images/hub-main.png)
+
+![VR System dashboard](docs/images/vr-system.png)
+
+![Per-game controller guide](docs/images/controller-guide.png)
+
 ## Changes since 0.5.2
 
 - Nine profiles: Skyrim VR/MGO, Fatekeeper, Ready or Not, Cyberpunk 2077,
