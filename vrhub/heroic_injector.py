@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Launch the installed UEVR injector with an existing native Heroic runner.
 
 Heroic's runExe IPC is private. Follow its runWineCommand runner selection,

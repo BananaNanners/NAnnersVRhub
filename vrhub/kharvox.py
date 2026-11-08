@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """KHARVOX 1.4 package checks and native Heroic/GOG launch planning.
 
 Reads metadata only until the user explicitly launches KHARVOX. Never edits the

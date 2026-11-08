@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Searchable, read-only Quest controller references for the Games page."""
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QFont, QPainter, QPen

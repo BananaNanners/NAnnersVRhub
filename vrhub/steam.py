@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Find Steam libraries and installed games on Linux."""
 import re
 from pathlib import Path

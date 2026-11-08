@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """BananNanners visual theme for the Qt GUI."""
 from pathlib import Path
 
@@ -19,6 +21,21 @@ PANEL_2 = "#171D23"
 BORDER = "#2A3139"
 
 STYLESHEET = f"""
+QMenuBar, QMenu {{
+    background: {PANEL};
+    color: {TEXT};
+}}
+QMenuBar::item {{
+    background: transparent;
+    padding: 5px 10px;
+}}
+QMenuBar::item:selected, QMenu::item:selected {{
+    background: #3B3108;
+    color: {YELLOW};
+}}
+QMenu::item {{
+    padding: 7px 24px;
+}}
 QMainWindow {{
     background: {BG};
 }}
@@ -26,7 +43,7 @@ QWidget {{
     color: {TEXT};
     font-size: 10.5pt;
 }}
-QWidget#systemDashboard, QWidget#gamesPage, QDialog#liveTestDialog, QDialog#testHistoryDialog, QDialog#logDiagnosticsDialog, QDialog#supportReportDialog, QDialog#hubUpdateDialog, QDialog#heroicInjectorDialog, QDialog#controllerBindingsDialog {{
+QWidget#systemDashboard, QWidget#gamesPage, QDialog#liveTestDialog, QDialog#testHistoryDialog, QDialog#logDiagnosticsDialog, QDialog#supportReportDialog, QDialog#hubUpdateDialog, QDialog#heroicInjectorDialog, QDialog#controllerBindingsDialog, QDialog#doomSaveRecoveryDialog, QDialog#doomSaveConfirmation {{
     background: {BG};
 }}
 QTabWidget::pane {{

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Pinned payload safety, PE metadata and fail-closed offline command routing."""
 import copy
 import importlib.util

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Windows VHVR archive mapping and shared installer isolation; no gameplay claims."""
 import copy
 import importlib.util

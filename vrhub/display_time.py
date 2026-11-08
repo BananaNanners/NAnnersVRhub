@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """24-hour local presentation. Stored timestamps and the OS timezone are untouched."""
 from datetime import datetime, timezone
 import re

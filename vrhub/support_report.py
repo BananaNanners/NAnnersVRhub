@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Fresh, independent diagnostic sections; export only on an explicit request."""
 from copy import deepcopy
 from datetime import datetime, timezone

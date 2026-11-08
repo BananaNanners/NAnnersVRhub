@@ -1,3 +1,187 @@
+## 0.5.4 — Stable release preparation
+
+- Promote the desktop-accepted RC1 to 0.5.4. Record the November 7, 2026 user desktop pass and retain GPL-3.0-only/MIT notices.
+- Include installer recovery fixes, development-only save backup/history/comparison/undo, stronger path/hash guards, recent recovery discovery and clearer blocked states.
+- Include the confirmed Hub rollback UI; adjustable sizing remains limited to development save recovery.
+- Preserve the accepted runtime behavior. Refresh versioned documentation and synthetic future-update fixtures; final publication and the real stable-endpoint acceptance test remain pending.
+
+## 0.5.4-rc1 — Release preparation (unpublished)
+
+- Consolidate the 0.5.4 installer recovery fixes, development save tools, integrity checks, recent-backup discovery and Hub rollback UI.
+- Record the user-confirmed dev23 rollback cancel/accept/restart pass. Adjustable sizing remains limited to development save recovery.
+- Add GPL-3.0-only licensing for original Hub code; retain the existing MIT bridge installer and upstream product terms. Include license text in managed installations and source packages.
+- Preserve current GitHub README screenshots and Qt CI runtime-library setup; document remaining limits and candidate acceptance steps.
+
+## 0.5.4-dev23 — Hub rollback control
+
+- Add Roll back to [version] in Hub updates, using the existing managed installer transaction and verification.
+- Require confirmation, show progress, and offer Restart Hub after successful activation; keep the running process pinned until restart.
+- Disable rollback for source runs, unavailable/corrupt previous releases, active update operations or a pending restart. Display the unavailable reason.
+- Revalidate the confirmed current/previous releases, including under the installer lock, to reject stale confirmations.
+- Keep non-cancelable activation and the independent terminal recovery manager. No automatic rollback or restart.
+
+## 0.5.4-dev22 — Explain blocked backups
+
+- Replace ambiguous recovery Review required states with Restore blocked; backup verification failures have a specific state and explanation.
+- Distinguish missing/unreadable/unsupported records, unconfirmed preparation, wrong game, missing hashes and mismatched payload hashes.
+- Explain that no manual approval button exists; keep the backup and choose another verified source.
+- Deduplicate identical scan-summary errors. Map internal snapshot history statuses to clear blocked labels without changing stored metadata.
+- Keep restore acceptance conditions, directory identity checks, backup discovery and window sizing intact.
+
+## 0.5.4-dev21 — Recent recovery discovery
+
+- Rank recovery sets by recorded creation instant, not random directory names; combine DOOM legacy and current sets before selecting 128.
+- Use folder modification time only as an explained ordering fallback for missing/unreadable creation metadata; this does not establish save progress or integrity.
+- Bound ordinary locations separately, retaining all copies in the selected recovery sets instead of silently cutting the combined list at 256 rows.
+- Explain recovery, ordinary-location and snapshot list limits. Retain every backup on disk.
+- Normalize displayed recovery creation dates to UTC before chronological group ordering; local time formatting remains unchanged.
+- Preserve dev20 path-identity and recovery-integrity safeguards, window size controls and game configuration.
+
+## 0.5.4-dev20 — Restore review safeguards
+
+- Bind restore previews to canonical source/target paths and directory device/inode identity; recheck before preparation and replacement.
+- Validate managed recovery copies against their retained transaction fingerprint for ordinary source selection, not only Undo.
+- Block missing, invalid, unconfirmed and mismatched recovery records. Retain compatible legacy transaction records with hashes but no optional operation/game/version fields.
+- Preserve the dev19 size selector, layout, source/target handling and original dev19 files.
+- Backup discovery ordering (review finding 3) remains open for the next change.
+
+## 0.5.4-dev19 — Adjustable recovery window size
+
+- Default to 80% of available screen width/height.
+- Add 70%, 80%, 90% and Custom controls beside Close, with measured width/height percentages.
+- Show logical dimensions and Qt pixel scale in the readout tooltip. Manual resize updates Custom; reopening resets to 80%.
+- Preserve font sizes, scroll fallback and save handling.
+
+## 0.5.4-dev18 — Screen-relative recovery sizing
+
+- Open recovery at 94% of available screen width/height instead of the fixed 1180×900 cap.
+- Reuse existing Qt layout items when moving the form, keeping text-size cache invalidation attached to the correct item.
+- Measure wrapped instructions/status/results after resize, text and style changes so rows move down instead of overlapping.
+- Keep font sizes, save handling, scroll fallback, dividers and the fixed Close footer.
+
+## 0.5.4-dev17 — Stable recovery layout
+
+- Put the recovery form in a resizable scroll area that respects its layout minimums when feedback appears.
+- Keep Close outside the scrolling form; preserve both pane dividers and separate source/target summaries.
+- Preserve target-validation feedback, save selection, preferences and all restore safeguards.
+
+## 0.5.4-dev16 — Explain target changes
+
+- Keep rejected-target messages visible across rescans until dismissed or replaced by another target choice.
+- Explain recovery-backup, empty-folder, missing-location, non-folder and access-denied rejection reasons; retain save-format diagnostics.
+- Validate dropdown targets before switching, preserve the previous target on rejection, and confirm successful changes without moving saves.
+- Start the target browser at the current target or an existing ancestor. Canceling leaves the prior feedback unchanged.
+
+## 0.5.4-dev15 — Side-by-side save summaries
+
+- Add Selected source and Active target panels with a visible, draggable horizontal splitter. Keep the existing list/details height splitter.
+- Display full paths, mission/date/time/version and file counts without duplicating the target summary in the source panel.
+- Keep scan issues, comparison counts and restore-blocking warnings visible. Clear stale summaries when selection or target changes.
+- Preserve source remembering, dot-free action labels and all existing recovery safeguards.
+
+## 0.5.4-dev14 — Clear source selection
+
+- Explain that clicking a row selects a source; rename Choose save folder to Browse for another source folder and start browsing at the selected row.
+- Show the complete source path in a read-only, copyable field and mark its row Selected source.
+- Add Remember selected source, preserving explicit selection after the verified preference update. Reopening and ordinary scans still start without a selected source.
+- Remove trailing dots from recovery action buttons; preserve the active-target button name and all restore safeguards.
+
+## 0.5.4-dev13 — Remember custom save folders
+
+- Remember up to eight recent custom source and eight target folders per game after save-format validation.
+- Recheck remembered folders on scan; custom targets require explicit selection after reopening and sources are never auto-selected.
+- Add Forget remembered folders for the current game, keeping saves, backups and other games' preferences.
+- Keep folder preferences in a separate local file with atomic locked updates. Preserve session-only development enablement and restore safeguards.
+
+## 0.5.4-dev12 — Recovery list layout
+
+- Prioritize save-list space over the empty details pane and set a minimum list height.
+- Add a draggable vertical splitter with scrollable, non-collapsible panes.
+- Open a larger recovery window bounded by available screen geometry; keep grouped rows and all restore safeguards.
+
+## 0.5.4-dev11 — Clear recovery backup groups
+
+- List active save locations first and group recovery copies under dated Restore or Undo headings.
+- Name saved copies Selected source, Original saves before restore, or Saves preserved before undo. Keep full paths in tooltips/details.
+- Distinguish save-location counts from backup-set and saved-copy counts. Headings cannot become restore sources.
+- Show undated Recovery backup for unreadable legacy metadata; no inferred creation date or changed restore behavior.
+
+## 0.5.4-dev10 — Undo last restore
+
+- Preview and undo the last completed restore for the selected target, retaining current saves in a fresh verified backup.
+- Warn when saves changed after that restore; verify the original backup, reviewed fingerprints and restore record again before replacement.
+- Block repeated undo, stale previews and incomplete or corrupt history. Keep development controls disabled at startup.
+
+## 0.5.4-dev2 — explicit DOOM save recovery (unreleased)
+
+## 0.5.4-dev9 — Save file comparison
+
+- Show added, changed, removed and unchanged file counts for the selected source/target.
+- Add a read-only comparison window with every relative filename and both folder paths.
+- Repeat counts and explain target-only removal in restore confirmation, with full file lists under Show Details. Preserve default No and all existing restore/backup safeguards.
+
+
+## 0.5.4-dev8 — Save snapshots and history
+
+- Add Back up current saves with an optional note, content verification and game/Hub-version/creation-date labels.
+- Add per-game snapshot history with explicit source-list review; incomplete or changed snapshots cannot restore.
+- Preserve current saves and prior backups, retain failed copies for diagnosis, and keep development tools disabled at startup.
+
+
+## 0.5.4-dev7 — Skyrim save locations
+
+- Recognize root-level steam_autocloud.vdf alongside Skyrim saves without using its timestamp as gameplay progress.
+- Read the matching MO2 Steam shortcut to discover its own Proton-prefix saves, independently of runner/config_info availability.
+- Label base-game prefix, MO2 shortcut prefix and profile-local candidates. Preserve explicit source/target review.
+
+
+## 0.5.4-dev6 — Explain scan failures and missing dates
+
+- Show validation errors without selecting a row; mark invalid current targets as review required.
+- Keep restore blocked while showing bounded, stat-only folder-file observations when available.
+- Explain unavailable/partial dates and observed counts; use DOOM checkpoint timestamps when metadata has no usable date.
+
+
+## 0.5.4-dev5 — Save-date explanation
+
+- Show DOOM metadata guidance only for DOOM; other games explain that dates are file modification times and do not confirm progress.
+- Retain compatibility/cloud-sync guidance and all recovery behavior.
+
+
+## 0.5.4-dev4 — Session development switch
+
+- Add Tools → Enable development tools, unchecked on every new Hub window.
+- Keep save recovery hidden on normal launch, including when the old environment
+  flag is inherited. Unchecking hides it again.
+- Pass session permission explicitly to recovery without changing environment or
+  saved settings. Preserve all save validation, backup and rollback behavior.
+
+
+## 0.5.4-dev3 — Development save recovery
+
+- Hide save recovery during normal use; enable per launch with NANNERS_DEV_SAVE_RECOVERY=1.
+- Add save recovery adapters for all nine game profiles, explicit target selection,
+  per-game backup folders, account/type checks and launcher shutdown checks.
+- Reuse verified backup, staging, stale-preview and rollback protection; no automatic
+  latest-save selection, account conversion or cloud synchronization.
+- New adapter save-load acceptance remains pending; preserve recipes, controller
+  guides, installed mod handling, test history and the isolated VR runner route.
+
+
+- Add a DOOM-only Find and restore saves window with read-only discovery of the active native Heroic prefix, known KHARVOX experiment prefixes and recovery backups. Allow explicit selection of another complete save folder.
+- Show mission, recorded save date, time value, game version and full paths. No source is automatically selected and nothing is synchronized at launch. Identical sets require no restore.
+- Back up and SHA-256 verify both complete sets before explicit restoration. Reject stale previews, changed Heroic locations, linked save entries, different reported game versions and busy game/launcher processes. Retain recovery copies on failure and support selecting a prior backup to recover earlier progress.
+- Keep graphics settings, bridge/runner selection, existing installer records and gameplay history separate. Retain dev1 installer fixes and the stable separate bridge component workflow.
+- Require both recovery modules in the packaged source inventory and add backend/offscreen Qt regression coverage. User desktop acceptance is pending.
+
+## 0.5.4-dev1 — installer recovery fixes (unreleased)
+
+- Base this preview on stable v0.5.3, preserving the separately downloaded/imported pinned KHARVOX Bridge 0.2.0 and the thin Hub package.
+- Retain original files for new PAK installs and restore them on uninstall. Reject recorded reinstallation and changed/missing backup inventories before modifying files.
+- Keep game-root transaction backups until the installer state commits, roll back on commit failure, and preserve recovery copies if rollback is incomplete.
+- Save generic installer records by atomic replacement. Existing legacy PAK records retain their previous behavior; missing historical backups cannot be recreated.
+- Add regression tests for original restore, partial writes, commit failures and recovery-copy retention. The two medium-priority UEVR/profile findings remain deferred.
+
 ## 0.5.3
 
 - Accept the October 21 rc1 gameplay report: bridge import/test/launch,

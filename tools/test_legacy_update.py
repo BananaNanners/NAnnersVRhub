@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Exercise the published 0.5.2 updater against a synthetic stable candidate.
 
 Requires a locally verified 0.5.2 source folder and working PySide6. No real

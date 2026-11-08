@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Offline per-user application deployment. Game data and Hub state are never copied.
 
 Only installation.json selects the active release. Launchers resolve its immutable
@@ -170,7 +172,8 @@ def _source_files(source: Path) -> tuple[str, dict[str, bytes]]:
             raise RuntimeError(f"Source package contains a symlink: {path}")
         if '__pycache__' in path.relative_to(package).parts or path.suffix in {'.pyc', '.pyo'}:
             continue
-        if path.is_file() and (path.suffix in {".py", ".png", ".toml"}):
+        if path.is_file() and ((path.suffix in {".py", ".png", ".toml"}
+                               or (path.parent == package / "licenses" and path.suffix == ".txt"))):
             files[path.relative_to(source).as_posix()] = path.read_bytes()
     version = _version(package)
     project = tomllib.loads((source / "pyproject.toml").read_text())
@@ -188,6 +191,16 @@ def _source_files(source: Path) -> tuple[str, dict[str, bytes]]:
         raise RuntimeError("Invalid packaged recipe inventory.")
     required = {"vrhub/gui.py", "vrhub/cli.py", "vrhub/launcher.py", "vrhub/guard.py", "vrhub/self_install.py",
                 "vrhub/assets/bananananners.png", *{f"vrhub/recipes/{rid}.toml" for rid in recipes}}
+    recovery = config.get("required_doom_save_recovery")
+    if recovery is not None:
+        if type(recovery) is not int or recovery != 1:
+            raise RuntimeError("Unsupported DOOM save recovery inventory.")
+        required.update({"vrhub/doom_saves.py", "vrhub/doom_save_gui.py"})
+    generic_recovery = config.get("required_game_save_recovery")
+    if generic_recovery is not None:
+        if type(generic_recovery) is not int or generic_recovery != 1:
+            raise RuntimeError("Unsupported development save recovery inventory.")
+        required.update({"vrhub/game_saves.py", "vrhub/game_save_gui.py"})
     guides = config.get("required_controller_guides")
     if guides is not None:
         if not isinstance(guides, list) or any(not isinstance(rid, str) for rid in guides) or sorted(guides) != sorted(recipes):
@@ -200,7 +213,7 @@ def _source_files(source: Path) -> tuple[str, dict[str, bytes]]:
         bridge_files = {'vrhub/bridge_installer.py', 'vrhub/kharvox_component.py', 'vrhub/kharvox_bridge.py'}
         if config['required_kharvox_installer'] != '0.2.0' or not bridge_files.issubset(files):
             raise RuntimeError('Incomplete source folder: DOOM bridge installer modules are missing.')
-    for name in ("pyproject.toml", "README.md", "INSTALL-0.5.1.md", "TROUBLESHOOTING.md", "UPDATE-TESTING-0.5.2-dev1.md", "HOGWARTS-TESTING-0.5.2-dev2.md", "HOGWARTS-HEROIC-0.5.2-dev3.md", "HOGWARTS-ONECLICK-0.5.2-dev4.md", "RELEASE-NOTES-0.5.2.md", "UPDATE-TESTING-0.5.2.md", "SUBNAUTICA-TESTING-0.5.3-dev1.md", "SUBNAUTICA-SUCCESS-0.5.3-dev2.md", "VALHEIM-TESTING-0.5.3-dev3.md", "CONTROLLER-GUIDES-0.5.3-dev4.md", "ELDEN-RING-TESTING-0.5.3-dev6.md", "DOOM-TESTING-0.5.3-dev8.md", "DOOM-HUB-TESTING-0.5.3-dev9.md", "BRIDGE-INSTALL-TESTING-0.5.3-dev10.md", "RELEASE-NOTES-0.5.3.md", "UPDATE-TESTING-0.5.3-rc1.md", "VALIDATION-0.5.3-rc1.md", "UPDATE-TESTING-0.5.3.md", "VALIDATION-0.5.3.md"):
+    for name in ("LICENSE", "NOTICE.md", "RELEASE-NOTES-0.5.4.md", "VALIDATION-0.5.4.md", "VALIDATION-0.5.4-rc1.md", "pyproject.toml", "README.md", "INSTALL-0.5.1.md", "TROUBLESHOOTING.md", "UPDATE-TESTING-0.5.2-dev1.md", "HOGWARTS-TESTING-0.5.2-dev2.md", "HOGWARTS-HEROIC-0.5.2-dev3.md", "HOGWARTS-ONECLICK-0.5.2-dev4.md", "RELEASE-NOTES-0.5.2.md", "UPDATE-TESTING-0.5.2.md", "SUBNAUTICA-TESTING-0.5.3-dev1.md", "SUBNAUTICA-SUCCESS-0.5.3-dev2.md", "VALHEIM-TESTING-0.5.3-dev3.md", "CONTROLLER-GUIDES-0.5.3-dev4.md", "ELDEN-RING-TESTING-0.5.3-dev6.md", "DOOM-TESTING-0.5.3-dev8.md", "DOOM-HUB-TESTING-0.5.3-dev9.md", "BRIDGE-INSTALL-TESTING-0.5.3-dev10.md", "RELEASE-NOTES-0.5.3.md", "UPDATE-TESTING-0.5.3-rc1.md", "VALIDATION-0.5.3-rc1.md", "UPDATE-TESTING-0.5.3.md", "VALIDATION-0.5.3.md"):
         path = source / name
         if path.is_symlink():
             raise RuntimeError(f"Source documentation must not be a symlink: {path}")
@@ -412,7 +425,7 @@ def install(source: Path, root: Path, *, check_only=False, expected_current=None
     return {"status": "INSTALLED", "version": version, "root": str(root), "previous": record["previous"]}
 
 
-def rollback(root: Path) -> dict:
+def rollback(root: Path, *, expected_current=None, expected_previous=None) -> dict:
     root = root.expanduser().absolute()
     if _read_record(root) is None:
         raise RuntimeError("No previous managed app version is available. Saved data was not changed.")
@@ -420,6 +433,9 @@ def rollback(root: Path) -> dict:
         old = _read_record(root)
         if not old or not old["previous"]:
             raise RuntimeError("No previous managed app version is available. Saved data was not changed.")
+        if ((expected_current is not None and old["current"] != expected_current)
+                or (expected_previous is not None and old["previous"] != expected_previous)):
+            raise RuntimeError("The installed Hub versions changed after confirmation. Restart and review rollback again.")
         directory, manifest = _release(root, old["previous"])
         _probe(directory, old["python"])
         files = {name: (directory / name).read_bytes() for name in manifest["files"]}

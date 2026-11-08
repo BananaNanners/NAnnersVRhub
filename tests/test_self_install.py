@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 import fcntl
 import ctypes
 import ctypes.util
@@ -259,6 +261,19 @@ class ManagedInstallTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "preserved"):
             self.install()
         self.assertEqual(path.read_text(), '{"schema": 99}')
+
+    def test_reviewed_rollback_refuses_changed_current_or_previous(self):
+        self.install()
+        self.new_version("0.5.4-dev99")
+        self.install()
+        record=self.record()
+        for current,previous in (("wrong",record["previous"]),(record["current"],"wrong")):
+            with self.subTest(current=current,previous=previous):
+                with self.assertRaisesRegex(RuntimeError,"changed after confirmation"):
+                    installer.rollback(self.root,expected_current=current,expected_previous=previous)
+                self.assertEqual(self.record(),record)
+        installer.rollback(self.root,expected_current=record["current"],expected_previous=record["previous"])
+        self.assertEqual(self.record()["current"],record["previous"])
 
     def test_rollback_refuses_modified_previous_release(self):
         self.install()

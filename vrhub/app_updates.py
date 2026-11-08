@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Public stable Hub releases, bounded downloads and managed upgrades.
 
 This module never imports downloaded code. Only an explicit install calls the
@@ -399,3 +401,20 @@ def restart_command():
         raise UpdateError("No managed Hub launcher is available.")
     self_install._release(root, record["current"])
     return [str(root / "bin/nannersvrhub")]
+
+
+def rollback_context():
+    root, current = managed_context()
+    record = self_install._read_record(root)
+    if not record or record["current"] != current or not record.get("previous"):
+        raise UpdateError("No previous managed Hub version is available for rollback.")
+    _directory, manifest = self_install._release(root, record["previous"])
+    return {"root": str(root), "current": current, "previous": record["previous"], "version": manifest["version"]}
+
+
+def rollback_hub(reviewed):
+    fresh = rollback_context()
+    if fresh != reviewed:
+        raise UpdateError("The installed Hub versions changed after confirmation. Review rollback again.")
+    return self_install.rollback(Path(fresh["root"]), expected_current=fresh["current"],
+                                 expected_previous=fresh["previous"])

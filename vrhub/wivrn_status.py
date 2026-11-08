@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Read-only WiVRn connection telemetry, with bounded D-Bus requests.
 
 Upstream interface: WiVRn/dbus/io.github.wivrn.Server.xml. Query only the

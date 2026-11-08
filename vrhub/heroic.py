@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Small Heroic/GOG discovery helpers.
 
 The Hub deliberately reads Heroic's own metadata and asks Heroic to launch games;

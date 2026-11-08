@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """NAnnersVRhub Qt window. Run with:  python -m vrhub.gui   (needs PySide6)"""
 import sys
 import subprocess
@@ -5,13 +7,13 @@ import zipfile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QFileDialog, QFrame, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
                                QComboBox, QDialog, QDialogButtonBox, QFormLayout, QListWidget, QPlainTextEdit,
                                QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
-from . import __version__, app_updates, compatibility, heroic_epic, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
+from . import __version__, app_updates, compatibility, heroic_epic, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates, game_saves
 from .handlers import get_handler
 from .cli import _roots
 from .display_time import age_text, filename_stamp, local_time
@@ -126,6 +128,7 @@ class LogDiagnosticsDialog(QDialog):
         self.worker = None
         self.log_report = None
         self._closing = False
+
         self.setObjectName("logDiagnosticsDialog")
         self.setWindowTitle("Game log diagnostics — " + recipe["name"])
         self.resize(900, 700)
@@ -550,6 +553,13 @@ class HubWindow(QMainWindow):
         self.scan_worker: ScanWorker | None = None
         self.scan_report: dict | None = None
         self._closing = False
+        self.development_tools_enabled = False
+        tools_menu = self.menuBar().addMenu("Tools")
+        self.development_tools_action = QAction("Enable development tools", self)
+        self.development_tools_action.setCheckable(True)
+        self.development_tools_action.setToolTip("Show development save recovery for this session only.")
+        tools_menu.addAction(self.development_tools_action)
+        self.development_tools_action.toggled.connect(self.set_development_tools_enabled)
 
         self.hub_updates = HubUpdateController(self)
         self.hub_updates.idle.connect(self.close_when_idle)
@@ -646,6 +656,7 @@ class HubWindow(QMainWindow):
         self.doom_probe_btn = QPushButton("Test VR bridge")
         self.doom_logs_btn = QPushButton("Open DOOM diagnostics")
         self.doom_import_btn = QPushButton("Import bridge package…")
+        self.doom_saves_btn = QPushButton("Development: restore game saves…")
         self.bridge_log_btn.setObjectName("secondaryAction")
         refresh_btn = QPushButton("Refresh")
         self.install_btn.clicked.connect(self.install)
@@ -672,6 +683,7 @@ class HubWindow(QMainWindow):
         self.doom_probe_btn.clicked.connect(lambda: self.run_kharvox_bridge('probe'))
         self.doom_logs_btn.clicked.connect(self.open_doom_diagnostics)
         self.doom_import_btn.clicked.connect(self.import_kharvox_bridge)
+        self.doom_saves_btn.clicked.connect(self.show_doom_saves)
         refresh_btn.clicked.connect(self.refresh)
 
         left = QVBoxLayout()
@@ -681,7 +693,7 @@ class HubWindow(QMainWindow):
         left.addLayout(_row(self.inspect_btn, self.diag_btn, self.bridge_log_btn, self.check_btn, self.mark_btn))
         left.addLayout(_row(self.key_btn, self.kharvox_folder_btn, refresh_btn))
         left.addLayout(_row(self.doom_prepare_btn, self.doom_probe_btn, self.doom_logs_btn))
-        left.addLayout(_row(self.doom_import_btn))
+        left.addLayout(_row(self.doom_import_btn, self.doom_saves_btn))
         main = QHBoxLayout()
         main.setSpacing(10)
         main.addLayout(left, 5)
@@ -887,6 +899,7 @@ class HubWindow(QMainWindow):
     def show_details(self):
         r = self.current()
         kharvox = bool(r and r.get('handler') == 'kharvox-gog')
+        self.doom_saves_btn.setVisible(bool(r and self.development_tools_enabled and r["id"] in game_saves.LAYOUTS))
         self.kharvox_folder_btn.setVisible(kharvox)
         for button in (self.doom_prepare_btn, self.doom_probe_btn, self.doom_logs_btn, self.doom_import_btn):
             button.setVisible(kharvox)
@@ -1006,6 +1019,16 @@ class HubWindow(QMainWindow):
             QMessageBox.information(self, "Debug log", f"No debug log exists yet.\n\nExpected path:\n{path}")
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def set_development_tools_enabled(self, checked):
+        self.development_tools_enabled = bool(checked)
+        self.show_details()
+
+    def show_doom_saves(self):
+        recipe = self.current()
+        if recipe and self.development_tools_enabled and recipe.get("id") in game_saves.LAYOUTS:
+            from .game_save_gui import GameSavesDialog
+            GameSavesDialog(recipe, self, development_enabled=True).exec()
 
     # ---- update checking -------------------------------------------------
     def check_updates(self):

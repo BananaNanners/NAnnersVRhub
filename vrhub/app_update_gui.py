@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Hub application updates, separate from game-mod update checks."""
 import subprocess
 import threading
@@ -38,8 +40,12 @@ class HubUpdateWorker(QThread):
                 self.result.emit(result)
             elif self.action == "download":
                 self.result.emit(app_updates.download(self.value, cancel=self.cancel, progress=self.progress.emit))
-            else:
+            elif self.action == "rollback":
+                self.result.emit(app_updates.rollback_hub(self.value))
+            elif self.action == "install":
                 self.result.emit(app_updates.install_bundle(Path(self.value)))
+            else:
+                raise RuntimeError("Unknown Hub update action.")
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -99,7 +105,7 @@ class HubUpdateController(QObject):
         self._auto_pending = False
         self.progress_value = 0
         self.message = {"restore": "Checking the saved download…", "check": "Checking GitHub…", "download": "Downloading and verifying the source ZIP…",
-                        "install": "Installing the verified update…"}[action]
+                        "install": "Installing the verified update…", "rollback": "Verifying and restoring the previous Hub version…"}[action]
         worker = self.worker = HubUpdateWorker(action, value, self)
         worker.result.connect(self.receive_result)
         worker.failed.connect(self.failed)
@@ -137,7 +143,8 @@ class HubUpdateController(QObject):
             self.message = f"Verified download ready: {result['release']['version']}."
         else:
             self.installed = True
-            self.message = f"Installed {result['version']}. Restart the Hub to use it. Rollback is available through nannersvrhub-manage."
+            self.message = ((f"Rolled back to {result['version']}." if action == "rollback" else f"Installed {result['version']}.")
+                            + " Restart the Hub to use it. Game installs, saves and test history were not changed.")
         self.changed.emit()
 
     def ready_for_release(self):
@@ -166,7 +173,7 @@ class HubUpdateController(QObject):
 
     def shutdown(self):
         self.closing = True
-        if self.worker and self.worker.action != "install":
+        if self.worker and self.worker.action not in {"install", "rollback"}:
             self.worker.cancel.set()
 
     def restart(self):
@@ -212,6 +219,8 @@ class HubUpdateDialog(QDialog):
         self.download = QPushButton("Download source ZIP")
         self.install = QPushButton("Install update…")
         self.restart = QPushButton("Restart Hub")
+        self.rollback = QPushButton("Roll back Hub")
+        self.rollback_info = None
         self.cancel = QPushButton("Cancel download/check")
         self.release = QPushButton("View GitHub releases")
         self.folder = QPushButton("Open verified download")
@@ -219,12 +228,13 @@ class HubUpdateDialog(QDialog):
         self.download.clicked.connect(lambda: controller.start("download", controller.release))
         self.install.clicked.connect(self.install_update)
         self.restart.clicked.connect(controller.restart)
+        self.rollback.clicked.connect(self.rollback_update)
         self.cancel.clicked.connect(lambda: controller.worker.cancel.set() if controller.worker else None)
         self.release.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(controller.release["html_url"] if controller.release else app_updates.RELEASES)))
         self.folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(controller.bundle["directory"])) if controller.bundle else None)
         for widget in (self.versions, self.status, self.checked, self.startup, self.automatic, policy, self.managed, self.notes, self.bar):
             layout.addWidget(widget)
-        for widgets in ((self.check, self.download, self.install, self.restart), (self.cancel, self.release, self.folder)):
+        for widgets in ((self.check, self.download, self.install, self.restart), (self.rollback, self.cancel, self.release, self.folder)):
             row = QHBoxLayout()
             for widget in widgets:
                 row.addWidget(widget)
@@ -249,20 +259,33 @@ class HubUpdateDialog(QDialog):
         self.bar.setValue(c.progress_value)
         self.check.setEnabled(not c.busy and not c.installed)
         self.download.setEnabled(bool(c.release) and not c.busy and not c.installed)
-        self.cancel.setEnabled(c.busy and c.worker.action != "install")
+        self.cancel.setEnabled(c.busy and c.worker.action not in {"install", "rollback"})
         self.restart.setVisible(c.installed)
         self.restart.setEnabled(not c.busy)
         self.folder.setEnabled(bool(c.bundle) and not c.busy)
+        self.rollback.setEnabled(False)
+        self.rollback_info = None
         if c.installed:
             self.managed.setText("Restart uses the installed application's stable launcher.")
         elif not c.busy:
             try:
                 app_updates.managed_context()
                 self.can_install = True
-                self.managed.setText("Managed installation: in-app upgrades and rollback are available.")
+                try:
+                    self.rollback_info = app_updates.rollback_context()
+                    version = self.rollback_info["version"]
+                    self.rollback.setText(f"Roll back to {version}")
+                    self.rollback.setToolTip("Restore the previous installed Hub application, then choose Restart Hub. Game data is kept.")
+                    self.rollback.setEnabled(True)
+                    self.managed.setText(f"Managed installation. Previous Hub available: {version}.")
+                except Exception as exc:
+                    self.rollback.setText("Roll back Hub")
+                    self.rollback.setToolTip(str(exc))
+                    self.managed.setText("Managed installation. Rollback unavailable: " + str(exc))
             except Exception as exc:
                 self.can_install = False
                 self.managed.setText(str(exc))
+                self.rollback.setToolTip(str(exc))
         self.install.setEnabled(bool(self.can_install and c.ready_for_release() and app_updates.newer(c.release) and not c.busy and not c.installed))
 
     def install_update(self):
@@ -275,3 +298,16 @@ class HubUpdateDialog(QDialog):
                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if answer == QMessageBox.Yes:
             c.start("install", c.bundle["directory"])
+
+    def rollback_update(self):
+        c = self.controller
+        if c.busy or c.installed or self.rollback_info is None:
+            return
+        reviewed = dict(self.rollback_info)
+        answer = QMessageBox.question(self, "Roll back Hub?",
+                                      f"Switch the installed Hub to {reviewed['version']}?\n\n"
+                                      "Only the Hub application is rolled back. Game installs, saves, profiles and test history stay in place. "
+                                      "The current Hub stays open until you choose Restart Hub.",
+                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer == QMessageBox.Yes:
+            c.start("rollback", reviewed)

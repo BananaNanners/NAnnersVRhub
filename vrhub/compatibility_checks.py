@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Recipe-driven local evidence for Steam and Heroic/Epic mod workflows.
 
 Only reads files and finds tool paths. It never executes a runner, parses launch

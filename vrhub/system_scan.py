@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Read-only host VR inventory. Never starts a runtime or an OpenXR session."""
 import ctypes.util
 import copy

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Update checking: GitHub releases (no login) and Nexus Mods (needs a free personal API key)."""
 import json
 import os

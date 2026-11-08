@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """NAnnersVRhub core: recipes, install/uninstall bookkeeping, UEVR + profile handling."""
 import html
 import json
@@ -96,9 +98,8 @@ def _load_state() -> dict:
 
 
 def _save_state(s: dict) -> None:
-    f = state_file()
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(s, indent=2))
+    from .self_install import _atomic
+    _atomic(state_file(), (json.dumps(s, indent=2) + "\n").encode())
 
 
 def is_installed(recipe_id: str) -> bool:
@@ -178,6 +179,9 @@ def install(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
     if recipe.get("method") in {"bepinex", "ervr"}:
         from . import bepinex
         return bepinex.install(recipe, [mod_file], steam_roots)
+    if recipe["files"][0]["kind"] == "pak":
+        from . import pak
+        return pak.install(recipe, mod_file, game)
     rule = recipe["files"][0]
     ext = f".{rule['kind']}"
     dest_dir = game / rule["dest"]
@@ -346,6 +350,9 @@ def _install_gameroot(recipe: dict, mod_files: list[Path], steam_roots=None) -> 
     written_by: list[list[Path]] = []
     original_backups: dict[Path, Path] = {}
     originally_missing: set[Path] = set()
+    # Read before modifying the game, and keep backups until this record commits.
+    st = _load_state()
+    retain_backups = False
 
     try:
         plans = []
@@ -387,38 +394,43 @@ def _install_gameroot(recipe: dict, mod_files: list[Path], steam_roots=None) -> 
                 written.append(target)
             written_by.append(written)
 
+        now = int(time.time())
+        entry = st.get(recipe["id"], {})
+        comp_state = entry.get("components", {})
+        all_new = [str(w) for ws in written_by for w in ws]
+        for c, f, ws in zip(comp_of, mod_files, written_by):
+            if c is not None:
+                comp_state[str(c["nexus_mod"])] = {
+                    "files": [str(w) for w in ws], "installed_at": now, "archive": f.name
+                }
+        st[recipe["id"]] = {"files": list(dict.fromkeys(entry.get("files", []) + all_new)),
+                            "keep": str(base), "installed_at": now, "components": comp_state}
+        _save_state(st)
+
     except Exception as e:
         # Roll back the game tree to exactly how it looked before this transaction.
+        recovery_errors = []
         for target in originally_missing:
             try:
                 target.unlink(missing_ok=True)
-            except OSError:
-                pass
+            except OSError as exc:
+                recovery_errors.append(f"{target}: {exc}")
         for target, backup in original_backups.items():
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(backup, target)
-            except OSError:
-                pass
+            except OSError as exc:
+                recovery_errors.append(f"{target}: {exc}")
         _log("install_rollback", recipe=recipe["id"], error=str(e), archives=[f.name for f in mod_files])
+        if recovery_errors:
+            retain_backups = True
+            raise RuntimeError(f"Installation failed and rollback was incomplete. Recovery files preserved at {txn_root}: "
+                               + "; ".join(recovery_errors)) from e
         raise
     finally:
         shutil.rmtree(stage_root, ignore_errors=True)
-        shutil.rmtree(txn_root, ignore_errors=True)
-
-    now = int(time.time())
-    st = _load_state()
-    entry = st.get(recipe["id"], {})
-    comp_state = entry.get("components", {})
-    all_new = [str(w) for ws in written_by for w in ws]
-    for c, f, ws in zip(comp_of, mod_files, written_by):
-        if c is not None:
-            comp_state[str(c["nexus_mod"])] = {
-                "files": [str(w) for w in ws], "installed_at": now, "archive": f.name
-            }
-    st[recipe["id"]] = {"files": list(dict.fromkeys(entry.get("files", []) + all_new)),
-                        "keep": str(base), "installed_at": now, "components": comp_state}
-    _save_state(st)
+        if not retain_backups:
+            shutil.rmtree(txn_root, ignore_errors=True)
     _log("install_ok", recipe=recipe["id"], files=len(all_new), archives=[f.name for f in mod_files])
     return [w for ws in written_by for w in ws]
 
@@ -590,6 +602,9 @@ def install_profile(recipe: dict, zip_file: Path, steam_roots=None) -> list[Path
 def uninstall(recipe_id: str) -> list[Path]:
     """Remove what we installed under this key (use '<game>:profile' for a profile)."""
     state = _load_state()
+    if state.get(recipe_id, {}).get("installer") == "pak-1":
+        from . import pak
+        return pak.uninstall(recipe_id)
     if state.get(recipe_id, {}).get("installer") in {"submersed-vr-1", "vhvr-1", "ervr-1"}:
         from . import bepinex
         return bepinex.uninstall(recipe_id)

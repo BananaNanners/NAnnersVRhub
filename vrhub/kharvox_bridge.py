@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Hub adapter for the unchanged, user-tested KHARVOX lab 0.1.6 engine."""
 import importlib.util
 import os

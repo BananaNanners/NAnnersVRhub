@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Control evidence, offline rendering, filtering, packaging and real Qt navigation."""
 import copy
 import importlib.util

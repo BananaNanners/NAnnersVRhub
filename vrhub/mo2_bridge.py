@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Small helper for forwarding a launch request into Jackify's running MO2.
 
 Steam remains responsible for starting the primary MO2 process through the

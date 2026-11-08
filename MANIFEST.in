@@ -1,3 +1,5 @@
+include LICENSE NOTICE.md
+recursive-include vrhub/licenses *.txt
 include install.py vrhub-check
 include *.md
 recursive-include tests *.py

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Read-only Elden Ring evidence and a fail-closed Steam command adapter.
 
 No game executable is renamed, anti-cheat file changed, or game binary loaded.

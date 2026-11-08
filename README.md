@@ -1,6 +1,8 @@
 # NAnnersVRhub — VR Mod Hub for Linux
 
-Current release: **0.5.3** · [Download](https://github.com/BananaNanners/NAnnersVRhub/releases/tag/v0.5.3)
+NAnnersVRhub **0.5.4** · [Release downloads](https://github.com/BananaNanners/NAnnersVRhub/releases/tag/v0.5.4)
+
+This release adds safer install recovery, development-only save backup/recovery, and a Hub rollback button. Adjustable window sizing applies only to development save recovery. See [0.5.4 release notes](RELEASE-NOTES-0.5.4.md).
 
 A Linux VR mod hub with runtime/headset diagnostics, per-game compatibility,
 controller references, install inventories, gameplay-test history and managed
@@ -34,16 +36,14 @@ Linux, Python 3.11+ and working PySide6 are required for the Hub. Close the
 old Hub, extract the custom source ZIP and run:
 
 ```fish
-cd ~/Downloads/NAnnersVRhub-0.5.3
+cd ~/Downloads/NAnnersVRhub-0.5.4
 and python3 install.py
 and ~/.local/bin/nannersvrhub
 ```
 
-NAnnersVRhub 0.5.3 is available now. Existing managed 0.5.2 installations can use
-Hub updates -> Check now -> Download source ZIP -> Install update -> Restart.
-The published 0.5.2 updater successfully discovered, downloaded, verified and
-extracted the public 0.5.3 release in development checks. The full desktop
-installation and restart remain a separate final user acceptance check.
+After publication, existing managed installations can use Hub updates → Check now → Download source ZIP → Install update → Restart Hub. Manual installation uses the custom source archive above. Close the Hub before installing manually. Game data remains separate from application files.
+
+In Hub updates, **Roll back to [version]** verifies and switches to the retained previous application after confirmation; **Restart Hub** activates it in a new process. Only one previous app version is retained. Application rollback does not undo data changes. If that older version lacks a rollback button, the independent terminal manager remains available.
 
 ## DOOM bridge
 
@@ -86,5 +86,15 @@ software may contain errors. Compatibility and gameplay reports describe
 specific tested versions and setups; they do not guarantee the same result
 on every system or verify a current gameplay session.
 
-Read [Release notes](RELEASE-NOTES-0.5.3.md) and
-[Validation](VALIDATION-0.5.3.md) for scope and checks.
+Read [Release notes](RELEASE-NOTES-0.5.4.md) and
+[Validation](VALIDATION-0.5.4.md) for release scope and checks.
+
+## Development save recovery
+
+Tools → Enable development tools exposes save recovery for the nine bundled profiles. Development tools start disabled each session. You can explicitly select source/target folders, back up current saves, inspect snapshot history, compare added/changed/removed files, restore a complete set, undo the last restore and remember custom paths per game. Backups are retained; saves are not merged or automatically selected by progress/date.
+
+The development save recovery window alone offers 70%, 80%, 90% and Custom sizing (default 80% of available screen width/height). Other Hub windows have not gained these sizing controls.
+
+## License
+
+Original Hub code is licensed under **GNU GPL version 3 only**. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). The existing MIT bridge installer and separately obtained dependencies/mods retain their own terms. Licensing this Hub does not merge it into Kaon or change project ownership.

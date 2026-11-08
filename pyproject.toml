@@ -1,9 +1,12 @@
 [project]
 name = "nannersvrhub"
-version = "0.5.3"
+version = "0.5.4"
 description = "NAnnersVRhub: Linux VR mod hub (CachyOS / WiVRn / Quest 3)"
 requires-python = ">=3.11"
 dependencies = []
+license = {file = "LICENSE"}
+authors = [{name = "Carlos Garcia (BananaNanners)"}]
+classifiers = ["License :: OSI Approved :: GNU General Public License v3 (GPLv3)"]
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.5"]
@@ -22,12 +25,14 @@ build-backend = "setuptools.build_meta"
 packages = ["vrhub"]
 
 [tool.setuptools.package-data]
-vrhub = ["assets/*.png", "recipes/*.toml", "controls/*.toml"]
+vrhub = ["assets/*.png", "recipes/*.toml", "controls/*.toml", "licenses/*.txt"]
 
 [tool.setuptools.exclude-package-data]
 vrhub = ["**/__pycache__/*", "**/*.pyc", "**/*.pyo"]
 
 [tool.nannersvrhub]
+required_doom_save_recovery = 1
+required_game_save_recovery = 1
 required_kharvox_installer = "0.2.0"
 required_recipes = ["cyberpunk-2077", "doom-2016-gog", "elden-ring", "fatekeeper", "hogwarts-legacy", "ready-or-not", "skyrim-vr-mgo", "subnautica", "valheim"]
 required_controller_guides = ["cyberpunk-2077", "doom-2016-gog", "elden-ring", "fatekeeper", "hogwarts-legacy", "ready-or-not", "skyrim-vr-mgo", "subnautica", "valheim"]

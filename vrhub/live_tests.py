@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Explicit user-reported gameplay history, independent of installer state.
 
 Reads do not create files. Saves serialize concurrent writers and atomically

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Transactional SubmersedVR installation; fixtures are never gameplay evidence."""
 import copy
 import importlib.util

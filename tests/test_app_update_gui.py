@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Real Qt threads and managed activation; synthetic releases, never gameplay evidence."""
 import importlib.util
 import json
@@ -51,9 +53,10 @@ class QtUpdateTests(unittest.TestCase):
         c.start("check", True)
         self.wait()
         c.show()
-        self.assertIn("0.5.4", c.dialog.versions.text())
+        self.assertIn("0.5.5", c.dialog.versions.text())
         self.assertEqual(c.dialog.notes.toPlainText(), self.fixture.metadata["body"])
         self.assertFalse(c.dialog.install.isEnabled())  # Source run.
+        self.assertFalse(c.dialog.rollback.isEnabled())
         c.dialog.automatic.setChecked(True)
         self.assertTrue(app_updates.read_settings()["auto_download"])
         c.start("download", c.release)
@@ -169,7 +172,7 @@ with mock.patch.object(HubWindow,'check_updates'), mock.patch.object(HubWindow,'
   app.processEvents()
  assert w.table.rowCount()==9
  c.dialog.check.click(); wait()
- assert c.release['version']=='0.5.4',c.message
+ assert c.release['version']=='0.5.5',c.message
  c.dialog.download.click(); wait()
  assert c.dialog.install.isEnabled(),c.message
  with mock.patch.object(QMessageBox,'question',return_value=QMessageBox.Yes):
@@ -187,11 +190,75 @@ print('Real managed GUI: check -> download -> verify -> install -> restart: OK')
 '''
         output = run(sys.executable, "-I", "-B", "-c", probe, root / "releases" / first, fixture.base, __version__)
         self.assertIn("restart: OK", output)
-        self.assertIn("0.5.4", run(root / "bin/nannersvrhub", "--version"))
+        self.assertIn("0.5.5", run(root / "bin/nannersvrhub", "--version"))
         self.assertIn("Fatekeeper", run(root / "bin/nannersvrhub", "info", "fatekeeper"))
         after = json.loads((root / "installation.json").read_text())
         self.assertEqual(after["previous"], first)
-        run(root / "bin/nannersvrhub-manage", "rollback")
+        rollback_probe = r'''
+import json,os,sys,time
+from pathlib import Path
+from unittest import mock
+sys.path.insert(0,sys.argv[1])
+from PySide6.QtWidgets import QApplication,QMessageBox,QWidget
+from vrhub.app_update_gui import HubUpdateController
+from vrhub import app_updates
+app=QApplication([]);w=QWidget();w.show();c=HubUpdateController(w);c.show()
+assert c.dialog.rollback.isEnabled(),c.dialog.managed.text()
+assert sys.argv[2] in c.dialog.rollback.text()
+root=Path(os.environ['_NANNERSVRHUB_ROOT']);before=(root/'installation.json').read_bytes()
+with mock.patch.object(QMessageBox,'question',return_value=QMessageBox.No):c.dialog.rollback.click()
+assert (root/'installation.json').read_bytes()==before and not c.busy
+with mock.patch.object(QMessageBox,'question',return_value=QMessageBox.Yes):c.dialog.rollback.click()
+deadline=time.monotonic()+35
+while c.busy and time.monotonic()<deadline:app.processEvents();time.sleep(.005)
+app.processEvents()
+assert not c.busy and c.installed,c.message
+assert 'Rolled back to '+sys.argv[2] in c.message,c.message
+assert c.dialog.restart.isVisible() and not c.dialog.rollback.isEnabled()
+with mock.patch('vrhub.app_update_gui.subprocess.Popen') as spawn:
+ c.dialog.restart.click()
+ assert spawn.call_args.args[0]==[str(root/'bin/nannersvrhub')]
+print('Managed GUI rollback and restart: OK')
+'''
+        output = run(sys.executable, '-I', '-B', '-c', rollback_probe, root / 'releases' / after['current'], __version__)
+        self.assertIn('Managed GUI rollback and restart: OK', output)
         self.assertIn(__version__, run(root / "bin/nannersvrhub", "--version"))
         run(root / "bin/nannersvrhub-manage", "rollback")
-        self.assertIn("0.5.4", run(root / "bin/nannersvrhub", "--version"))
+        self.assertIn("0.5.5", run(root / "bin/nannersvrhub", "--version"))
+
+    def test_rollback_unavailable_or_corrupt_previous_is_disabled(self):
+        c=self.controller
+        for reason in ('No previous managed Hub version is available', 'Previous release hash mismatch'):
+            with self.subTest(reason=reason), mock.patch.object(app_updates,'managed_context',return_value=(Path('/fixture'),'current')), \
+                    mock.patch.object(app_updates,'rollback_context',side_effect=RuntimeError(reason)):
+                c.show()
+                self.assertFalse(c.dialog.rollback.isEnabled())
+                self.assertIn(reason,c.dialog.managed.text())
+                self.assertIn(reason,c.dialog.rollback.toolTip())
+
+    def test_rollback_worker_failure_keeps_restart_hidden(self):
+        c=self.controller
+        with mock.patch.object(app_updates,'rollback_hub',side_effect=RuntimeError('Activation failed; original retained')):
+            c.start('rollback',{})
+            self.assertFalse(c.worker.cancel.is_set())
+            self.wait()
+        self.assertFalse(c.installed)
+        self.assertIn('original retained',c.message)
+
+    def test_shutdown_does_not_cancel_rollback(self):
+        c=self.controller
+        class Worker:
+            action='rollback'
+            cancel=threading.Event()
+        c.worker=Worker()
+        c.shutdown()
+        self.assertFalse(c.worker.cancel.is_set())
+        c.worker=None
+
+    def test_changed_confirmation_context_never_calls_rollback(self):
+        reviewed={'root':'/fixture','current':'old','previous':'previous','version':'1'}
+        with mock.patch.object(app_updates,'rollback_context',return_value=dict(reviewed,current='changed')), \
+                mock.patch.object(self_install,'rollback') as rollback:
+            with self.assertRaisesRegex(RuntimeError,'changed after confirmation'):
+                app_updates.rollback_hub(reviewed)
+            rollback.assert_not_called()

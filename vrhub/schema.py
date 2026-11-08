@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
 """Recipe validation for NAnnersVRhub.
 
 Recipes are intentionally simple TOML, but validating them at load time keeps a
