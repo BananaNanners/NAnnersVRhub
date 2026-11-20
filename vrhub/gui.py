@@ -24,7 +24,8 @@ from .controller_gui import ControllerBindingsPage
 from .launcher_ui import LauncherSidebar, GameBanner
 from .dashboard_ui import GameDashboard, ResponsiveQuickActions, snapshot as dashboard_snapshot
 from .mod_updates_gui import ModUpdatesPage
-from . import artwork
+from .downloads_gui import GuidedDownloadsPage
+from . import artwork, download_planner
 
 
 class HeroicInjectorDialog(QDialog):
@@ -659,6 +660,10 @@ class HubWindow(QMainWindow):
         self.mod_updates = ModUpdatesPage()
         self.game_details_tabs.addTab(self.mod_updates, "Mod updates")
         self.mod_updates.refresh_requested.connect(self.check_updates)
+        self.downloads = GuidedDownloadsPage()
+        self.game_details_tabs.addTab(self.downloads, "Downloads / Install Plan")
+        self.downloads.inspect_requested.connect(self.inspect_planned_archive)
+        self.downloads.scan_idle.connect(self.close_when_idle)
         self.game_details_tabs.currentChanged.connect(
             lambda index: self.refresh_compatibility() if index == 1 else None)
         self.install_btn = QPushButton("Install mod file…")
@@ -949,7 +954,10 @@ class HubWindow(QMainWindow):
         self.close_when_idle()
 
     def close_when_idle(self):
-        if self._closing and not self.scan_worker and not (self.worker and self.worker.isRunning()) and not self.hub_updates.busy:
+        downloads_busy = bool(self.downloads.worker and self.downloads.worker.isRunning())
+        if (self._closing and not self.scan_worker
+                and not (self.worker and self.worker.isRunning())
+                and not self.hub_updates.busy and not downloads_busy):
             self.close()
 
     def copy_system_report(self):
@@ -974,7 +982,9 @@ class HubWindow(QMainWindow):
         self._closing = True
         self.scan_timer.stop()
         self.hub_updates.shutdown()
-        if self.scan_worker or (self.worker and self.worker.isRunning()) or self.hub_updates.busy:
+        if (self.scan_worker or (self.worker and self.worker.isRunning())
+                or self.hub_updates.busy
+                or (self.downloads.worker and self.downloads.worker.isRunning())):
             event.ignore()
             return
         super().closeEvent(event)
@@ -1050,6 +1060,7 @@ class HubWindow(QMainWindow):
         self.game_dashboard.set_snapshot(
             dashboard_snapshot(row, available, verification, checked))
         self.mod_updates.set_recipe(r, available)
+        self.downloads.set_recipe(r)
         update_count = sum(item.get("status") == "update" for item in available or [])
         idx = self.game_details_tabs.indexOf(self.mod_updates)
         self.game_details_tabs.setTabText(
@@ -1275,7 +1286,7 @@ class HubWindow(QMainWindow):
 
     # ---- actions ---------------------------------------------------------
     def _pick(self, title: str) -> Path | None:
-        f, _ = QFileDialog.getOpenFileName(self, title, str(Path.home() / "Downloads"), "Mod files (*.zip *.pak)")
+        f, _ = QFileDialog.getOpenFileName(self, title, self.download_picker_folder(), "Mod files (*.zip *.pak)")
         return Path(f) if f else None
 
     def _run(self, fn, ok_title: str, ok_text) -> None:
@@ -1288,7 +1299,7 @@ class HubWindow(QMainWindow):
         self.refresh()
 
     def _pick_many(self, title: str) -> list[Path]:
-        files, _ = QFileDialog.getOpenFileNames(self, title, str(Path.home() / "Downloads"),
+        files, _ = QFileDialog.getOpenFileNames(self, title, self.download_picker_folder(),
                                                 "Mod files (*.zip *.7z *.rar *.pak)")
         return [Path(f) for f in files]
 
@@ -1476,6 +1487,34 @@ class HubWindow(QMainWindow):
             self.preflight_results[r["id"]] = rep
             self.show_details()
             QMessageBox.information(self, "Preflight", hub.preflight_text(rep))
+
+    def inspect_planned_archive(self, archive_path):
+        """Use the existing validated read-only staging inspector only."""
+        recipe = self.current()
+        if not recipe:
+            return
+        if recipe.get("method") not in {"gameroot", "bepinex", "ervr"}:
+            QMessageBox.information(
+                self, "Manual package review required",
+                "This profile has no supported generic archive inspector. "
+                "Use the Setup guide for the correct package order. "
+                "Nothing has been installed or changed.")
+            return
+        try:
+            report = hub.inspect_archive(recipe, Path(archive_path))
+        except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+            QMessageBox.warning(self, "Archive rejected (nothing installed)", str(exc))
+            return
+        QMessageBox.information(self, "Read-only archive inspection", hub.inspect_text(report))
+
+    def download_picker_folder(self):
+        recipe = self.current()
+        try:
+            directory, _source = download_planner.folder_for(recipe) if recipe else (None, "")
+        except (ValueError, RuntimeError, OSError):
+            directory = None
+        return str(directory if directory and directory.is_dir()
+                   else Path.home() / "Downloads")
 
     def inspect_archive(self):
         r = self.current()

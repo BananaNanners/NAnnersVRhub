@@ -344,6 +344,60 @@ QLabel#dashboardCardDetail {{
 QWidget#modUpdatesPage, QWidget#modUpdatesContent {{
     background: #0A0D10;
 }}
+/* Dev5A: guided downloads, pinned-hash archive inventory, read-only plan. */
+QWidget#guidedDownloadsPage {{
+    background: #0A0D10;
+}}
+QLabel#downloadsHeading {{
+    color: #FFD21A;
+    font-size: 17px;
+    font-weight: 800;
+}}
+QLabel#downloadsExplanation {{
+    color: #A7ADB7;
+    font-size: 11px;
+}}
+QLabel#downloadsLocation, QLabel#downloadsSummary {{
+    background: #171D23;
+    color: #F5F2DE;
+    border: 1px solid #2A3139;
+    border-radius: 8px;
+    padding: 9px;
+    font-size: 11px;
+}}
+QLabel#downloadsSummary {{
+    font-weight: 700;
+}}
+QTableWidget#downloadsTable {{
+    background: #11161B;
+    alternate-background-color: #171D23;
+    border: 1px solid #2A3139;
+    border-radius: 8px;
+    selection-background-color: #3B3108;
+    gridline-color: #252C33;
+}}
+QTableWidget#downloadsTable QHeaderView::section {{
+    background: #14212B;
+    color: #F5F2DE;
+    padding: 7px;
+    font-weight: 700;
+}}
+QPushButton#downloadsScan {{
+    color: #FFD21A;
+    background: #342B0B;
+    border: 1px solid #FFD21A;
+    padding: 7px 12px;
+    font-weight: 700;
+}}
+QPushButton#downloadsAction, QPushButton#downloadsSourceButton {{
+    color: #23B7FF;
+    background: #14212B;
+    border: 1px solid #244A61;
+    padding: 7px 10px;
+}}
+QPushButton#downloadsAction:hover, QPushButton#downloadsSourceButton:hover {{
+    border-color: #23B7FF;
+}}
 QLabel#modUpdatesHeading {{
     color: #FFD21A;
     font-size: 18px;
