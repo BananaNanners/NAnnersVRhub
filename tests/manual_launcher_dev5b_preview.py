@@ -356,10 +356,10 @@ def main():
                   "Downloads / Install Plan tab is selected. Scan Cyberpunk, "
                   "switch to Valheim, then return to Cyberpunk to verify persistence. "
                   "Use Scan local archives, "
-                  "Set default folder, Set this game's folder and Use default. "
+                  "Choose default folder, Choose game folder and Auto-detect folder. "
                   "Pinned SHA-256 matches are green; filename-only matches need inspection. "
                   "All settings saved only in private test data; downloads, installation, "
-                  "game launches and rollback are disabled. Drag headers between "
+                  "game launches and rollback are disabled. Hover over folder buttons for help. Drag headers between "
                   "Game/Game install and other column names, or double-click to autofit. "
                   "Column widths remember your choices within this test preview.", flush=True)
 
