@@ -174,4 +174,100 @@ QToolTip {{
     color: {TEXT};
     border: 1px solid {YELLOW};
 }}
+
+/* Dev1 launcher chrome: strictly reuse the BananaNanners palette. */
+QFrame#launcherSidebar {{
+    background: #11161B;
+    border: 1px solid #2A3139;
+    border-radius: 11px;
+}}
+QLabel#launcherSideTitle {{
+    color: #FFD21A;
+    font-size: 14px;
+    font-weight: 800;
+}}
+QLabel#launcherSideHint {{
+    color: #A7ADB7;
+    font-size: 9px;
+}}
+QPushButton#launcherNavButton {{
+    text-align: left;
+    font-size: 12px;
+    min-height: 30px;
+    padding: 7px 10px;
+}}
+QPushButton#launcherNavButton:checked {{
+    background: #332B0A;
+    color: #FFD21A;
+    border: 1px solid #FFD21A;
+}}
+QPushButton#launcherNavPlanned {{
+    text-align: left;
+    min-height: 25px;
+    font-size: 10px;
+}}
+QListWidget#launcherGameList {{
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-size: 10px;
+    outline: none;
+}}
+QListWidget#launcherGameList::item {{
+    padding: 7px 5px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+}}
+QListWidget#launcherGameList::item:selected {{
+    background: #342B0B;
+    color: #FFD21A;
+    border: 1px solid #FFD21A;
+}}
+QFrame#launcherGameBanner {{
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+        stop:0 #28230A, stop:0.50 #14171B, stop:1 #10232E);
+    border: 1px solid #4B4219;
+    border-radius: 12px;
+}}
+QLabel#launcherBannerCaption {{
+    color: #FFD21A;
+    font-size: 9px;
+    font-weight: 700;
+}}
+QLabel#launcherGameTitle {{
+    color: #F5F2DE;
+    font-size: 23px;
+    font-weight: 800;
+}}
+QLabel#launcherBannerStatus {{
+    color: #A7ADB7;
+    font-size: 10px;
+}}
+QPushButton#launcherDisclosure {{
+    color: #23B7FF;
+    text-align: left;
+    font-size: 10px;
+}}
+
+/* Match scrollbars to the existing charcoal theme in the game library. */
+QListWidget#launcherGameList QScrollBar:vertical {{
+    background: #11161B;
+    width: 9px;
+    margin: 0px;
+    border: none;
+}}
+QListWidget#launcherGameList QScrollBar::handle:vertical {{
+    background: #39414A;
+    min-height: 24px;
+    border-radius: 4px;
+}}
+QListWidget#launcherGameList QScrollBar::add-line:vertical,
+QListWidget#launcherGameList QScrollBar::sub-line:vertical {{
+    height: 0px;
+    background: transparent;
+}}
+QListWidget#launcherGameList QScrollBar::add-page:vertical,
+QListWidget#launcherGameList QScrollBar::sub-page:vertical {{
+    background: transparent;
+}}
 """

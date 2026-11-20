@@ -20,6 +20,7 @@ from .display_time import age_text, filename_stamp, local_time
 from .theme import BLUE, GREEN, LOGO_PATH, MUTED, RED, STYLESHEET, TEXT, YELLOW
 from .app_update_gui import HubUpdateController
 from .controller_gui import ControllerBindingsPage
+from .launcher_ui import LauncherSidebar, GameBanner
 
 
 class HeroicInjectorDialog(QDialog):
@@ -687,21 +688,59 @@ class HubWindow(QMainWindow):
         self.doom_saves_btn.clicked.connect(self.show_doom_saves)
         refresh_btn.clicked.connect(self.refresh)
 
-        left = QVBoxLayout()
-        left.addWidget(self.table)
-        left.addLayout(_row(self.install_btn, self.uninstall_btn, self.profile_btn, self.unprofile_btn))
-        left.addLayout(_row(self.copy_btn, self.inject_btn, self.game_launch_btn, self.game_play_btn, self.verify_btn, self.preflight_btn))
-        left.addLayout(_row(self.inspect_btn, self.diag_btn, self.bridge_log_btn, self.check_btn, self.mark_btn))
-        left.addLayout(_row(self.key_btn, self.kharvox_folder_btn, refresh_btn))
-        left.addLayout(_row(self.doom_prepare_btn, self.doom_probe_btn, self.doom_logs_btn))
-        left.addLayout(_row(self.doom_import_btn, self.doom_saves_btn))
-        main = QHBoxLayout()
-        main.setSpacing(10)
-        main.addLayout(left, 5)
-        main.addWidget(self.game_details_tabs, 6)
+        # Dev1 launcher shell: game selection stays backed by the existing
+        # QTableWidget so legacy install/compatibility/save workflows retain
+        # their original recipe IDs, signals and data.
+        self.game_banner = GameBanner()
+        self.library_toggle = QPushButton("Show detailed library table")
+        self.library_toggle.setObjectName("launcherDisclosure")
+        self.library_toggle.setCheckable(True)
+        self.library_panel = QWidget()
+        library_layout = QVBoxLayout(self.library_panel)
+        library_layout.setContentsMargins(0, 0, 0, 0)
+        self.table.setMaximumHeight(205)
+        library_layout.addWidget(self.table)
+        self.library_panel.hide()
+        self.library_toggle.toggled.connect(self.library_panel.setVisible)
+        self.library_toggle.toggled.connect(
+            lambda enabled: self.library_toggle.setText(
+                "Hide detailed library table" if enabled else "Show detailed library table"))
+
+        self.more_tools_toggle = QPushButton("More tools and advanced actions")
+        self.more_tools_toggle.setObjectName("launcherDisclosure")
+        self.more_tools_toggle.setCheckable(True)
+        self.more_tools_panel = QWidget()
+        advanced_layout = QVBoxLayout(self.more_tools_panel)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+        advanced_layout.setSpacing(5)
+        advanced_layout.addLayout(_row(self.uninstall_btn, self.profile_btn,
+                                       self.unprofile_btn, self.verify_btn))
+        advanced_layout.addLayout(_row(self.copy_btn, self.inject_btn,
+                                       self.game_launch_btn, self.inspect_btn))
+        advanced_layout.addLayout(_row(self.diag_btn, self.bridge_log_btn, self.mark_btn))
+        advanced_layout.addLayout(_row(self.key_btn, refresh_btn))
+        advanced_layout.addLayout(_row(self.doom_prepare_btn, self.doom_probe_btn,
+                                       self.doom_logs_btn))
+        advanced_layout.addLayout(_row(self.doom_import_btn, self.doom_saves_btn))
+        self.more_tools_panel.hide()
+        self.more_tools_toggle.toggled.connect(self.more_tools_panel.setVisible)
+        self.more_tools_toggle.toggled.connect(
+            lambda enabled: self.more_tools_toggle.setText(
+                "Hide advanced actions" if enabled else "More tools and advanced actions"))
+
+        game_layout = QVBoxLayout()
+        game_layout.setContentsMargins(10, 10, 10, 10)
+        game_layout.setSpacing(7)
+        game_layout.addWidget(self.game_banner)
+        game_layout.addLayout(_row(self.game_play_btn, self.preflight_btn,
+                                   self.check_btn, self.install_btn, self.kharvox_folder_btn))
+        game_layout.addLayout(_row(self.library_toggle, self.more_tools_toggle))
+        game_layout.addWidget(self.library_panel)
+        game_layout.addWidget(self.more_tools_panel)
+        game_layout.addWidget(self.game_details_tabs, 1)
         games_page = QWidget()
         games_page.setObjectName("gamesPage")
-        games_page.setLayout(main)
+        games_page.setLayout(game_layout)
         dashboard = QWidget()
         dashboard.setObjectName("systemDashboard")
         dashboard_layout = QVBoxLayout(dashboard)
@@ -738,7 +777,19 @@ class HubWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(dashboard, "VR System")
         self.tabs.addTab(games_page, "Games")
+        # Keep the same page indexes for older tests and existing callers;
+        # sidebar navigation replaces only the visible page tabs.
+        self.tabs.tabBar().hide()
+        self.sidebar = LauncherSidebar()
+        self.sidebar.page_selected.connect(self.tabs.setCurrentIndex)
+        self.sidebar.game_selected.connect(self.select_launcher_game)
+        self.tabs.currentChanged.connect(self.sidebar.set_page)
         self.tabs.currentChanged.connect(lambda index: self.refresh_system_live() if index == 0 else None)
+        self.tabs.setCurrentIndex(1)
+        shell = QHBoxLayout()
+        shell.setSpacing(10)
+        shell.addWidget(self.sidebar)
+        shell.addWidget(self.tabs, 1)
         status_row = QHBoxLayout()
         status_row.addWidget(self.runtime_label)
         status_row.addWidget(self.live_status_label)
@@ -749,7 +800,7 @@ class HubWindow(QMainWindow):
         root.setSpacing(9)
         root.addWidget(header)
         root.addLayout(status_row)
-        root.addWidget(self.tabs, 1)
+        root.addLayout(shell, 1)
         central = QWidget()
         central.setLayout(root)
         self.setCentralWidget(central)
@@ -871,6 +922,15 @@ class HubWindow(QMainWindow):
         idx = self.table.currentRow()
         return self.rows[idx]["recipe"] if 0 <= idx < len(self.rows) else None
 
+    def select_launcher_game(self, index):
+        """Use the original game-table selection as the single authority."""
+        if 0 <= index < len(self.rows):
+            if self.table.currentRow() != index:
+                self.table.selectRow(index)
+            else:
+                self.show_details()
+            self.tabs.setCurrentIndex(1)
+
     def refresh(self):
         keep = self.table.currentRow()
         path, lib = runtime.active_runtime()
@@ -893,12 +953,17 @@ class HubWindow(QMainWindow):
                      updates.summarize(self.update_results.get(rid))]
             for c, text in enumerate(cells):
                 self.table.setItem(i, c, QTableWidgetItem(text))
+        self.sidebar.set_games(self.rows, keep if 0 <= keep < len(self.rows) else 0)
         if self.rows:
             self.table.selectRow(keep if 0 <= keep < len(self.rows) else 0)
         self.show_details()
 
     def show_details(self):
         r = self.current()
+        idx = self.table.currentRow()
+        self.sidebar.select_game(idx)
+        row = self.rows[idx] if 0 <= idx < len(self.rows) else None
+        self.game_banner.set_game(row, self.update_results.get(r["id"]) if r else None)
         kharvox = bool(r and r.get('handler') == 'kharvox-gog')
         self.doom_saves_btn.setVisible(bool(r and self.development_tools_enabled and r["id"] in game_saves.LAYOUTS))
         self.kharvox_folder_btn.setVisible(kharvox)
