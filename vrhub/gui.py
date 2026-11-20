@@ -23,6 +23,7 @@ from .app_update_gui import HubUpdateController
 from .controller_gui import ControllerBindingsPage
 from .launcher_ui import LauncherSidebar, GameBanner
 from .dashboard_ui import GameDashboard, ResponsiveQuickActions, snapshot as dashboard_snapshot
+from .mod_updates_gui import ModUpdatesPage
 
 
 class HeroicInjectorDialog(QDialog):
@@ -654,6 +655,9 @@ class HubWindow(QMainWindow):
         self.game_details_tabs.addTab(compat_page, "Compatibility profile")
         self.controller_bindings = ControllerBindingsPage()
         self.game_details_tabs.addTab(self.controller_bindings, "Controller bindings")
+        self.mod_updates = ModUpdatesPage()
+        self.game_details_tabs.addTab(self.mod_updates, "Mod updates")
+        self.mod_updates.refresh_requested.connect(self.check_updates)
         self.game_details_tabs.currentChanged.connect(
             lambda index: self.refresh_compatibility() if index == 1 else None)
         self.install_btn = QPushButton("Install mod file…")
@@ -1022,7 +1026,13 @@ class HubWindow(QMainWindow):
         checked = self.preflight_results.get(r["id"]) if r else None
         self.game_dashboard.set_snapshot(
             dashboard_snapshot(row, available, verification, checked))
-        self.details.setHtml(hub.details_html(r, available, verification) if r else "")
+        self.mod_updates.set_recipe(r, available)
+        update_count = sum(item.get("status") == "update" for item in available or [])
+        idx = self.game_details_tabs.indexOf(self.mod_updates)
+        self.game_details_tabs.setTabText(
+            idx, f"Mod updates ({update_count})" if update_count else "Mod updates")
+        self.details.setHtml(hub.details_html(
+            r, available, verification, compact_updates=True) if r else "")
         can_install = bool(r and get_handler(r).install_supported(r))
         self.install_btn.setEnabled(can_install)
         self.uninstall_btn.setEnabled(bool(r and r.get("method") != "guide"))
@@ -1150,6 +1160,7 @@ class HubWindow(QMainWindow):
             return
         self.check_btn.setEnabled(False)
         self.check_btn.setText("Checking…")
+        self.mod_updates.set_checking(True)
         self.worker = UpdateWorker()
         self.worker.done.connect(self._updates_done)
         self.worker.finished.connect(self.close_when_idle)
@@ -1159,6 +1170,7 @@ class HubWindow(QMainWindow):
         self.update_results = results or {}
         self.check_btn.setEnabled(True)
         self.check_btn.setText("Refresh update status")
+        self.mod_updates.set_checking(False)
         self.refresh()
 
     def mark_current(self):

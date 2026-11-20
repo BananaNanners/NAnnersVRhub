@@ -885,8 +885,9 @@ def details_text(recipe: dict) -> str:
     return "\n".join(lines)
 
 
-def details_html(recipe: dict, update_items: list[dict] | None = None, report: dict | None = None) -> str:
-    """Readable rich-text version for the GUI (headings, numbered steps, code box)."""
+def details_html(recipe: dict, update_items: list[dict] | None = None,
+                 report: dict | None = None, *, compact_updates: bool = False) -> str:
+    """Readable rich-text guide; GUI may collapse updates into their dedicated tab."""
     e = html.escape
     launch = recipe.get("launch", {})
     out = [
@@ -903,7 +904,18 @@ def details_html(recipe: dict, update_items: list[dict] | None = None, report: d
         links.append(f'<a href="{e(recipe["profile"]["page"])}">Profile page</a>')
     out.append("<p>" + " &nbsp;|&nbsp; ".join(links) + "</p>")
     if update_items:
-        if recipe.get("track_component_updates"):
+        if compact_updates:
+            pending = sum(item.get("status") == "update" for item in update_items)
+            uncertain = sum(item.get("status") in ("unknown", "error", "no_key", "manual")
+                            for item in update_items)
+            out.append("<h3>Mod updates</h3>")
+            out.append(f"<p><b>{pending} update(s) available</b> among "
+                       f"{len(update_items)} checked mod(s); "
+                       f"{uncertain} require manual review. "
+                       "See the <b>Mod updates</b> tab for installed/latest versions, "
+                       "individual status and download-source links. "
+                       "Checking does not download or install mods.</p>")
+        elif recipe.get("track_component_updates"):
             # Distinguish a full checklist from the subset requiring an update.
             # This is an informational list: the refresh button never installs mods.
             groups = (

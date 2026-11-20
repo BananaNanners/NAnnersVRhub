@@ -56,6 +56,9 @@ class CyberpunkComponentUpdates(unittest.TestCase):
         self.assertEqual(row["status"], "update")
         self.assertIn("1.30.0", row["detail"])
         self.assertIn("1.31.1", row["detail"])
+        self.assertEqual(row["installed_version"], "1.30.0")
+        self.assertEqual(row["latest_version"], "1.31.1")
+        self.assertEqual(row["mod_id"], 2380)
         self.assertEqual(self.invocations, [2380])
 
     def test_current_version_uses_per_mod_archive(self):

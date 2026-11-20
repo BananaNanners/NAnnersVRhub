@@ -152,6 +152,8 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
         else:
             page = u.get("manual", "")
         item = {"name": u["name"], "page": page}
+        if isinstance(u.get("nexus_mod"), int):
+            item["mod_id"] = u["nexus_mod"]
         component_ids = {c["nexus_mod"] for c in recipe.get("components", [])}
         is_component = bool(recipe.get("track_component_updates") and
                             u.get("nexus_game") == recipe.get("nexus_game") and
@@ -163,6 +165,10 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
                 item.update(status="not_installed", detail="Not installed through the hub; open Nexus for releases.")
                 out.append(item)
                 continue
+            archive_version = _installed_archive_version(
+                component.get("archive", ""), u["nexus_mod"])
+            if archive_version is not None:
+                item["installed_version"] = ".".join(map(str, archive_version))
             files = component.get("files", [])
             if not isinstance(files, list) or not files or any(
                     not isinstance(p, str) or not Path(p).is_file() for p in files):
@@ -195,6 +201,7 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
             out.append(item)
             continue
         day = published[:10]
+        item["latest_version"] = str(tag)
         item["page"] = latest.get("url", item["page"])
         if is_component:
             installed = _installed_archive_version(component.get("archive", ""), u["nexus_mod"])

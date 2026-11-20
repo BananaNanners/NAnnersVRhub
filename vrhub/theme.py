@@ -320,4 +320,81 @@ QLabel#dashboardCardDetail {{
     font-size: 11px;
     border: none;
 }}
+
+/* Dev3 Mod Updates: native table, familiar launcher layout, original brand. */
+QWidget#modUpdatesPage, QWidget#modUpdatesContent {{
+    background: #0A0D10;
+}}
+QLabel#modUpdatesHeading {{
+    color: #FFD21A;
+    font-size: 18px;
+    font-weight: 800;
+}}
+QLabel#modUpdatesExplanation {{
+    color: #A7ADB7;
+    font-size: 11px;
+}}
+QLabel#modUpdatesSummary {{
+    background: #171D23;
+    color: #F5F2DE;
+    border: 1px solid #2A3139;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+    font-weight: 700;
+}}
+QLabel#modUpdatesEmpty {{
+    color: #A7ADB7;
+    padding: 14px;
+    font-size: 12px;
+}}
+QToolButton#modUpdatesDisclosure {{
+    background: #171D23;
+    border: 1px solid #2A3139;
+    border-radius: 7px;
+    color: #FFD21A;
+    padding: 8px 12px;
+    font-weight: 700;
+    font-size: 12px;
+    text-align: left;
+}}
+QToolButton#modUpdatesDisclosure[group="current"] {{
+    color: #4FE39A;
+}}
+QToolButton#modUpdatesDisclosure[group="later"],
+QToolButton#modUpdatesDisclosure[group="not_installed"] {{
+    color: #A7ADB7;
+}}
+QToolButton#modUpdatesDisclosure:hover {{
+    background: #27250D;
+    border: 1px solid #FFD21A;
+}}
+QPushButton#modSourceButton {{
+    background: #14212B;
+    border: 1px solid #244A61;
+    color: #23B7FF;
+    font-weight: 700;
+    padding: 5px 8px;
+}}
+QPushButton#modSourceButton:hover {{
+    background: #143246;
+    border-color: #23B7FF;
+}}
+QPushButton#modUpdatesRefresh {{
+    padding: 9px 14px;
+}}
+QTableWidget#modUpdatesTable {{
+    background: #11161B;
+    alternate-background-color: #171D23;
+    border: 1px solid #2A3139;
+    border-radius: 7px;
+    font-size: 12px;
+}}
+QTableWidget#modUpdatesTable QHeaderView::section {{
+    background: #14212B;
+    color: #F5F2DE;
+    padding: 6px;
+    border-right: 1px solid #26343F;
+    font-weight: 700;
+}}
 """
