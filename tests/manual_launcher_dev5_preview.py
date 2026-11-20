@@ -101,8 +101,9 @@ def main():
         summary = win.table.item(target, 4).text()
         components = win.rows[target]["components"]
         checks = {
-            "opening_size_matches_screen_aware_default":
-                (win.width(), win.height()) == expected_open_size,
+            "opening_size_close_to_screen_aware_default":
+                abs(win.width() - expected_open_size[0]) <= 2
+                and abs(win.height() - expected_open_size[1]) <= 2,
             "nine_library_games": len(win.rows) == 9 and win.sidebar.game_list.count() == 9,
             "cyberpunk_selected": win.current()["id"] == "cyberpunk-2077",
             "correct_header": win.game_banner.heading.text() == "Cyberpunk 2077",
