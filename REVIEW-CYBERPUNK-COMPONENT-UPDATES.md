@@ -45,3 +45,12 @@ Other installed dependencies matched the Nexus-reported version at the time of t
 ## Pending before public release
 
 User desktop UI acceptance test (including Check for updates after updating archives); consider controlled cache/backoff if 14+ sequential Nexus API calls make first startup too slow or hit rate limits. Test the effect on network-offline start, rates, and detail-panel readability. Nothing has been merged into the released main branch yet.
+## November 20 GUI acceptance preflight
+
+The real `HubWindow` update worker and details/table were tested with the experimental read-only runner `tests/manual_component_update_preview.py` against an **isolated copy** of the user's Hub state, using the existing Nexus key by reference (not copied or printed). The runner disables installs, uninstalls, game launches, application self-updates, and development actions. It also skips unrelated VR system scanning.
+
+**Automated offscreen GUI verification: PASS, 9/9 checks.** The UI presented all 15 Cyberpunk update entries, the correct summary, individual latest-versus-installed comparisons, and no API errors. All prohibited action buttons were disabled.
+
+One dependency changed between the original read-only API check and GUI test: **ArchiveXL was updated from 1.27.3 to 1.28.8**, and the real GUI correctly reported it as current. The remaining four updates were Cyber Engine Tweaks (107), Input Loader (4575), Codeware (7780), and Visual Holsters (21936). This is a positive dynamic version-tracking test; hardcoding the old expected update count would be wrong.
+
+The read-only interactive test window was opened successfully on the KDE Wayland desktop, showing 15 entries and the four updates. **User visual acceptance remains pending.** Nothing was installed, removed or launched in the Steam games. Release 0.5.4 remains untouched.
