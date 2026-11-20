@@ -343,6 +343,14 @@ QLabel#modUpdatesSummary {{
     font-size: 12px;
     font-weight: 700;
 }}
+QLabel#modUpdatesRateLimitNotice {{
+    background: #26220F;
+    color: #FFD21A;
+    border: 1px solid #655315;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12px;
+}}
 QLabel#modUpdatesEmpty {{
     color: #A7ADB7;
     padding: 14px;

@@ -4,6 +4,7 @@
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -19,12 +20,62 @@ def _ts(iso: str) -> float:
 
 
 # ---- GitHub ---------------------------------------------------------------
+# Reuse a successful result briefly when the user refreshes multiple times.
+# This is process-only memory: no user tokens, files or system state are written.
+GITHUB_CACHE_SECONDS = 15 * 60
+_github_recent: dict[str, tuple[float, dict]] = {}
+_github_retry_after = 0.0
+
+
+def _github_retry_message() -> str:
+    if _github_retry_after > time.time():
+        local = datetime.fromtimestamp(_github_retry_after).astimezone().strftime("%H:%M")
+        return f"GitHub API rate limit reached; retry after {local} local time."
+    return "GitHub API rate limit reached; retry later."
+
+
 def fetch_latest(repo: str, timeout: int = 8) -> dict:
-    req = urllib.request.Request(GITHUB_API.format(repo=repo),
-                                 headers={"Accept": "application/vnd.github+json", **APP})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        d = json.load(r)
-    return {"tag": d["tag_name"], "published": d["published_at"], "url": d["html_url"]}
+    """Read the latest GitHub release, coalescing frequent user refreshes.
+
+    Never turn an expired cached result into a false "current" claim. When
+    rate-limited, yield a clear error instead of making further API calls.
+    """
+    global _github_retry_after
+    now = time.monotonic()
+    cached = _github_recent.get(repo)
+    if cached and now - cached[0] < GITHUB_CACHE_SECONDS:
+        return {**cached[1], "cached": True}
+    if time.time() < _github_retry_after:
+        raise OSError(_github_retry_message())
+
+    req = urllib.request.Request(
+        GITHUB_API.format(repo=repo),
+        headers={"Accept": "application/vnd.github+json", **APP})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            data = json.load(response)
+    except urllib.error.HTTPError as exc:
+        headers = exc.headers or {}
+        rate_limited = (exc.code == 429 or
+                        (exc.code == 403 and (
+                            str(headers.get("X-RateLimit-Remaining", "")) == "0"
+                            or "rate limit" in str(exc).lower())))
+        if rate_limited:
+            reset = headers.get("X-RateLimit-Reset")
+            try:
+                reset_time = float(reset)
+            except (TypeError, ValueError, OverflowError):
+                reset_time = time.time() + 60
+            _github_retry_after = max(time.time() + 60, reset_time)
+            raise OSError(_github_retry_message()) from None
+        raise OSError(f"GitHub returned HTTP {exc.code}; try again later.") from None
+    latest = {
+        "tag": str(data["tag_name"]),
+        "published": str(data["published_at"]),
+        "url": str(data["html_url"]),
+    }
+    _github_recent[repo] = (time.monotonic(), latest)
+    return {**latest, "cached": False}
 
 
 # ---- Nexus Mods -----------------------------------------------------------
@@ -203,6 +254,8 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
         day = published[:10]
         item["latest_version"] = str(tag)
         item["page"] = latest.get("url", item["page"])
+        if latest.get("cached"):
+            item["cached"] = True
         if is_component:
             installed = _installed_archive_version(component.get("archive", ""), u["nexus_mod"])
             available = _release_version(tag)
@@ -233,6 +286,8 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
             item.update(status="update", detail=f"Update available: {tag} (updated {day})")
         else:
             item.update(status="current", detail=f"Up to date (latest: {tag}, {day})")
+        if item.get("cached"):
+            item["detail"] += "; cached GitHub result reused (up to 15 minutes old)"
         out.append(item)
     return out
 

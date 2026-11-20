@@ -77,6 +77,15 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(len(grouping["review"]), 5)
         self.assertFalse(grouping["current"])
 
+    def test_github_rate_limit_is_explicit_review_not_failed_install(self):
+        records = [{"name": "VHVR", "status": "error",
+                    "detail": "Couldn't check GitHub: GitHub API rate limit reached; retry later.",
+                    "page": "https://github.com/org/project/releases"}]
+        groups = grouped_updates({"id": "valheim"}, records)
+        self.assertEqual(groups["review"][0]["status"], "Rate limited")
+        self.assertFalse(groups["current"])
+        self.assertFalse(groups["update"])
+
     def test_empty_and_missing_versions_never_fabricated(self):
         self.assertEqual(sum(map(len, grouped_updates(self.recipe, None).values())), 0)
         result = grouped_updates(self.recipe, [{"name": "A", "status": "update"}])
@@ -151,6 +160,21 @@ class QtModUpdatesTests(unittest.TestCase):
         self.assertTrue(current.text().startswith("✓"))
         self.assertEqual(current.foreground().color().name().lower(), "#4fe39a")
         self.assertIn("Install later", later.text())
+
+    def test_rate_limit_warning_appears_and_clears_between_games(self):
+        error = [{"name": "VHVR", "status": "error",
+                  "detail": "Couldn't check GitHub: GitHub API rate limit reached; retry later.",
+                  "page": "https://github.com/org/project/releases"}]
+        self.page.set_recipe({"id": "valheim", "name": "Valheim"}, error)
+        self.app.processEvents()
+        self.assertTrue(self.page.github_notice.isVisible())
+        self.assertIn("temporary online lookup", self.page.github_notice.text())
+        self.assertIn("no mod files were changed", self.page.github_notice.text())
+        self.assertEqual(self.page.sections["review"].table.item(0, 3).text(),
+                         "!  Rate limited")
+        self.page.set_recipe(self.recipe, sample_updates())
+        self.app.processEvents()
+        self.assertFalse(self.page.github_notice.isVisible())
 
     def test_up_to_date_expands_and_collapses_on_click(self):
         self.page.set_recipe(self.recipe, sample_updates())

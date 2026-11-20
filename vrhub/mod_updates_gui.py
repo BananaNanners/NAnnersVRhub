@@ -56,8 +56,10 @@ def grouped_updates(recipe, items):
             "name": str(raw.get("name") or "Unnamed mod"),
             "installed": str(raw.get("installed_version") or "—"),
             "latest": str(raw.get("latest_version") or "—"),
-            "status": "Install later" if group == "later" else STATUS_LABELS.get(
-                status, "Review"),
+            "status": ("Install later" if group == "later" else
+                       "Rate limited" if status == "error" and "rate limit" in
+                       str(raw.get("detail", "")).lower() else
+                       STATUS_LABELS.get(status, "Review")),
             "tone": group,
             "detail": str(raw.get("detail") or "No version details provided."),
             "page": str(raw.get("page") or ""),
@@ -202,7 +204,8 @@ class ModUpdatesPage(QWidget):
         top = QHBoxLayout()
         self.explanation = QLabel(
             "Read-only version check. Refreshing does not download, install, "
-            "remove or automatically mark mods as updated.")
+            "remove or automatically mark mods as updated. Recent GitHub "
+            "results may be reused for 15 minutes to avoid rate limits.")
         self.explanation.setObjectName("modUpdatesExplanation")
         self.explanation.setWordWrap(True)
         top.addWidget(self.explanation, 1)
@@ -217,6 +220,11 @@ class ModUpdatesPage(QWidget):
         self.summary.setObjectName("modUpdatesSummary")
         self.summary.setWordWrap(True)
         root.addWidget(self.summary)
+        self.github_notice = QLabel()
+        self.github_notice.setObjectName("modUpdatesRateLimitNotice")
+        self.github_notice.setWordWrap(True)
+        self.github_notice.hide()
+        root.addWidget(self.github_notice)
 
         self.area = QScrollArea()
         self.area.setObjectName("modUpdatesScroll")
@@ -276,6 +284,20 @@ class ModUpdatesPage(QWidget):
                 f"{pending} updates available  •  {current} up to date  •  "
                 f"{review} need review  •  {later} install later  •  "
                 f"{missing} not installed")
+        github_limited = sum(
+            raw.get("status") == "error" and
+            "GitHub" in str(raw.get("detail", "")) and
+            "rate limit" in str(raw.get("detail", "")).lower()
+            for raw in items or [])
+        self.github_notice.setVisible(github_limited > 0)
+        if github_limited:
+            self.github_notice.setText(
+                f"GitHub API rate limit reached: {github_limited} release "
+                "check(s) couldn't finish. This is a temporary online lookup "
+                "limit, not a failed mod installation. Try again after the "
+                "quota resets; no mod files were changed.")
+        else:
+            self.github_notice.clear()
         for name, section in self.sections.items():
             section.set_records(grouping[name])
         return grouping

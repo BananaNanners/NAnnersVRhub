@@ -67,3 +67,39 @@ Dev4 is the separate guided installation and selectable download-library milesto
 - Released NAnnersVRhub 0.5.4, Dev1, Dev2, game files, mods, saves, OpenXR runtime and previously installed archives remain unchanged.
 
 **Manual KDE checklist above is not yet signed off.**
+
+## November 20 follow-up: GitHub update-check rate limiting
+
+**User acceptance:** All prior Dev3 visual/layout checklist items passed, but the user reported some **Refresh update status** entries saying `Check failed`. Dev3 remains **pending recheck of this one issue**, not fully signed off.
+
+### Read-only root-cause verification
+
+A fresh check against the user's isolated saved-state copy confirmed **Cyberpunk 2077: 4 updates, 9 current, 1 unknown/manual review, 1 not installed**. The GitHub-dependent recipes failed with **HTTP 403: rate limit exceeded**:
+- Fatekeeper — FK_UEVR
+- Hogwarts Legacy — HL_UEVR
+- Subnautica — SubmersedVR and Tobey's BepInEx pack
+- Valheim — VHVR
+
+Ready or Not's update check succeeded. This is a **GitHub API quota limit**, not missing or corrupted installed files, and not a failed mod installation. GitHub's actual quota must reset before fresh release metadata becomes available.
+
+### Fix implemented in Dev3 only
+
+- `vrhub/updates.py`: 15-minute in-memory cache of **successful** GitHub release responses, keyed per repository, so rapid successive refreshes reuse a previously verified response without consuming API quota. Cache results carry `cached=True`, and any status based on a cached result explicitly includes that information and freshness window in the details. The cache writes **no files, tokens, credentials or game state**.
+- A GitHub HTTP 403 response reporting an exhausted quota (or HTTP 429) establishes a cooldown through the server's `X-RateLimit-Reset` header, or a 60-second conservative fallback if unavailable. Subsequent GitHub requests are suppressed while blocked, but the hub still reports **error** on affected mods and never labels them current.
+- `vrhub/mod_updates_gui.py`: affected rows show **Rate limited** under Needs review with a prominent, yellow **GitHub API rate-limit** explanation. It clearly states that the check was temporarily unavailable and *no mod files were changed*. The banner clears when viewing another game with successful checks. The top explanation discloses that recent GitHub results may be reused for 15 minutes.
+- Nexus mod checks and their update classifications are untouched. GitHub rate limiting does not interrupt independent Nexus checks.
+
+### Validation
+
+- **8** dedicated offline GitHub cache/quota tests, plus **2** UI regression tests checking explicit rate-limit status/banner and clearing on a game switch.
+- Complete Qt-offscreen regression: **675 tests total, 674 passed, 1 skipped**.
+- Final isolated live-data Qt GUI preview: **41/41 checks passed** (Cyberpunk counts, tab behavior, responsive geometry and original brand colors).
+- No installed games, mods, game saves, old release, OpenXR runtime, backup folders or production state were modified.
+
+### Remaining desktop acceptance
+
+- [ ] On Fatekeeper, Valheim, Subnautica or Hogwarts Legacy, a GitHub quota failure is labeled **Rate limited**, with an understandable notice.
+- [ ] Refresh remains read-only; repeated clicks don't silently clear or install anything.
+- [ ] On Cyberpunk, the four updates, nine current, one review and one later-stage port remain correctly separated.
+- [ ] Once the API quota resets, GitHub update checks can return normal results again. This last point requires the external quota reset; it is *not* an immediate-release blocker for a correct error state.
+- [ ] User confirms the new message and behavior on KDE.
