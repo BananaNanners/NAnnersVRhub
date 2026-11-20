@@ -123,6 +123,40 @@ class CyberpunkComponentUpdates(unittest.TestCase):
         rows = updates.check_recipe(legacy, state, nexus_fetch=self.fetch, nexus_key="test-key")
         self.assertEqual(rows[0]["status"], "update")
 
+    def test_grouped_ui_separates_outdated_from_current(self):
+        def item(name, status, detail):
+            return {"name": name, "status": status, "detail": detail,
+                    "page": "https://www.nexusmods.com/cyberpunk2077/mods/1"}
+        rows = [
+            item("Newest Mod", "current", "Version matches Nexus: 1.2"),
+            item("Old Mod", "update", "Update available: 1.0 → 1.2"),
+            item("Unverified Mod", "unknown", "Version not comparable"),
+            item("VR Port", "not_installed", "Not installed through the hub"),
+        ]
+        body = hub.details_html(self.recipe, rows)
+        self.assertIn("Mod update status", body)
+        self.assertIn("1 updates available</b> out of 4 tracked mods", body)
+        self.assertIn("1 up to date; 1", body)
+        self.assertIn("Read-only check.", body)
+        self.assertIn("It does not download, install, remove", body)
+        self.assertIn("Updates available (1)", body)
+        self.assertIn("Up to date (1)", body)
+        self.assertIn("Needs manual review (1)", body)
+        self.assertIn("Not installed (1)", body)
+        self.assertLess(body.index("Old Mod"), body.index("Newest Mod"))
+        self.assertLess(body.index("Newest Mod"), body.index("Unverified Mod"))
+        self.assertLess(body.index("<li><b>Unverified Mod</b>"), body.index("<li><b>VR Port</b>"))
+
+    def test_legacy_update_ui_is_unchanged(self):
+        older = dict(self.recipe)
+        older.pop("track_component_updates")
+        body = hub.details_html(older, [{
+            "name": "Legacy", "status": "update",
+            "detail": "Update available", "page": "https://example.com/mod",
+        }])
+        self.assertIn("<h3>Updates</h3>", body)
+        self.assertNotIn("Mod update status", body)
+
     def test_mark_current_does_not_hide_component_updates_or_write_state(self):
         state = Path(self.tmp.name) / "state.json"
         state.write_text(json.dumps(self.state))

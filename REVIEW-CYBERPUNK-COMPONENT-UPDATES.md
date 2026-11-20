@@ -54,3 +54,13 @@ The real `HubWindow` update worker and details/table were tested with the experi
 One dependency changed between the original read-only API check and GUI test: **ArchiveXL was updated from 1.27.3 to 1.28.8**, and the real GUI correctly reported it as current. The remaining four updates were Cyber Engine Tweaks (107), Input Loader (4575), Codeware (7780), and Visual Holsters (21936). This is a positive dynamic version-tracking test; hardcoding the old expected update count would be wrong.
 
 The read-only interactive test window was opened successfully on the KDE Wayland desktop, showing 15 entries and the four updates. **User visual acceptance remains pending.** Nothing was installed, removed or launched in the Steam games. Release 0.5.4 remains untouched.
+
+## November 20 follow-up: UI clarity feedback and revision
+
+User reported seeing 15 entries under the generic "Updates" heading and reasonably interpreting that as 15 updates required; "Check for updates" also looked like it might install/remove files.
+
+The development GUI now labels its control **Refresh update status**, with a tooltip explaining that it is read-only. Cyberpunk's Setup guide is headed **Mod update status** with a count summary and separate groups: **Updates available**, **Up to date**, **Needs manual review**, **Could not check**, **Nexus API key needed**, **Check manually**, and **Not installed**. Each group lists only items with the matching status. A plain-language note explains that refreshing does not download, install, remove or automatically mark mods current. All non-Cyberpunk legacy recipe display paths are unchanged.
+
+Validation: full Qt-offscreen regression **604 tests passed, 1 skipped**. The real Qt UpdateWorker and details view passed **12/12 read-only UI checks**, including separated sections and button wording. A refreshed isolated Hub-state copy yielded **4 updates, 9 current, 1 needs manual review, 1 not installed** when queried from the existing Nexus key. The interactive KDE test window was restarted using the new code; user visual acceptance remains pending.
+
+Game files, installed mods, release 0.5.4, saved install state, Nexus credentials, and backups were not changed by these tests. A test-only private snapshot under ~/.cache was refreshed from the production state; that snapshot is not the production database.

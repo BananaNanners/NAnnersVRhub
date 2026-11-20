@@ -643,7 +643,8 @@ class HubWindow(QMainWindow):
         self.inject_btn = QPushButton("Run UEVR injector")
         self.game_launch_btn = QPushButton("Launch game tool")
         self.game_play_btn = QPushButton("Launch game")
-        self.check_btn = QPushButton("Check for updates")
+        self.check_btn = QPushButton("Refresh update status")
+        self.check_btn.setToolTip("Read-only lookup: does not download, install, remove or update mods.")
         self.mark_btn = QPushButton("Mark as up to date")
         self.key_btn = QPushButton("Nexus API key…")
         self.verify_btn = QPushButton("Verify mods")
@@ -1044,7 +1045,7 @@ class HubWindow(QMainWindow):
     def _updates_done(self, results):
         self.update_results = results or {}
         self.check_btn.setEnabled(True)
-        self.check_btn.setText("Check for updates")
+        self.check_btn.setText("Refresh update status")
         self.refresh()
 
     def mark_current(self):

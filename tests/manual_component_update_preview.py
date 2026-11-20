@@ -102,6 +102,11 @@ def main():
                     for mod in expected),
                 "table_summary_matches_logic": summary == updates.summarize(items),
                 "details_include_updates": all(by_id[mod]["detail"] in body for mod in expected),
+                "groups_visibly_separated": all(heading in body for heading in (
+                    "Updates available (", "Up to date (", "Needs manual review (",
+                    "Not installed (")),
+                "read_only_description": "does not download, install, remove" in body,
+                "refresh_button_label": win.check_btn.text() == "Refresh update status",
                 "cyber_engine_tweaks_visible": "Cyber Engine Tweaks" in body,
                 "no_api_errors": all(x["status"] != "error" for x in items),
                 "install_disabled": not win.install_btn.isEnabled(),

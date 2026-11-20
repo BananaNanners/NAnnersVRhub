@@ -903,11 +903,45 @@ def details_html(recipe: dict, update_items: list[dict] | None = None, report: d
         links.append(f'<a href="{e(recipe["profile"]["page"])}">Profile page</a>')
     out.append("<p>" + " &nbsp;|&nbsp; ".join(links) + "</p>")
     if update_items:
-        out.append("<h3>Updates</h3><ul>")
-        for i in update_items:
-            out.append(f"<li><b>{e(i['name'])}:</b> {e(i['detail'])} "
-                       f'(<a href="{e(i["page"])}">open</a>)</li>')
-        out.append("</ul>")
+        if recipe.get("track_component_updates"):
+            # Distinguish a full checklist from the subset requiring an update.
+            # This is an informational list: the refresh button never installs mods.
+            groups = (
+                ("update", "Updates available", "#FFCA71"),
+                ("current", "Up to date", "#4FE39A"),
+                ("unknown", "Needs manual review", "#FFD21A"),
+                ("error", "Could not check", "#FF5B50"),
+                ("no_key", "Nexus API key needed", "#FFD21A"),
+                ("manual", "Check manually", "#FFD21A"),
+                ("not_installed", "Not installed", "#99A8B7"),
+            )
+            count = {key: sum(i.get("status") == key for i in update_items)
+                     for key, _heading, _color in groups}
+            out.append("<h3>Mod update status</h3>")
+            out.append("<p><b>Read-only check.</b> Refresh update status only looks up "
+                       "new versions. It does not download, install, remove, or "
+                       "automatically mark any mod as updated.</p>")
+            out.append(f"<p><b>{count['update']} updates available</b> out of "
+                       f"{len(update_items)} tracked mods; "
+                       f"{count['current']} up to date; "
+                       f"{sum(count[k] for k in ('unknown', 'error', 'no_key', 'manual'))} "
+                       f"need review; {count['not_installed']} not installed.</p>")
+            for key, heading, color in groups:
+                members = [i for i in update_items if i.get("status") == key]
+                if not members:
+                    continue
+                out.append(f'<h4 style="color:{color};">{e(heading)} ({len(members)})</h4>')
+                out.append("<ul>")
+                for item in members:
+                    out.append(f"<li><b>{e(item['name'])}</b> — {e(item['detail'])} "
+                               f'(<a href="{e(item["page"])}">Nexus / release page</a>)</li>')
+                out.append("</ul>")
+        else:
+            out.append("<h3>Updates</h3><ul>")
+            for i in update_items:
+                out.append(f"<li><b>{e(i['name'])}:</b> {e(i['detail'])} "
+                           f'(<a href="{e(i["page"])}">open</a>)</li>')
+            out.append("</ul>")
     if recipe.get("store", "steam") == "steam":
         out.append("<h3>Steam launch options</h3>")
         out.append('<table border="1" cellspacing="0" cellpadding="6"><tr><td><pre>'
