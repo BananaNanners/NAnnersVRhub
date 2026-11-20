@@ -58,6 +58,54 @@ class DownloadsQtTests(unittest.TestCase):
         self.app.processEvents()
         self.assertIsNone(self.page.worker, "local inventory should finish bounded")
 
+    def test_download_buttons_have_descriptive_labels_and_hover_help(self):
+        self.page.set_recipe(self.recipe)
+        texts = [
+            self.page.set_global.text(),
+            self.page.set_game.text(),
+            self.page.clear_game.text(),
+            self.page.reset_global.text(),
+            self.page.scan.text(),
+        ]
+        self.assertEqual(texts, [
+            "Choose default folder",
+            "Choose game folder",
+            "Use default folder",
+            "Auto-detect folder",
+            "Scan local archives",
+        ])
+        for button in (self.page.set_global, self.page.set_game,
+                       self.page.clear_game, self.page.reset_global,
+                       self.page.scan, self.page.inspect):
+            with self.subTest(button=button.text()):
+                self.assertNotIn("...", button.text())
+                self.assertNotIn("…", button.text())
+                self.assertGreater(len(button.toolTip()), 75)
+        self.assertIn("folder picker", self.page.set_global.toolTip())
+        self.assertIn("folder picker", self.page.set_game.toolTip())
+        self.assertIn("other games", self.page.set_game.toolTip())
+        self.assertIn("scans are kept", self.page.clear_game.toolTip().lower())
+        self.assertIn("does NOT clear saved scan", self.page.reset_global.toolTip())
+        self.assertIn("effective folders change", self.page.reset_global.toolTip())
+        self.assertIn("does not download", self.page.scan.toolTip().lower())
+        self.assertIn("No mod is installed", self.page.inspect.toolTip())
+
+    def test_auto_detect_folder_keeps_saved_scan_if_effective_folder_unchanged(self):
+        self.page.set_recipe(self.recipe)
+        archive = self.library / "CET-107.zip"
+        archive.write_bytes(b"sample")
+        self.page.scan.click()
+        self.wait_scanned()
+        before = archive_scans.load_saved()
+        self.assertIn("cyberpunk-2077", before)
+        self.page.reset_global.click()
+        self.app.processEvents()
+        after = archive_scans.load_saved()
+        self.assertEqual(after, before)
+        self.assertIn("Saved scan:", self.page.scan_age.text())
+        self.assertIn("1 possible matches", self.page.summary.text())
+        self.assertEqual(archive.read_bytes(), b"sample")
+
     def test_native_component_list_has_15_rows_without_scanning(self):
         self.page.set_recipe(self.recipe)
         self.assertEqual(self.page.table.rowCount(), 15)

@@ -120,16 +120,40 @@ class GuidedDownloadsPage(QWidget):
         self.location.setTextInteractionFlags(Qt.TextSelectableByMouse)
         outer.addWidget(self.location)
 
-        self.set_global = QPushButton("Set default folder…")
+        self.set_global = QPushButton("Choose default folder")
         self.set_global.setObjectName("downloadsAction")
-        self.set_game = QPushButton("Set this game's folder…")
+        self.set_game = QPushButton("Choose game folder")
         self.set_game.setObjectName("downloadsAction")
         self.clear_game = QPushButton("Use default folder")
         self.clear_game.setObjectName("downloadsAction")
-        self.reset_global = QPushButton("Reset default")
+        self.reset_global = QPushButton("Auto-detect folder")
         self.reset_global.setObjectName("downloadsAction")
         self.scan = QPushButton("Scan local archives")
         self.scan.setObjectName("downloadsScan")
+        # Clear hover descriptions, not ambiguous trailing ellipses. Resetting
+        # a folder is not the same operation as clearing saved scan results.
+        self.set_global.setToolTip(
+            "Choose the default folder used to look for downloaded mod archives "
+            "for games without a custom folder. Opens a folder picker. "
+            "Does not download, move, or delete archives.")
+        self.set_game.setToolTip(
+            "Choose a mod archive folder for this game only. Opens a folder "
+            "picker. If the folder changes, this game's old scan no longer "
+            "applies; other games' saved scans remain intact.")
+        self.clear_game.setToolTip(
+            "Remove this game's custom folder choice and use the shared "
+            "default folder instead. Saved scans are kept if the effective "
+            "folder stays the same. No archives are deleted.")
+        self.reset_global.setToolTip(
+            "Clear the manually chosen DEFAULT folder and return to "
+            "automatic folder discovery. This does NOT clear saved scan "
+            "results or verification for unchanged folders. Results for "
+            "games whose effective folders change are invalidated. "
+            "No archives or mods are deleted.")
+        self.scan.setToolTip(
+            "Read the selected local archive folder, check recipe-pinned "
+            "SHA-256 hashes, and save this game's new scan snapshot. "
+            "Does not download, install, move, or delete any archive.")
         self.action_toolbar = ResponsiveDownloadActions((
             self.set_global, self.set_game, self.clear_game,
             self.reset_global, self.scan,
@@ -175,6 +199,9 @@ class GuidedDownloadsPage(QWidget):
         footer = QHBoxLayout()
         self.inspect = QPushButton("Inspect selected archive (read-only)")
         self.inspect.setObjectName("downloadsAction")
+        self.inspect.setToolTip(
+            "Inspect the selected existing archive using the Hub's supported "
+            "read-only staging checker. No mod is installed or changed.")
         self.inspect.setEnabled(False)
         self.inspect.clicked.connect(self._inspect)
         footer.addWidget(self.inspect)

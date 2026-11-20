@@ -57,3 +57,30 @@
 ## Planned next development
 
 **Dev5B2 — user-authorized verified archive downloads.** This stage will address source URL allowlists, supported direct upstream files versus manual/Nexus login flows, expected SHA-256 pinning, progress, cancellation, retry, staging, and safety. Neither new live download nor mod install is part of Dev5B1.
+
+## UI clarity follow-up — folder controls and hover descriptions
+
+The user identified confusion between resetting the **default folder choice**
+and resetting saved scans/verification. Dev5B1 now provides native Qt hover
+tooltips for all five folder/scan actions and the read-only archive inspector.
+The two folder-picker buttons use plain labels without trailing ellipses:
+
+- **Choose default folder** opens the global archive-library folder picker.
+- **Choose game folder** opens a per-game override picker.
+- **Use default folder** removes the selected game's override.
+- **Auto-detect folder** clears the global override and returns to automatic
+  folder discovery; this is **not** a "clear saved scans" command. Only a change
+  of effective folder invalidates affected game snapshots.
+- **Scan local archives** explicitly scans files and refreshes this game's saved
+  result; it does not download or install anything.
+
+The existing scan-persistence and folder selection logic is unchanged. No
+additional destructive "Clear scans" command was added. Hover descriptions
+are read-only, and all preview settings remain isolated from production.
+
+### Additional UI acceptance
+
+- [ ] The folder picker buttons no longer show trailing ellipses.
+- [ ] Hover over every control and see a helpful description of its actual behavior.
+- [ ] **Auto-detect folder** clearly states that unchanged-folder scans persist.
+- [ ] Existing Cyberpunk, Valheim and Subnautica snapshots still reappear on game switch.

@@ -291,6 +291,18 @@ def main():
             checks["three_distinct_saved_profiles"] = (
                 {"cyberpunk-2077", "valheim", "subnautica"}
                 <= set(archive_scans.load_saved()))
+            checks["buttons_use_clear_labels_without_ellipses"] = (
+                [x.text() for x in (
+                    win.downloads.set_global, win.downloads.set_game,
+                    win.downloads.clear_game, win.downloads.reset_global,
+                    win.downloads.scan)] == [
+                    "Choose default folder", "Choose game folder",
+                    "Use default folder", "Auto-detect folder",
+                    "Scan local archives"])
+            checks["hover_help_disambiguates_folder_reset_from_scan_reset"] = (
+                "does NOT clear saved scan" in win.downloads.reset_global.toolTip()
+                and "other games" in win.downloads.set_game.toolTip()
+                and "does not download" in win.downloads.scan.toolTip().lower())
 
             # New page simulates reopening the application. Its view comes
             # from the isolated on-disk scan snapshot, not the old QWidget.
