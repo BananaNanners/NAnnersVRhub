@@ -5,8 +5,10 @@
 Dev1 keeps the existing game table as the authoritative GUI selection source;
 the game list here is a synchronized navigation view, not a second model.
 """
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal, QSize, QRect
-from PySide6.QtGui import QColor, QFont, QPen
+from PySide6.QtGui import QColor, QFont, QPen, QPainter, QPixmap, QLinearGradient, QBrush
 from PySide6.QtWidgets import (QFrame, QLabel, QListWidget, QListWidgetItem,
                                QPushButton, QVBoxLayout, QStyledItemDelegate, QStyle)
 
@@ -202,9 +204,11 @@ class GameBanner(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("launcherGameBanner")
+        self._local_art = QPixmap()
+        self.setMinimumHeight(148)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 12, 18, 12)
-        layout.setSpacing(5)
+        layout.setContentsMargins(22, 16, 22, 14)
+        layout.setSpacing(6)
         self.caption = QLabel("NANNERSVRHUB  /  GAME PROFILE")
         self.caption.setObjectName("launcherBannerCaption")
         layout.addWidget(self.caption)
@@ -215,15 +219,67 @@ class GameBanner(QFrame):
         self.status = QLabel("Only verified installation and runtime facts are shown.")
         self.status.setObjectName("launcherBannerStatus")
         self.status.setWordWrap(True)
+        self.status.setMaximumWidth(630)
         layout.addWidget(self.status)
+        layout.addStretch(1)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        # Local Steam art is optional, never downloaded or redistributed.
+        # Without it, paint an original neutral sci-fi texture using brand hues.
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        right = int(self.width() * 0.58)
+        area = QRect(right, 1, self.width() - right - 1, self.height() - 2)
+        painter.setClipRect(area)
+        if not self._local_art.isNull():
+            art = self._local_art.scaled(
+                area.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            crop = QRect(max(0, (art.width() - area.width()) // 2),
+                         max(0, (art.height() - area.height()) // 2),
+                         area.width(), area.height())
+            painter.drawPixmap(area, art, crop)
+        else:
+            painter.fillRect(area, QColor("#10232E"))
+            for pos in range(-60, area.width() + 120, 57):
+                x = area.x() + pos
+                painter.setPen(QPen(QColor(35, 183, 255, 65), 1))
+                painter.drawLine(x, 0, x + 120, area.height())
+            painter.setPen(QPen(QColor(255, 210, 26, 140), 3))
+            painter.drawLine(area.x() + area.width() * 2 // 3, 10,
+                             area.x() + area.width() // 3, area.height() - 8)
+        fade = QLinearGradient(area.x(), 0, self.width(), 0)
+        fade.setColorAt(0, QColor(16, 20, 23, 255))
+        fade.setColorAt(0.43, QColor(12, 18, 22, 92))
+        fade.setColorAt(1, QColor(10, 13, 16, 25))
+        painter.fillRect(area, QBrush(fade))
+        painter.end()
+
+    def _find_local_art(self, recipe):
+        """Use only user-cached Steam library hero images, with a safe fallback."""
+        appid = recipe.get("steam_appid")
+        if not isinstance(appid, int):
+            return QPixmap()
+        cache = Path.home() / ".local/share/Steam/appcache/librarycache" / str(appid)
+        for name in ("library_hero.jpg", "library_hero.png"):
+            path = cache / name
+            if path.is_file():
+                pixmap = QPixmap(str(path))
+                if not pixmap.isNull():
+                    return pixmap
+        return QPixmap()
 
     def set_game(self, row, update_items=None):
         if row is None:
+            self._local_art = QPixmap()
             self.heading.setText("Choose a game")
             self.status.setText("Select a profile from the game library.")
+            self.update()
             return
         recipe = row["recipe"]
+        self._local_art = self._find_local_art(recipe)
         self.heading.setText(display_game_name(recipe))
+        self.update()
         store = {
             "steam": "Steam",
             "heroic-epic": "Heroic / Epic",

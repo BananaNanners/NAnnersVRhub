@@ -281,4 +281,43 @@ QListWidget#launcherGameList QScrollBar::add-page:vertical,
 QListWidget#launcherGameList QScrollBar::sub-page:vertical {{
     background: transparent;
 }}
+
+/* Dev2 read-only game dashboard — existing BananaNanners palette. */
+QWidget#gameDashboard {{
+    background: transparent;
+}}
+QFrame#dashboardCard {{
+    background: #171D23;
+    border: 1px solid #2A3139;
+    border-radius: 10px;
+}}
+QFrame#dashboardCard[tone="warning"] {{
+    border: 1px solid #766115;
+}}
+QFrame#dashboardCard[tone="success"] {{
+    border: 1px solid #246348;
+}}
+QLabel#dashboardCardHeading {{
+    color: #A7ADB7;
+    font-size: 11px;
+    font-weight: 700;
+    border: none;
+}}
+QLabel#dashboardCardValue {{
+    color: #F5F2DE;
+    font-size: 18px;
+    font-weight: 800;
+    border: none;
+}}
+QLabel#dashboardCardValue[tone="success"] {{
+    color: #4FE39A;
+}}
+QLabel#dashboardCardValue[tone="warning"] {{
+    color: #FFD21A;
+}}
+QLabel#dashboardCardDetail {{
+    color: #A7ADB7;
+    font-size: 11px;
+    border: none;
+}}
 """

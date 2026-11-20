@@ -21,6 +21,7 @@ from .theme import BLUE, GREEN, LOGO_PATH, MUTED, RED, STYLESHEET, TEXT, YELLOW
 from .app_update_gui import HubUpdateController
 from .controller_gui import ControllerBindingsPage
 from .launcher_ui import LauncherSidebar, GameBanner
+from .dashboard_ui import GameDashboard, snapshot as dashboard_snapshot
 
 
 class HeroicInjectorDialog(QDialog):
@@ -550,6 +551,7 @@ class HubWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(LOGO_PATH)))
         self.rows: list[dict] = []
         self.update_results: dict = {}
+        self.preflight_results: dict = {}  # Only explicit checks from this UI session.
         self.worker: UpdateWorker | None = None
         self.scan_worker: ScanWorker | None = None
         self.scan_report: dict | None = None
@@ -692,6 +694,7 @@ class HubWindow(QMainWindow):
         # QTableWidget so legacy install/compatibility/save workflows retain
         # their original recipe IDs, signals and data.
         self.game_banner = GameBanner()
+        self.game_dashboard = GameDashboard()
         self.library_toggle = QPushButton("Show detailed library table")
         self.library_toggle.setObjectName("launcherDisclosure")
         self.library_toggle.setCheckable(True)
@@ -732,6 +735,7 @@ class HubWindow(QMainWindow):
         game_layout.setContentsMargins(10, 10, 10, 10)
         game_layout.setSpacing(7)
         game_layout.addWidget(self.game_banner)
+        game_layout.addWidget(self.game_dashboard)
         game_layout.addLayout(_row(self.game_play_btn, self.preflight_btn,
                                    self.check_btn, self.install_btn, self.kharvox_folder_btn))
         game_layout.addLayout(_row(self.library_toggle, self.more_tools_toggle))
@@ -932,6 +936,9 @@ class HubWindow(QMainWindow):
             self.tabs.setCurrentIndex(1)
 
     def refresh(self):
+        # Game files and runtime conditions may have changed. Never retain a
+        # previous local preflight success across a new state refresh.
+        self.preflight_results.clear()
         keep = self.table.currentRow()
         path, lib = runtime.active_runtime()
         ok = bool(path and lib)
@@ -974,7 +981,12 @@ class HubWindow(QMainWindow):
             button.setVisible(not kharvox)
         self.controller_bindings.set_recipe(r)
         self.refresh_compatibility()
-        self.details.setHtml(hub.details_html(r, self.update_results.get(r["id"]), hub.verify(r)) if r else "")
+        verification = hub.verify(r) if r else None
+        available = self.update_results.get(r["id"]) if r else None
+        checked = self.preflight_results.get(r["id"]) if r else None
+        self.game_dashboard.set_snapshot(
+            dashboard_snapshot(row, available, verification, checked))
+        self.details.setHtml(hub.details_html(r, available, verification) if r else "")
         can_install = bool(r and get_handler(r).install_supported(r))
         self.install_btn.setEnabled(can_install)
         self.uninstall_btn.setEnabled(bool(r and r.get("method") != "guide"))
@@ -1356,6 +1368,8 @@ class HubWindow(QMainWindow):
         r = self.current()
         if r:
             rep = hub.preflight(r, _roots())
+            self.preflight_results[r["id"]] = rep
+            self.show_details()
             QMessageBox.information(self, "Preflight", hub.preflight_text(rep))
 
     def inspect_archive(self):
