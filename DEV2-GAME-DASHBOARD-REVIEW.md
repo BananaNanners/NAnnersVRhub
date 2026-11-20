@@ -36,3 +36,15 @@
 8. The test build cannot modify installed mods or saves, and the released 0.5.4 hub remains independently available.
 
 **Next milestone:** Dev3 dedicated structured Mod Updates tab; download folder selection in Dev4; per-mod rollback in Dev5. User input may refine visual layout before Dev3 begins.
+
+## November 20 follow-up: resizable game launcher and user checklist
+
+User liked the new cards but could not restore/resize the window; at maximum size the cards became excessively wide. Also requested an explicit **checkbox-style desktop acceptance checklist for each future dev**.
+
+**Root cause verified in real Qt geometry:** old minimum window height ~1041 and min-size hint 824×1063; resize(1200,750) actually yielded 1200×1063. A long Setup guide was constraining the root shell. Fixed with an independently scrollable Games page, centered **1420px content cap**, two-column card reflow below 980px page width, and two-column quick-action reflow below 840px. The preview now opens restored at 1120×720 rather than 1450×880.
+
+During visual review, an additional **first-resize overlap bug** was discovered: the QGrid reflow updated size hints but retained the previous one-row widget height until a second resize. Both cards and quick-action rows now immediately set their new minimum heights and invalidate geometry on reflow. A dedicated regression test verifies the children fit inside the parent on the **first** resize in both directions.
+
+**Automated results:** 644 total test cases, **643 passed, 1 skipped**, including nine responsive layout tests. Read-only GUI preview **29/29** checks passed, including real 920×600 geometry, no horizontal scroll, visible VR System control, compact card/action columns, maximized content cap, and restored 1120×720 layout. Reviewed rendered image confirms no overlap or clipping.
+
+**Human KDE acceptance is still pending.** The new project checklist `DEV2-RESIZE-ACCEPTANCE.md` should serve as the pattern for future devs. No install, game, runtime or release files changed.

@@ -63,11 +63,12 @@ def main():
     win = LauncherPreview()
     win.setWindowTitle("NAnnersVRhub 0.5.5-dev2 — GAME DASHBOARD PREVIEW (READ ONLY)")
     # The installed app's version remains 0.5.4. Label only this isolated
-    # preview window as Dev1 so screenshots aren't mistaken for the release.
+    # Dev2 preview so screenshots cannot be mistaken for the released app.
     brand = win.findChild(QLabel, "brandTitle")
     if brand:
         brand.setText("NAnnersVRhub  0.5.5-dev2 · PREVIEW")
-    win.resize(1450, 880)
+    # Default to a restored desktop-sized window for genuine resize review.
+    win.resize(1120, 720)
     win.tabs.setCurrentIndex(1)
     target = next(i for i, row in enumerate(win.rows)
                   if row["recipe"]["id"] == "cyberpunk-2077")
@@ -115,12 +116,30 @@ def main():
             "no_gameplay_claim": "VR Ready" not in win.game_banner.status.text(),
         }
         if opts.verify:
-            # Simulate sidebar navigation without requesting any VR/game actions.
+            # Verify actual geometry, not just the ability to call resize().
+            # Old Dev2 had a hard Qt minimum HEIGHT >1000px, so a bare
+            # resize(1100, 700) call previously did not shrink its window.
+            win.resize(920, 600)
+            app.processEvents()
+            checks["compact_actual_window_size"] = (win.width(), win.height()) == (920, 600)
+            checks["compact_cards_two_columns"] = win.game_dashboard._columns == 2
+            checks["compact_actions_two_columns"] = win.quick_actions._columns == 2
+            checks["compact_vertical_scroll"] = win.game_page_scroll.verticalScrollBar().maximum() > 0
+            checks["compact_no_horizontal_scroll"] = win.game_page_scroll.horizontalScrollBar().maximum() == 0
+            checks["vr_system_button_visible"] = win.sidebar.system_button.isVisible()
             win.sidebar.system_button.click()
             checks["vr_system_navigation"] = win.tabs.currentIndex() == 0
             win.sidebar.games_button.click()
             checks["games_navigation"] = win.tabs.currentIndex() == 1
+
+            win.resize(2200, 1200)
             app.processEvents()
+            checks["maximized_content_width_capped"] = (
+                win.game_page_scroll.widget().width() <= 1420
+                and max(c.width() for c in win.game_dashboard.cards.values()) <= 360)
+            win.resize(1120, 720)
+            app.processEvents()
+            checks["restored_actual_window_size"] = (win.width(), win.height()) == (1120, 720)
             capture = Path.home() / ".cache/nannersvrhub-055-dev2-preview.png"
             checks["render_snapshot"] = bool(win.grab().save(str(capture), "PNG"))
             print("SNAPSHOT", capture, flush=True)
@@ -130,9 +149,10 @@ def main():
         if opts.verify:
             QTimer.singleShot(800, lambda: app.exit(0 if all(checks.values()) else 1))
         else:
-            print("KDE PREVIEW READY. Select games and switch between Games / VR System; "
-                  "open the legacy tools drawer safely. Close this test window when done.",
-                  flush=True)
+            print("KDE RESIZE PREVIEW READY at 1120x720. Drag the window edges/corners "
+                  "to test restored and maximized layouts, scroll the game panel, "
+                  "and verify VR System navigation stays visible. "
+                  "Close the read-only test window when finished.", flush=True)
 
     polling = QTimer()
     polling.timeout.connect(verify)

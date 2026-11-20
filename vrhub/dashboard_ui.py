@@ -130,6 +130,7 @@ class GameDashboard(QWidget):
         layout.setHorizontalSpacing(9)
         layout.setVerticalSpacing(8)
         self.cards = {}
+        self._columns = 4
         for i, key in enumerate(("game", "mods", "updates", "vr")):
             card = StatusCard()
             self.cards[key] = card
@@ -137,6 +138,61 @@ class GameDashboard(QWidget):
             layout.setColumnStretch(i, 1)
         self.set_snapshot(snapshot(None))
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # At narrower window sizes, show two readable cards per row instead
+        # of squeezing four long status strings side-by-side. The parent
+        # QScrollArea handles the additional vertical height.
+        columns = 2 if self.width() < 980 else 4
+        if columns != self._columns:
+            self._columns = columns
+            grid = self.layout()
+            for i, key in enumerate(("game", "mods", "updates", "vr")):
+                grid.addWidget(self.cards[key], i // columns, i % columns)
+            for i in range(4):
+                grid.setColumnStretch(i, 1 if i < columns else 0)
+            grid.invalidate()
+            # Changing a grid from one row to two changes its height hint.
+            # Qt may otherwise keep the old one-row viewport until a SECOND
+            # resize, clipping the lower cards on the first drag.
+            self.setMinimumHeight(grid.minimumSize().height())
+            self.updateGeometry()
+
     def set_snapshot(self, values):
         for key, card in self.cards.items():
             card.set_card(values[key])
+
+
+class ResponsiveQuickActions(QWidget):
+    """Keep existing real action buttons usable in compact window sizes.
+
+    Buttons are reparented, not recreated: original signal connections and
+    visibility/enabled state remain owned by HubWindow.
+    """
+    def __init__(self, buttons, parent=None):
+        super().__init__(parent)
+        self.setObjectName("responsiveQuickActions")
+        self.buttons = tuple(buttons)
+        self._columns = 5
+        grid = QGridLayout(self)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(7)
+        grid.setVerticalSpacing(6)
+        for i, button in enumerate(self.buttons):
+            grid.addWidget(button, 0, i)
+        for i in range(5):
+            grid.setColumnStretch(i, 1)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        columns = 2 if self.width() < 840 else 5
+        if columns != self._columns:
+            self._columns = columns
+            grid = self.layout()
+            for i, button in enumerate(self.buttons):
+                grid.addWidget(button, i // columns, i % columns)
+            for i in range(5):
+                grid.setColumnStretch(i, 1 if i < columns else 0)
+            grid.invalidate()
+            self.setMinimumHeight(grid.minimumSize().height())
+            self.updateGeometry()

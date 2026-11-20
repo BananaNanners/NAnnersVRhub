@@ -11,7 +11,8 @@ from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QFileDialog, QFrame, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
                                QComboBox, QDialog, QDialogButtonBox, QFormLayout, QListWidget, QPlainTextEdit,
-                               QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
+                               QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget,
+                               QScrollArea, QSizePolicy)
 
 from . import __version__, app_updates, compatibility, heroic_epic, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates, game_saves
 from .handlers import get_handler
@@ -21,7 +22,7 @@ from .theme import BLUE, GREEN, LOGO_PATH, MUTED, RED, STYLESHEET, TEXT, YELLOW
 from .app_update_gui import HubUpdateController
 from .controller_gui import ControllerBindingsPage
 from .launcher_ui import LauncherSidebar, GameBanner
-from .dashboard_ui import GameDashboard, snapshot as dashboard_snapshot
+from .dashboard_ui import GameDashboard, ResponsiveQuickActions, snapshot as dashboard_snapshot
 
 
 class HeroicInjectorDialog(QDialog):
@@ -736,8 +737,11 @@ class HubWindow(QMainWindow):
         game_layout.setSpacing(7)
         game_layout.addWidget(self.game_banner)
         game_layout.addWidget(self.game_dashboard)
-        game_layout.addLayout(_row(self.game_play_btn, self.preflight_btn,
-                                   self.check_btn, self.install_btn, self.kharvox_folder_btn))
+        self.quick_actions = ResponsiveQuickActions((
+            self.game_play_btn, self.preflight_btn, self.check_btn,
+            self.install_btn, self.kharvox_folder_btn,
+        ))
+        game_layout.addWidget(self.quick_actions)
         game_layout.addLayout(_row(self.library_toggle, self.more_tools_toggle))
         game_layout.addWidget(self.library_panel)
         game_layout.addWidget(self.more_tools_panel)
@@ -745,6 +749,21 @@ class HubWindow(QMainWindow):
         games_page = QWidget()
         games_page.setObjectName("gamesPage")
         games_page.setLayout(game_layout)
+        # A long setup guide must never force the entire launcher beyond the
+        # available KDE screen. The game content scrolls independently while
+        # navigation and runtime indicators remain accessible at any height.
+        # Cap the content width to avoid giant status cards when maximized.
+        games_page.setMaximumWidth(1420)
+        self.game_page_scroll = QScrollArea()
+        self.game_page_scroll.setObjectName("gamePageScroll")
+        self.game_page_scroll.setWidgetResizable(True)
+        self.game_page_scroll.setFrameShape(QFrame.NoFrame)
+        self.game_page_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.game_page_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.game_page_scroll.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        self.game_page_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.game_page_scroll.setMinimumSize(0, 0)
+        self.game_page_scroll.setWidget(games_page)
         dashboard = QWidget()
         dashboard.setObjectName("systemDashboard")
         dashboard_layout = QVBoxLayout(dashboard)
@@ -780,7 +799,7 @@ class HubWindow(QMainWindow):
         dashboard_layout.addWidget(self.system_details, 1)
         self.tabs = QTabWidget()
         self.tabs.addTab(dashboard, "VR System")
-        self.tabs.addTab(games_page, "Games")
+        self.tabs.addTab(self.game_page_scroll, "Games")
         # Keep the same page indexes for older tests and existing callers;
         # sidebar navigation replaces only the visible page tabs.
         self.tabs.tabBar().hide()
