@@ -365,6 +365,11 @@ QLabel#downloadsExplanation {{
     color: #A7ADB7;
     font-size: 11px;
 }}
+QLabel#downloadsScanAge {{
+    color: #23B7FF;
+    font-size: 11px;
+    padding: 2px 5px;
+}}
 QLabel#downloadsLocation, QLabel#downloadsSummary {{
     background: #171D23;
     color: #F5F2DE;

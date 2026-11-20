@@ -11,7 +11,7 @@ from unittest import mock
 from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication, QPushButton
 
-from vrhub import download_planner as planner, hub
+from vrhub import download_planner as planner, archive_scans, hub
 from vrhub.downloads_gui import GuidedDownloadsPage
 from vrhub.app_update_gui import HubUpdateController
 from vrhub.gui import HubWindow
@@ -31,6 +31,8 @@ class DownloadsQtTests(unittest.TestCase):
         patches = [
             mock.patch.object(planner, "preferences_file", return_value=self.root / "settings.json"),
             mock.patch.object(planner, "default_library", return_value=self.library),
+            mock.patch.object(archive_scans, "snapshot_file",
+                              return_value=self.root / "scans.json"),
         ]
         for patcher in patches:
             patcher.start()
@@ -140,6 +142,104 @@ class DownloadsQtTests(unittest.TestCase):
         self.page._update_inspect_button()
         self.assertFalse(self.page.inspect.isEnabled())
 
+    def test_scanned_game_restored_after_scanning_another_game(self):
+        self.library.joinpath("CET-107-1-37.zip").write_bytes(b"cyberpunk owned archive")
+        self.page.set_recipe(self.recipe)
+        self.page.scan.click()
+        self.wait_scanned()
+        self.assertEqual(self.page.table.item(0, 3).text(),
+                         "Possible archive — inspect first")
+        first_timestamp = self.page.scan_age.text()
+        self.assertIn("Saved scan:", first_timestamp)
+        self.assertIn("snapshot", first_timestamp)
+        valheim = hub.load_recipes()["valheim"]
+        self.page.set_recipe(valheim)
+        self.page.scan.click()
+        self.wait_scanned()
+        self.assertIn("Saved scan:", self.page.scan_age.text())
+        self.page.set_recipe(self.recipe)
+        self.app.processEvents()
+        self.assertEqual(self.page.table.item(0, 3).text(),
+                         "Possible archive — inspect first")
+        self.assertIn("1 archives found", self.page.summary.text())
+        self.assertEqual(self.page.scan_age.text(), first_timestamp)
+        self.assertEqual(set(archive_scans.load_saved()),
+                         {"cyberpunk-2077", "valheim"})
+
+    def test_scans_persist_across_new_page_instance(self):
+        self.library.joinpath("CET-107.zip").write_bytes(b"archive")
+        self.page.set_recipe(self.recipe)
+        self.page.scan.click()
+        self.wait_scanned()
+        self.assertEqual(self.page.table.item(0, 3).text(),
+                         "Possible archive — inspect first")
+        second = GuidedDownloadsPage()
+        self.addCleanup(second.close)
+        second.set_recipe(self.recipe)
+        self.app.processEvents()
+        self.assertEqual(second.table.item(0, 3).text(),
+                         "Possible archive — inspect first")
+        self.assertIn("Saved scan:", second.scan_age.text())
+
+    def test_archived_game_result_persisted_when_worker_finishes_after_switch(self):
+        self.library.joinpath("CET-107.zip").write_bytes(b"archive")
+        self.page.set_recipe(self.recipe)
+        self.page.start_scan()
+        valheim = hub.load_recipes()["valheim"]
+        self.page.set_recipe(valheim)
+        self.wait_scanned()
+        self.assertEqual(self.page.recipe["id"], "valheim")
+        self.assertEqual(self.page.table.rowCount(), 2)
+        self.assertNotIn("1 possible matches", self.page.summary.text())
+        self.page.set_recipe(self.recipe)
+        self.assertIn("1 possible matches", self.page.summary.text())
+        self.assertEqual(self.page.table.item(0, 2).text(), "CET-107.zip")
+
+    def test_archived_file_change_blocks_old_verification_in_gui(self):
+        import hashlib
+        payload = b"a pinned file for test"
+        item = {"id": "testgame", "name": "Test", "method": "bepinex",
+                "packages": [{"id": "loader", "name": "Test package",
+                              "sha256": hashlib.sha256(payload).hexdigest()}]}
+        archive = self.library / "BepInEx-loader.zip"
+        archive.write_bytes(payload)
+        self.page.set_recipe(item)
+        self.page.scan.click()
+        self.wait_scanned()
+        self.assertEqual(self.page.table.item(0, 3).text(),
+                         "Pinned SHA-256 verified")
+        self.page.set_recipe(self.recipe)
+        archive.write_bytes(b"archive modified after verification")
+        self.page.set_recipe(item)
+        self.app.processEvents()
+        self.assertEqual(self.page.table.item(0, 3).text(),
+                         "Archive changed — rescan required")
+        self.assertIn("1 changed", self.page.summary.text())
+        self.assertFalse(self.page.inspect.isEnabled())
+
+    def test_changing_one_folder_invalidates_only_its_saved_scan(self):
+        archive = self.library / "CET-107.zip"
+        archive.write_bytes(b"archive")
+        self.page.set_recipe(self.recipe)
+        self.page.scan.click()
+        self.wait_scanned()
+        valheim = hub.load_recipes()["valheim"]
+        self.page.set_recipe(valheim)
+        self.page.scan.click()
+        self.wait_scanned()
+        self.assertEqual(len(archive_scans.load_saved()), 2)
+        self.page.set_recipe(self.recipe)
+        other = self.root / "other-archives"
+        other.mkdir()
+        with mock.patch("vrhub.downloads_gui.QFileDialog.getExistingDirectory",
+                        return_value=str(other)):
+            self.page.set_game.click()
+        self.assertEqual(
+            set(archive_scans.load_saved()), {"valheim"})
+        self.assertEqual(self.page.table.item(0, 3).text(), "Not checked")
+        self.page.set_recipe(valheim)
+        self.assertIn("Saved scan:", self.page.scan_age.text())
+
     def test_source_button_opens_source_page_on_explicit_click(self):
         self.page.set_recipe(self.recipe)
         button = self.page.table.cellWidget(0, 4)
@@ -167,6 +267,8 @@ class DownloadsHubWindowTests(unittest.TestCase):
             mock.patch.object(planner, "preferences_file",
                               return_value=self.root / "folders.json"),
             mock.patch.object(planner, "default_library", return_value=self.library),
+            mock.patch.object(archive_scans, "snapshot_file",
+                              return_value=self.root / "scans.json"),
             mock.patch.object(HubWindow, "check_updates"),
             mock.patch.object(HubWindow, "scan_setup"),
             mock.patch.object(HubUpdateController, "startup"),

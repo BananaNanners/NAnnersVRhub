@@ -6,6 +6,7 @@ Changing a folder only updates Hub-specific preferences. Archive scans hash
 local files and validate pinned checksums, but never download or install.
 """
 from pathlib import Path
+from datetime import datetime
 
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
 from PySide6.QtGui import QColor, QDesktopServices
@@ -15,7 +16,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner
+from . import download_planner as planner, archive_scans
 from .table_columns import enable_spreadsheet_columns
 
 COLOR = {
@@ -24,6 +25,7 @@ COLOR = {
     "Hash mismatch — do not install": "#FF5B50",
     "Hash not verified — do not install": "#FF5B50",
     "Not found locally": "#A7ADB7",
+    "Archive changed — rescan required": "#FF5B50",
 }
 
 
@@ -88,6 +90,12 @@ class GuidedDownloadsPage(QWidget):
         self._last_folder = None
         self._last_plan = None
         self.worker = None
+        self._saved_error = None
+        try:
+            self._saved = archive_scans.load_saved()
+        except (ValueError, OSError) as exc:
+            # A damaged snapshot file must be preserved, never overwritten.
+            self._saved, self._saved_error = {}, str(exc)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 10, 10, 10)
@@ -143,6 +151,10 @@ class GuidedDownloadsPage(QWidget):
         self.summary.setObjectName("downloadsSummary")
         self.summary.setWordWrap(True)
         outer.addWidget(self.summary)
+        self.scan_age = QLabel("No scan saved for this game yet.")
+        self.scan_age.setObjectName("downloadsScanAge")
+        self.scan_age.setWordWrap(True)
+        outer.addWidget(self.scan_age)
 
         self.table = QTableWidget(0, 5)
         self.table.setObjectName("downloadsTable")
@@ -195,9 +207,19 @@ class GuidedDownloadsPage(QWidget):
         except (ValueError, RuntimeError, OSError) as exc:
             folder, source, error = None, "", str(exc)
         if rid != self._last_id or folder != self._last_folder:
-            self._last_plan = None
             self._last_id = rid
             self._last_folder = folder
+        saved = self._saved.get(rid) if rid and folder else None
+        if saved and saved["folder"] == str(folder):
+            # Resolve again on game switch: changing or removing an archive
+            # must invalidate previously verified status.
+            self._last_plan = archive_scans.displayed_record(saved)["plan"]
+            self._set_scan_age(saved)
+        else:
+            self._last_plan = None
+            self.scan_age.setText(
+                self._saved_error or "No scan saved for this game yet. "
+                "Scan local archives to create a per-game snapshot.")
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan):
             btn.setEnabled(bool(recipe) and (not self.worker or not self.worker.isRunning()))
@@ -212,6 +234,24 @@ class GuidedDownloadsPage(QWidget):
             self._display_unsanned(recipe, error)
         else:
             self._show_plan(self._last_plan)
+
+    def _set_scan_age(self, record):
+        scanned = datetime.fromisoformat(record["scanned_at"]).astimezone()
+        self.scan_age.setText(
+            f"Saved scan: {scanned:%Y-%m-%d %H:%M} (local time) · "
+            "Historical snapshot, not a fresh verification. "
+            "Rescan when archives are added, removed or updated.")
+
+    def _invalidate_changed_locations(self):
+        try:
+            invalid = archive_scans.remove_changed_folders()
+        except (ValueError, OSError) as exc:
+            self._saved_error = str(exc)
+            self.scan_age.setText(
+                f"Folder selection saved. Existing scan snapshots need review: {exc}")
+            return
+        for rid in invalid:
+            self._saved.pop(rid, None)
 
     def _display_unsanned(self, recipe, error):
         self._set_rows([
@@ -236,7 +276,7 @@ class GuidedDownloadsPage(QWidget):
         try:
             planner.set_location(scope, selected,
                                  self.recipe["id"] if scope == "game" else None)
-            self._last_plan = None
+            self._invalidate_changed_locations()
             self.set_recipe(self.recipe)
         except (RuntimeError, ValueError, OSError) as exc:
             self.summary.setText(f"Folder was NOT saved: {exc}")
@@ -246,7 +286,7 @@ class GuidedDownloadsPage(QWidget):
             return
         try:
             planner.set_location("game", None, self.recipe["id"])
-            self._last_plan = None
+            self._invalidate_changed_locations()
             self.set_recipe(self.recipe)
         except (RuntimeError, ValueError, OSError) as exc:
             self.summary.setText(f"Folder preference was NOT changed: {exc}")
@@ -256,7 +296,7 @@ class GuidedDownloadsPage(QWidget):
             return
         try:
             planner.set_location("global", None)
-            self._last_plan = None
+            self._invalidate_changed_locations()
             self.set_recipe(self.recipe)
         except (RuntimeError, ValueError, OSError) as exc:
             self.summary.setText(f"Default folder preference was NOT changed: {exc}")
@@ -284,14 +324,30 @@ class GuidedDownloadsPage(QWidget):
     def _completed(self, result, worker):
         if self.worker is not worker:
             return
-        try:
-            folder, _ = self._folder()
-        except (RuntimeError, OSError, ValueError):
+        # Worker results belong to the game that launched the scan, not
+        # whatever game happens to be selected when it finishes.
+        if (result.get("game_id") != worker.recipe.get("id") or
+                result.get("folder") != str(worker.folder)):
             return
+        try:
+            active, _ = planner.folder_for(worker.recipe)
+            if str(active) != result["folder"]:
+                return  # its folder changed since scan started
+            rec = archive_scans.persist(result)
+        except (OSError, ValueError, RuntimeError) as exc:
+            if self.recipe and self.recipe["id"] == result["game_id"]:
+                self._last_plan = result
+                self._show_plan(result)
+                self.scan_age.setText(
+                    f"Scan completed but could not be saved: {exc}")
+            return
+        self._saved[worker.recipe["id"]] = rec
+        self._saved_error = None
         if (self.recipe and self.recipe["id"] == result["game_id"] and
-                str(folder) == result["folder"]):
-            self._last_plan = result
-            self._show_plan(result)
+                self._last_folder and str(self._last_folder) == result["folder"]):
+            self._last_plan = archive_scans.displayed_record(rec)["plan"]
+            self._set_scan_age(rec)
+            self._show_plan(self._last_plan)
 
     def _failed(self, message, worker):
         if self.worker is worker:
@@ -308,11 +364,13 @@ class GuidedDownloadsPage(QWidget):
 
     def _show_plan(self, plan):
         self._set_rows(plan["rows"])
+        changed = plan.get("changed", 0)
         self.summary.setText(
             f'{plan["scanned"]} archives found · {plan["verified"]} pinned hashes verified '
             f'· {plan["possible"]} possible matches needing inspection '
             f'· {plan["mismatch"]} mismatched (BLOCKED) '
             f'· {plan["unverified"]} unchecked (BLOCKED) · {plan["missing"]} missing'
+            + (f' · {changed} changed — rescan required' if changed else "")
             + (f' — {plan["warning"]}' if plan.get("warning") else ""))
         self.guidance.setText(
             "Stage 1: inspect and install prerequisites using the existing installer. "
