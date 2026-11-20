@@ -1051,6 +1051,13 @@ class HubWindow(QMainWindow):
         r = self.current()
         if not r:
             return
+        if r.get("track_component_updates"):
+            QMessageBox.information(
+                self, "Per-mod update tracking",
+                "Cyberpunk dependencies use the installed archive version for each mod. "
+                "To clear an update, install the newer archive through the hub. "
+                "Mark as up to date cannot override a different recorded version.")
+            return
         done = hub.mark_current(r)
         QMessageBox.information(self, "Marked", "Marked as up to date." if done else
                                 "Nothing installed through the hub to mark.")

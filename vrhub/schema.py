@@ -121,6 +121,12 @@ def validate_recipe(recipe: dict, source: str = "recipe") -> dict:
             if q.is_absolute() or ".." in q.parts:
                 raise RecipeError(f"{source}: unsafe required_files path for component {mod}: {p}")
 
+    tracking = recipe.get("track_component_updates", False)
+    if not isinstance(tracking, bool):
+        raise RecipeError(f"{source}: track_component_updates must be true/false")
+    if tracking and (method != "gameroot" or not components or not recipe.get("nexus_game")):
+        raise RecipeError(f"{source}: component update tracking requires gameroot, components and nexus_game")
+
     root_dirs = recipe.get("root_dirs", [])
     if root_dirs and (not isinstance(root_dirs, list) or any(not isinstance(x, str) or not x for x in root_dirs)):
         raise RecipeError(f"{source}: root_dirs must be a list of directory names")

@@ -3,6 +3,7 @@
 """Update checking: GitHub releases (no login) and Nexus Mods (needs a free personal API key)."""
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -92,12 +93,58 @@ def fetch_nexus(game: str, mod_id: int, key: str) -> dict:
             "url": f"https://www.nexusmods.com/{game}/mods/{mod_id}"}
 
 
+# ---- per-component Nexus update checking ----------------------------------
+def _release_version(tag: str) -> tuple[int, ...] | None:
+    # Unknown/non-numeric tags are not silently treated as matching versions.
+    match = re.fullmatch(r"[vV]?(\d+(?:\.\d+){0,3})", str(tag).strip())
+    return tuple(int(v) for v in match.group(1).split(".")) if match else None
+
+
+def _installed_archive_version(filename: str, mod_id: int) -> tuple[int, ...] | None:
+    """Extract Nexus's usual 'mod-id-version-timestamp' or 'id 1.2.3' form.
+
+    Never infer a version from install time. Non-matching filenames remain
+    unknown rather than being reported as current.
+    """
+    if not isinstance(filename, str) or not filename:
+        return None
+    pattern = r"(?<![0-9A-Za-z])" + re.escape(str(mod_id)) + (
+        r"(?![0-9A-Za-z])[ _-]+[vV]?(\d{1,4}(?:[._-]\d{1,4}){0,3})(?=$|[ ._-])"
+    )
+    match = re.search(pattern, filename)
+    return tuple(int(v) for v in re.split(r"[._-]", match.group(1))) if match else None
+
+
+def _ordered_numeric(a: tuple[int, ...], b: tuple[int, ...]) -> int:
+    width = max(len(a), len(b))
+    aa, bb = a + (0,) * (width - len(a)), b + (0,) * (width - len(b))
+    return (aa > bb) - (aa < bb)
+
+
+def _update_targets(recipe: dict, state: dict) -> list[dict]:
+    """Explicit update targets plus opt-in Nexus targets for all components."""
+    result = list(recipe.get("updates", []))
+    if not recipe.get("track_component_updates"):
+        return result
+    tracked = {(u.get("nexus_game"), u.get("nexus_mod")) for u in result}
+    names = state.get("_names", {})
+    for comp in recipe.get("components", []):
+        mod_id = comp["nexus_mod"]
+        key = (recipe["nexus_game"], mod_id)
+        if key in tracked:
+            continue
+        label = names.get(str(mod_id), {}).get("name") or comp["name"]
+        result.append({"name": label, "nexus_game": recipe["nexus_game"], "nexus_mod": mod_id})
+        tracked.add(key)
+    return result
+
+
 # ---- shared checking logic ------------------------------------------------
 def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_key=_UNSET) -> list[dict]:
     fetch = fetch or fetch_latest
     nexus_fetch = nexus_fetch or fetch_nexus
     out = []
-    for u in recipe.get("updates", []):
+    for u in _update_targets(recipe, state):
         if "github" in u:
             page = f"https://github.com/{u['github']}/releases"
         elif "nexus_game" in u:
@@ -105,6 +152,23 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
         else:
             page = u.get("manual", "")
         item = {"name": u["name"], "page": page}
+        component_ids = {c["nexus_mod"] for c in recipe.get("components", [])}
+        is_component = bool(recipe.get("track_component_updates") and
+                            u.get("nexus_game") == recipe.get("nexus_game") and
+                            u.get("nexus_mod") in component_ids)
+        component = None
+        if is_component:
+            component = state.get(recipe["id"], {}).get("components", {}).get(str(u["nexus_mod"]))
+            if not isinstance(component, dict):
+                item.update(status="not_installed", detail="Not installed through the hub; open Nexus for releases.")
+                out.append(item)
+                continue
+            files = component.get("files", [])
+            if not isinstance(files, list) or not files or any(
+                    not isinstance(p, str) or not Path(p).is_file() for p in files):
+                item.update(status="unknown", detail="Recorded files are missing or unverified; inspect the mod install.")
+                out.append(item)
+                continue
         source = "the update source"
         try:
             if "github" in u:
@@ -132,6 +196,25 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
             continue
         day = published[:10]
         item["page"] = latest.get("url", item["page"])
+        if is_component:
+            installed = _installed_archive_version(component.get("archive", ""), u["nexus_mod"])
+            available = _release_version(tag)
+            if installed is None or available is None:
+                item.update(status="unknown", detail=f"Latest Nexus version: {tag} ({day}); "
+                            f"couldn't reliably compare the installed archive version.")
+            else:
+                old = ".".join(str(x) for x in installed)
+                change = _ordered_numeric(installed, available)
+                if change < 0:
+                    item.update(status="update", detail=f"Update available: {old} → {tag} (updated {day})")
+                elif change == 0:
+                    item.update(status="current", detail=f"Version matches Nexus: {tag} ({day}); "
+                                "file revisions may need manual review.")
+                else:
+                    item.update(status="unknown", detail=f"Installed archive {old} is newer than "
+                                f"reported Nexus version {tag}; verify manually.")
+            out.append(item)
+            continue
         tracked = [state[k] for k in u.get("tracks", [recipe["id"]]) if k in state]
         stamps = [t.get("installed_at") for t in tracked]
         if not tracked:

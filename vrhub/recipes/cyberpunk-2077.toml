@@ -6,6 +6,7 @@ manual_download = true
 # Mod archives are unpacked straight into the game folder (several at once, in the order given).
 method = "gameroot"
 nexus_game = "cyberpunk2077"
+track_component_updates = true
 
 setup = [
   "Check that the plain game runs under Proton first.",

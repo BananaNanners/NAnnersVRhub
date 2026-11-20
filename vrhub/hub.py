@@ -814,7 +814,13 @@ def state() -> dict:
 
 
 def mark_current(recipe: dict) -> list[str]:
-    """Record 'installed just now' for this game's installs (use after grabbing the latest release by hand)."""
+    """Record an install date only for legacy date-based update targets.
+
+    Version-checked component recipes must not be overridden by a game-wide
+    timestamp; install the matching newer component archive instead.
+    """
+    if recipe.get("track_component_updates"):
+        return []
     st = _load_state()
     keys = {k for u in recipe.get("updates", []) for k in u.get("tracks", [])} or {recipe["id"]}
     marked = []
