@@ -53,3 +53,13 @@ Do not run `install.py`, `nannersvrhub-manage install`, or the normal launcher t
 ## Review notes
 
 The approved full-width Cyberpunk game-page artwork mockup is a **multi-milestone design direction**, not a screenshot of 0.5.5-dev1. Dev1 is the navigation/architecture foundation only. The responsive art and mod table come after the shell is visually accepted.
+
+## Dev1 follow-up: sidebar readability (November 20)
+
+The user's first KDE screenshots confirmed all original controls and the updated launcher navigation worked, but the **left navigation text was too small**. In the same isolated Dev1 worktree we increased the game list to two-level typography: **15px semibold game titles** and **12px detection text**, using the existing yellow/green/charcoal palette. The list is now slightly wider with 65px rows and obvious selected/hover state. `Game detected` still means an installation was found, not VR gameplay success.
+
+Sidebar header, navigation controls, future-section labels and helper copy were enlarged. To preserve space for the nine games, the disabled Downloads/Backups/Settings/Logs future buttons are now behind a collapsed **Future sections** disclosure. They remain disabled and clearly indicate forthcoming milestones.
+
+Validation: **614 tests passed, 1 skipped** in Qt offscreen full suite; **14/14 automated GUI preview checks passed**, including live read-only Nexus data, navigation, action disabling, and screenshot capture. New tests cover font/row data, game selection and future-section expanding. A rendered screenshot was visually inspected; the wider game list and larger text were visible, without altering the existing brand colors.
+
+**User acceptance of the revised KDE preview is still pending.** No game files, mods, saves, production state, released 0.5.4, or system runtime settings were changed.

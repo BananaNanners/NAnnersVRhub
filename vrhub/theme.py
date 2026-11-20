@@ -183,17 +183,17 @@ QFrame#launcherSidebar {{
 }}
 QLabel#launcherSideTitle {{
     color: #FFD21A;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 800;
 }}
 QLabel#launcherSideHint {{
     color: #A7ADB7;
-    font-size: 9px;
+    font-size: 11px;
 }}
 QPushButton#launcherNavButton {{
     text-align: left;
-    font-size: 12px;
-    min-height: 30px;
+    font-size: 14px;
+    min-height: 34px;
     padding: 7px 10px;
 }}
 QPushButton#launcherNavButton:checked {{
@@ -201,16 +201,27 @@ QPushButton#launcherNavButton:checked {{
     color: #FFD21A;
     border: 1px solid #FFD21A;
 }}
+QPushButton#launcherFutureToggle {{
+    text-align: left;
+    color: #A7ADB7;
+    font-size: 12px;
+    min-height: 28px;
+    padding: 5px 8px;
+}}
+QPushButton#launcherFutureToggle:checked {{
+    color: #FFD21A;
+    border-color: #FFD21A;
+}}
 QPushButton#launcherNavPlanned {{
     text-align: left;
-    min-height: 25px;
-    font-size: 10px;
+    min-height: 30px;
+    font-size: 12px;
 }}
 QListWidget#launcherGameList {{
     background: transparent;
     border: none;
     border-radius: 6px;
-    font-size: 10px;
+    font-size: 13px;
     outline: none;
 }}
 QListWidget#launcherGameList::item {{

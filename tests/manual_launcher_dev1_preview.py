@@ -32,6 +32,7 @@ class LauncherPreview(gui.HubWindow):
             self.sidebar.system_button,
             self.library_toggle,
             self.more_tools_toggle,
+            self.sidebar.future_toggle,
             self.check_btn,
         }
         for button in self.findChildren(QPushButton):

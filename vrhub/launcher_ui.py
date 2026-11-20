@@ -5,11 +5,12 @@
 Dev1 keeps the existing game table as the authoritative GUI selection source;
 the game list here is a synchronized navigation view, not a second model.
 """
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal, QSize, QRect
+from PySide6.QtGui import QColor, QFont, QPen
 from PySide6.QtWidgets import (QFrame, QLabel, QListWidget, QListWidgetItem,
-                               QPushButton, QVBoxLayout, QHBoxLayout)
+                               QPushButton, QVBoxLayout, QStyledItemDelegate, QStyle)
 
-from .theme import BLUE, GREEN, MUTED, RED, TEXT, YELLOW
+from .theme import GREEN, MUTED, TEXT, YELLOW
 
 
 SHORT_GAME_NAMES = {
@@ -30,6 +31,56 @@ def display_game_name(recipe):
     return SHORT_GAME_NAMES.get(recipe["id"], recipe["name"])
 
 
+class GameLibraryItemDelegate(QStyledItemDelegate):
+    """Readable two-line game rows with a visible selection and neutral status.
+
+    The second line is deliberately "Game detected", not "VR ready":
+    detecting an installed game never certifies its headset behavior.
+    """
+
+    def sizeHint(self, option, index):
+        return QSize(185, 65)
+
+    def paint(self, painter, option, index):
+        painter.save()
+        try:
+            rect = option.rect.adjusted(3, 1, -4, -1)
+            selected = bool(option.state & QStyle.State_Selected)
+            hovered = bool(option.state & QStyle.State_MouseOver)
+            if selected:
+                painter.setPen(QPen(QColor(YELLOW), 1))
+                painter.setBrush(QColor("#342B0B"))
+                painter.drawRoundedRect(rect, 7, 7)
+            elif hovered:
+                painter.setPen(QPen(QColor("#39414A"), 1))
+                painter.setBrush(QColor("#1B2026"))
+                painter.drawRoundedRect(rect, 7, 7)
+
+            title = index.data(Qt.UserRole) or index.data(Qt.DisplayRole) or ""
+            detected = bool(index.data(Qt.UserRole + 1))
+            base = option.font
+            heading = QFont(base)
+            heading.setPixelSize(15)
+            heading.setWeight(QFont.DemiBold)
+            subtitle = QFont(base)
+            subtitle.setPixelSize(12)
+            subtitle.setWeight(QFont.Normal)
+
+            x = rect.x() + 13
+            width = max(0, rect.width() - 22)
+            painter.setFont(heading)
+            painter.setPen(QColor(YELLOW if selected else TEXT if detected else MUTED))
+            painter.drawText(QRect(x, rect.y() + 8, width, 26),
+                             Qt.AlignLeft | Qt.AlignVCenter | Qt.TextSingleLine, str(title))
+            painter.setFont(subtitle)
+            painter.setPen(QColor(GREEN if detected else MUTED))
+            painter.drawText(QRect(x, rect.y() + 36, width, 20),
+                             Qt.AlignLeft | Qt.AlignVCenter | Qt.TextSingleLine,
+                             "Game detected" if detected else "Not detected")
+        finally:
+            painter.restore()
+
+
 class LauncherSidebar(QFrame):
     page_selected = Signal(int)
     game_selected = Signal(int)
@@ -37,8 +88,8 @@ class LauncherSidebar(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("launcherSidebar")
-        self.setMinimumWidth(205)
-        self.setMaximumWidth(290)
+        self.setMinimumWidth(235)
+        self.setMaximumWidth(315)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 14, 12, 12)
@@ -60,7 +111,8 @@ class LauncherSidebar(QFrame):
 
         self.game_list = QListWidget()
         self.game_list.setObjectName("launcherGameList")
-        self.game_list.setSpacing(3)
+        self.game_list.setSpacing(4)
+        self.game_list.setItemDelegate(GameLibraryItemDelegate(self.game_list))
         self.game_list.setSelectionMode(QListWidget.SingleSelection)
         self.game_list.currentRowChanged.connect(self._game_chosen)
         layout.addWidget(self.game_list, 1)
@@ -71,10 +123,16 @@ class LauncherSidebar(QFrame):
         self.system_button.clicked.connect(lambda: self.page_selected.emit(0))
         layout.addWidget(self.system_button)
 
-        upcoming = QLabel("COMING IN LATER MILESTONES")
-        upcoming.setObjectName("launcherSideHint")
-        upcoming.setWordWrap(True)
-        layout.addWidget(upcoming)
+        # Keep most of the sidebar available for the nine real game profiles.
+        # Planned pages remain discoverable without consuming navigation space.
+        self.future_toggle = QPushButton("  Future sections  ▸")
+        self.future_toggle.setObjectName("launcherFutureToggle")
+        self.future_toggle.setCheckable(True)
+        layout.addWidget(self.future_toggle)
+        self.future_panel = QFrame()
+        future_layout = QVBoxLayout(self.future_panel)
+        future_layout.setContentsMargins(0, 0, 0, 0)
+        future_layout.setSpacing(4)
         self.planned_buttons = {}
         for name, phase in (
             ("Downloads", "Dev4"),
@@ -87,13 +145,21 @@ class LauncherSidebar(QFrame):
             button.setEnabled(False)
             button.setToolTip(name + " navigation is planned for " + phase +
                               "; existing tools remain accessible under each game.")
-            layout.addWidget(button)
+            future_layout.addWidget(button)
             self.planned_buttons[name] = button
+        self.future_panel.hide()
+        layout.addWidget(self.future_panel)
+        self.future_toggle.toggled.connect(self._set_future_visible)
 
         footer = QLabel("🍌  NAnnersVRhub  •  Linux VR")
         footer.setObjectName("launcherSideHint")
         layout.addWidget(footer)
         self.set_page(1)
+
+    def _set_future_visible(self, expanded):
+        self.future_panel.setVisible(bool(expanded))
+        self.future_toggle.setText(
+            "  Hide future sections  ▾" if expanded else "  Future sections  ▸")
 
     def _game_chosen(self, index):
         if index >= 0:
@@ -112,10 +178,9 @@ class LauncherSidebar(QFrame):
                 status = "Game detected" if row["game_found"] else "Not detected"
                 item = QListWidgetItem(f"{name}\n{status}")
                 item.setToolTip(row["recipe"]["name"])
-                item.setSizeHint(QSize(175, 49))
-                if not row["game_found"]:
-                    from PySide6.QtGui import QColor
-                    item.setForeground(QColor(MUTED))
+                item.setSizeHint(QSize(185, 65))
+                item.setData(Qt.UserRole, name)
+                item.setData(Qt.UserRole + 1, bool(row["game_found"]))
                 self.game_list.addItem(item)
             if rows:
                 self.game_list.setCurrentRow(min(max(0, selected), len(rows) - 1))

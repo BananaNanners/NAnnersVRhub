@@ -90,6 +90,31 @@ class LauncherShellTests(unittest.TestCase):
         self.assertEqual(self.window.game_details_tabs.tabText(1), "Compatibility profile")
         self.assertIsNotNone(self.window.compat_refresh_btn)
 
+    def test_sidebar_text_hierarchy_and_row_spacing(self):
+        from PySide6.QtCore import Qt
+        from vrhub.launcher_ui import GameLibraryItemDelegate
+        self.assertIsInstance(self.window.sidebar.game_list.itemDelegate(), GameLibraryItemDelegate)
+        self.assertGreaterEqual(self.window.sidebar.minimumWidth(), 230)
+        first = self.window.sidebar.game_list.item(0)
+        self.assertGreaterEqual(first.sizeHint().height(), 60)
+        self.assertEqual(first.data(Qt.UserRole), "Cyberpunk 2077")
+        self.assertIs(type(first.data(Qt.UserRole + 1)), bool)
+        stylesheet = self.window.styleSheet()
+        self.assertIn("QLabel#launcherSideTitle", stylesheet)
+        self.assertIn("font-size: 16px", stylesheet)
+        self.assertIn("font-size: 14px", stylesheet)
+        self.assertIn("#FFD21A", stylesheet)
+
+    def test_future_sections_expand_without_hiding_game_library(self):
+        self.assertFalse(self.window.sidebar.future_panel.isVisible())
+        self.window.sidebar.future_toggle.click()
+        self.app.processEvents()
+        self.assertTrue(self.window.sidebar.future_panel.isVisible())
+        self.assertEqual(self.window.sidebar.game_list.count(), 9)
+        self.window.sidebar.future_toggle.click()
+        self.app.processEvents()
+        self.assertFalse(self.window.sidebar.future_panel.isVisible())
+
     def test_unimplemented_navigation_is_disabled_and_labeled(self):
         for label in ("Downloads", "Backups", "Settings", "Logs"):
             button = self.window.sidebar.planned_buttons[label]
