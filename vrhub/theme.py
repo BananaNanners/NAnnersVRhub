@@ -344,6 +344,14 @@ QLabel#dashboardCardDetail {{
 QWidget#modUpdatesPage, QWidget#modUpdatesContent {{
     background: #0A0D10;
 }}
+QLabel#tableColumnHint {{
+    color: #A7ADB7;
+    font-size: 10px;
+    padding: 5px 3px 3px 3px;
+}}
+QTableWidget QHeaderView {{
+    background: #14212B;
+}}
 /* Dev5A: guided downloads, pinned-hash archive inventory, read-only plan. */
 QWidget#guidedDownloadsPage {{
     background: #0A0D10;

@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QUrl
 
+from .table_columns import enable_spreadsheet_columns
+
 
 GROUPS = ("update", "review", "later", "not_installed", "current")
 GROUP_TITLES = {
@@ -92,14 +94,10 @@ class UpdateTable(QTableWidget):
         self.setAlternatingRowColors(True)
         self.setShowGrid(False)
         self.verticalHeader().hide()
-        self.horizontalHeader().setStretchLastSection(False)
-        self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for index in (1, 2, 3, 4):
-            self.horizontalHeader().setSectionResizeMode(index, QHeaderView.Fixed)
-        self.setColumnWidth(1, 102)
-        self.setColumnWidth(2, 102)
-        self.setColumnWidth(3, 137)
-        self.setColumnWidth(4, 116)
+        self.columns = enable_spreadsheet_columns(
+            self, "mod-updates", (295, 120, 120, 185, 137),
+            expand_weights=(3, 1, 1, 2, 0), min_row_height=44,
+            fixed_table_height=True)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setMinimumWidth(0)
@@ -122,7 +120,7 @@ class UpdateTable(QTableWidget):
                                   record.get("tone"), "!")
                     value = f"{symbol}  {value}"
                 cell = QTableWidgetItem(value)
-                cell.setToolTip(record["detail"])
+                cell.setToolTip(record['name'] + chr(10) + record['detail'])
                 if col in (1, 2, 3):
                     cell.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
                 if col == 3:
@@ -149,6 +147,7 @@ class UpdateTable(QTableWidget):
         height = (self.horizontalHeader().height()
                   + sum(self.rowHeight(i) for i in range(self.rowCount())) + 4)
         self.setFixedHeight(max(self.horizontalHeader().height() + 4, height))
+        self.columns.schedule_rows()
 
 
 class UpdateSection(QWidget):

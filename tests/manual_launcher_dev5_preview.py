@@ -13,12 +13,12 @@ import os
 import sys
 from pathlib import Path
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QPushButton, QLabel
+from PySide6.QtWidgets import QApplication, QPushButton, QLabel, QHeaderView
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vrhub import gui, hub, updates
+from vrhub import gui, hub, updates, table_columns
 from vrhub.app_update_gui import HubUpdateController
 
 
@@ -167,6 +167,18 @@ def main():
                 win.downloads.table.rowCount() == 15,
             "stage2_not_silently_installed":
                 "Later" in win.downloads.table.item(14, 1).text(),
+            "all_library_columns_draggable":
+                all(win.table.horizontalHeader().sectionResizeMode(j) ==
+                    QHeaderView.Interactive for j in range(5)),
+            "all_download_columns_draggable":
+                all(win.downloads.table.horizontalHeader().sectionResizeMode(j) ==
+                    QHeaderView.Interactive for j in range(5)),
+            "all_mod_updates_columns_draggable":
+                all(win.mod_updates.sections["update"].table.horizontalHeader()
+                    .sectionResizeMode(j) == QHeaderView.Interactive for j in range(5)),
+            "column_preference_state_isolated":
+                str(table_columns.preferences_file()).startswith(
+                    str(Path(os.environ["VRHUB_STATE"]).parent.resolve())),
             "custom_banner_button_available": win.change_banner_btn.isEnabled(),
             "artwork_choice_matches_game":
                 win.artwork_label.text().endswith(win.game_banner.artwork_choice.source),
@@ -239,8 +251,12 @@ def main():
             win.resize(1630, 1060)
             win.sidebar.game_list.setCurrentRow(target)
             win.game_details_tabs.setCurrentIndex(4)
+            win.library_toggle.setChecked(True)
             win.game_page_scroll.verticalScrollBar().setValue(0)
             app.processEvents()
+            checks["library_game_column_balanced"] = (
+                150 <= win.table.columnWidth(0) <= 780
+                and win.table.columnWidth(0) < win.table.viewport().width() * .65)
             capture = Path.home() / ".cache/nannersvrhub-055-dev5-preview.png"
             table_capture = Path.home() / ".cache/nannersvrhub-055-dev5-plan-tab.png"
             checks["render_snapshot"] = bool(win.grab().save(str(capture), "PNG"))
@@ -254,9 +270,11 @@ def main():
         if opts.verify:
             QTimer.singleShot(800, lambda: app.exit(0 if all(checks.values()) else 1))
         else:
-            # Open on Cyberpunk's fifteen-stage installation plan.
+            # Open on Cyberpunk's fifteen-stage installation plan with the
+            # detailed library table expanded for column drag acceptance.
             win.sidebar.game_list.setCurrentRow(target)
             win.game_details_tabs.setCurrentIndex(4)
+            win.library_toggle.setChecked(True)
             win.game_page_scroll.verticalScrollBar().setValue(0)
             app.processEvents()
             win.disable_mutations()
@@ -265,7 +283,9 @@ def main():
                   "Set default folder, Set this game's folder and Use default. "
                   "Pinned SHA-256 matches are green; filename-only matches need inspection. "
                   "All settings saved only in private test data; downloads, installation, "
-                  "game launches and rollback are disabled.", flush=True)
+                  "game launches and rollback are disabled. Drag headers between "
+                  "Game/Game install and other column names, or double-click to autofit. "
+                  "Column widths remember your choices within this test preview.", flush=True)
 
     polling = QTimer()
     polling.timeout.connect(verify)

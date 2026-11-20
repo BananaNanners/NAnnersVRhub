@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import download_planner as planner
+from .table_columns import enable_spreadsheet_columns
 
 COLOR = {
     "Pinned SHA-256 verified": "#4FE39A",
@@ -99,7 +100,8 @@ class GuidedDownloadsPage(QWidget):
         explanation = QLabel(
             "Use downloaded archives you already own. Pinned hashes can be "
             "verified automatically; filename-only matches still require review. "
-            "Scanning does NOT download, install, move or delete anything.")
+            "Scanning does NOT download, install, move or delete anything. "
+            "Drag table column borders to resize, or double-click to fit text.")
         explanation.setObjectName("downloadsExplanation")
         explanation.setWordWrap(True)
         outer.addWidget(explanation)
@@ -153,11 +155,9 @@ class GuidedDownloadsPage(QWidget):
         self.table.setWordWrap(True)
         self.table.verticalHeader().hide()
         self.table.setShowGrid(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        for column, width in ((1, 156), (3, 195), (4, 116)):
-            self.table.horizontalHeader().setSectionResizeMode(column, QHeaderView.Fixed)
-            self.table.setColumnWidth(column, width)
+        self.columns = enable_spreadsheet_columns(
+            self.table, "guided-downloads", (225, 160, 345, 230, 142),
+            expand_weights=(2, 1, 3, 2, 0), min_row_height=48)
         outer.addWidget(self.table, 1)
 
         footer = QHBoxLayout()
@@ -332,8 +332,8 @@ class GuidedDownloadsPage(QWidget):
             )
             for col, value in enumerate(values):
                 cell = QTableWidgetItem(value)
-                if record.get("file"):
-                    cell.setToolTip(str(record["file"]))
+                cell.setToolTip(
+                    str(record["file"]) if col == 2 and record.get("file") else value)
                 if col == 3:
                     cell.setForeground(QColor(COLOR.get(value, "#A7ADB7")))
                 cell.setData(Qt.UserRole, record.get("file", ""))
@@ -348,6 +348,7 @@ class GuidedDownloadsPage(QWidget):
                 self.table.setCellWidget(i, 4, btn)
             else:
                 self.table.setItem(i, 4, QTableWidgetItem("—"))
+        self.columns.schedule_rows()
         self._update_inspect_button()
 
     def _update_inspect_button(self):

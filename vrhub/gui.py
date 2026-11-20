@@ -26,6 +26,7 @@ from .dashboard_ui import GameDashboard, ResponsiveQuickActions, snapshot as das
 from .mod_updates_gui import ModUpdatesPage
 from .downloads_gui import GuidedDownloadsPage
 from . import artwork, download_planner
+from .table_columns import enable_spreadsheet_columns
 
 
 class HeroicInjectorDialog(QDialog):
@@ -627,7 +628,9 @@ class HubWindow(QMainWindow):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.library_columns = enable_spreadsheet_columns(
+            self.table, "game-library", (405, 160, 160, 160, 205),
+            expand_weights=(2, 1, 1, 1, 2), min_row_height=28)
         self.table.itemSelectionChanged.connect(self.show_details)
 
         self.details = QTextBrowser()
@@ -739,6 +742,10 @@ class HubWindow(QMainWindow):
         self.library_panel = QWidget()
         library_layout = QVBoxLayout(self.library_panel)
         library_layout.setContentsMargins(0, 0, 0, 0)
+        self.library_column_hint = QLabel(
+            "Drag column dividers to resize · Double-click a divider to fit text · Widths are remembered")
+        self.library_column_hint.setObjectName("tableColumnHint")
+        library_layout.addWidget(self.library_column_hint)
         self.table.setMaximumHeight(205)
         library_layout.addWidget(self.table)
         self.library_panel.hide()
@@ -987,6 +994,11 @@ class HubWindow(QMainWindow):
                 or (self.downloads.worker and self.downloads.worker.isRunning())):
             event.ignore()
             return
+        # Save only user-initiated header width edits, never game data.
+        self.library_columns.flush()
+        self.downloads.table.spreadsheet_columns.flush()
+        for section in self.mod_updates.sections.values():
+            section.table.spreadsheet_columns.flush()
         super().closeEvent(event)
 
     def current(self) -> dict | None:
@@ -1026,7 +1038,10 @@ class HubWindow(QMainWindow):
                      mod_text, profile,
                      updates.summarize(self.update_results.get(rid))]
             for c, text in enumerate(cells):
-                self.table.setItem(i, c, QTableWidgetItem(text))
+                item = QTableWidgetItem(text)
+                item.setToolTip(text)  # full value remains readable while narrow
+                self.table.setItem(i, c, item)
+        self.library_columns.schedule_rows()
         self.sidebar.set_games(self.rows, keep if 0 <= keep < len(self.rows) else 0)
         if self.rows:
             self.table.selectRow(keep if 0 <= keep < len(self.rows) else 0)
