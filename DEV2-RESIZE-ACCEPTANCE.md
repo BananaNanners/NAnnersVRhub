@@ -41,3 +41,15 @@ The Dev2 preview could not be reduced to a normal desktop window. A real Qt geom
 - [ ] User confirms **PASS** after inspecting the window on KDE.
 
 Automated test pass is not user approval. Keep this checklist visible in Dev3, Dev4, Dev5 and release acceptance notes.
+
+## November 20 final user preference — opening size
+
+User passed every Dev2 desktop check except the small **1120×720** default window. The requested natural launch size is **1630×1060 (width × height)**.
+
+- The real \`HubWindow\` now chooses 1630×1060 on either of the user's existing KDE displays (available logical geometries 2327×1309 and 2259×1271).
+- Startup computes a bounded size when the available screen is smaller; maximization and manual window resizing remain unrestricted.
+- The read-only KDE preview deliberately uses the exact same default-size logic as the real application, rather than overriding it.
+- New unit/Qt tests cover both detected monitor geometries, compact-screen fallbacks, and startup dimensions.
+- In Qt's 800×800 simulated offscreen display, full Nexus results may raise the minimum width beyond 800 after switching between very large and compact window sizes. The post-maximize GUI test therefore restores to at least 1120×720, while the separate test still checks the actual screen-aware startup size. This caveat does not affect the 1630×1060 desktop target.
+
+Only the opening dimensions are pending desktop acceptance; all other Dev2 items were reported PASS by the user. The release application, installed games, mods, saves, Proton/OpenXR settings, and Dev1 checkpoint are unchanged.

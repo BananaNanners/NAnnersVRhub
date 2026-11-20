@@ -542,11 +542,28 @@ class TestHistoryDialog(QDialog):
             QApplication.clipboard().setText(live_tests.record_text(self.entries[self.list.currentRow()], include_setup=True))
 
 
+def preferred_launcher_size(available_width: int, available_height: int) -> tuple[int, int]:
+    """Natural desktop opening size, bounded by the available screen.
+
+    Use Qt logical pixels: on a smaller display the launcher opens restored
+    within the workspace. Resizing/maximizing remain fully user-controlled.
+    """
+    return (
+        min(1630, max(772, available_width - 64)),
+        min(1060, max(530, available_height - 96)),
+    )
+
+
 class HubWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"NAnnersVRhub {__version__}")
-        self.resize(1220, 720)
+        screen = QApplication.primaryScreen()
+        if screen:
+            area = screen.availableGeometry()
+            self.resize(*preferred_launcher_size(area.width(), area.height()))
+        else:
+            self.resize(1630, 1060)
         self.setStyleSheet(STYLESHEET)
         if LOGO_PATH.is_file():
             self.setWindowIcon(QIcon(str(LOGO_PATH)))

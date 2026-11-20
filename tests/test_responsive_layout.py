@@ -9,7 +9,7 @@ from unittest import mock
 
 from PySide6.QtWidgets import QApplication, QScrollArea
 from vrhub.app_update_gui import HubUpdateController
-from vrhub.gui import HubWindow
+from vrhub.gui import HubWindow, preferred_launcher_size
 
 
 class ResponsiveLauncherTests(unittest.TestCase):
@@ -35,6 +35,23 @@ class ResponsiveLauncherTests(unittest.TestCase):
         self.window.resize(width, height)
         self.app.processEvents()
         self.assertEqual((self.window.width(), self.window.height()), (width, height))
+
+    def test_opening_size_matches_user_choice_on_main_desktop(self):
+        self.assertEqual(preferred_launcher_size(2327, 1309), (1630, 1060))
+        self.assertEqual(preferred_launcher_size(2259, 1271), (1630, 1060))
+
+    def test_screen_aware_size_falls_back_safely_on_smaller_desktop(self):
+        self.assertEqual(preferred_launcher_size(1280, 720), (1216, 624))
+        self.assertEqual(preferred_launcher_size(850, 560), (786, 530))
+        self.assertEqual(preferred_launcher_size(800, 800), (772, 704))
+
+    def test_actual_new_window_starts_at_display_appropriate_size(self):
+        # Qt offscreen testing exposes an 800x800 fake screen, so check the
+        # effective launch size rather than demanding 1630 on a tiny screen.
+        geom = self.app.primaryScreen().availableGeometry()
+        self.assertEqual(
+            (self.window.width(), self.window.height()),
+            preferred_launcher_size(geom.width(), geom.height()))
 
     def test_minimum_does_not_force_maximizing_on_laptop_screen(self):
         self.assertLessEqual(self.window.minimumSizeHint().height(), 600)
