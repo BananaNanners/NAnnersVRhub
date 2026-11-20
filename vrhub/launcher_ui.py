@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QFrame, QLabel, QListWidget, QListWidgetItem,
                                QPushButton, QVBoxLayout, QStyledItemDelegate, QStyle)
 
 from .theme import GREEN, MUTED, TEXT, YELLOW
+from . import artwork
 
 
 SHORT_GAME_NAMES = {
@@ -137,8 +138,8 @@ class LauncherSidebar(QFrame):
         future_layout.setSpacing(4)
         self.planned_buttons = {}
         for name, phase in (
-            ("Downloads", "Dev4"),
-            ("Backups", "Dev5"),
+            ("Downloads", "Dev5"),
+            ("Backups", "Dev6"),
             ("Settings", "later milestone"),
             ("Logs", "later milestone"),
         ):
@@ -205,6 +206,8 @@ class GameBanner(QFrame):
         super().__init__(parent)
         self.setObjectName("launcherGameBanner")
         self._local_art = QPixmap()
+        self.artwork_choice = artwork.ArtworkChoice(
+            None, "NAnnersVRhub original banner")
         self.setMinimumHeight(148)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 16, 22, 14)
@@ -256,22 +259,21 @@ class GameBanner(QFrame):
         painter.end()
 
     def _find_local_art(self, recipe):
-        """Use only user-cached Steam library hero images, with a safe fallback."""
-        appid = recipe.get("steam_appid")
-        if not isinstance(appid, int):
-            return QPixmap()
-        cache = Path.home() / ".local/share/Steam/appcache/librarycache" / str(appid)
-        for name in ("library_hero.jpg", "library_hero.png"):
-            path = cache / name
-            if path.is_file():
-                pixmap = QPixmap(str(path))
-                if not pixmap.isNull():
-                    return pixmap
+        """Resolve local Steam/Heroic/custom artwork without downloads."""
+        self.artwork_choice = artwork.locate_artwork(recipe)
+        if self.artwork_choice.path:
+            result = QPixmap(str(self.artwork_choice.path))
+            if not result.isNull():
+                return result
+        self.artwork_choice = artwork.ArtworkChoice(
+            None, "NAnnersVRhub original banner")
         return QPixmap()
 
     def set_game(self, row, update_items=None):
         if row is None:
             self._local_art = QPixmap()
+            self.artwork_choice = artwork.ArtworkChoice(
+                None, "NAnnersVRhub original banner")
             self.heading.setText("Choose a game")
             self.status.setText("Select a profile from the game library.")
             self.update()

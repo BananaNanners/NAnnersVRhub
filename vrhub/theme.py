@@ -92,6 +92,25 @@ QLabel#runtimePill, QLabel#liveStatus {{
     padding: 6px 10px;
     font-weight: 700;
 }}
+QLabel#launcherArtworkSource {{
+    color: #A7ADB7;
+    font-size: 11px;
+    padding: 3px 5px;
+}}
+QPushButton#launcherArtworkAction {{
+    background: #151D25;
+    border: 1px solid #39414A;
+    color: #23B7FF;
+    font-size: 11px;
+    padding: 6px 11px;
+}}
+QPushButton#launcherArtworkAction:hover {{
+    border-color: #23B7FF;
+}}
+QPushButton#launcherArtworkAction:disabled {{
+    color: #69717C;
+    border-color: #252C33;
+}}
 QLabel#snapshotStatus {{
     background: {PANEL_2};
     border: 1px solid {BORDER};

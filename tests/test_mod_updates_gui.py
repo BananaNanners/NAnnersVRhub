@@ -213,6 +213,22 @@ class QtModUpdatesTests(unittest.TestCase):
         self.page.set_checking(False)
         self.assertTrue(self.page.refresh_button.isEnabled())
 
+    def test_switching_games_does_not_leave_ghost_source_buttons(self):
+        self.page.set_recipe(self.recipe, sample_updates())
+        table = self.page.sections["update"].table
+        self.assertEqual(table.rowCount(), 4)
+        self.page.set_recipe({"id": "hogwarts-legacy", "name": "Hogwarts Legacy"}, [
+            {"name": "HL_UEVR", "status": "update",
+             "page": "https://github.com/jbusfield/HL_UEVR/releases",
+             "detail": "Update available"}])
+        self.app.processEvents()
+        self.assertEqual(table.rowCount(), 1)
+        self.assertEqual(
+            len([button for button in table.findChildren(QPushButton)
+                 if button.isVisible()]), 1)
+        self.assertEqual(table.cellWidget(0, 4).text(), "Open source")
+        self.assertEqual(table.item(0, 0).text(), "HL_UEVR")
+
     def test_source_buttons_use_web_url_and_never_install(self):
         self.page.set_recipe(self.recipe, sample_updates())
         table = self.page.sections["update"].table

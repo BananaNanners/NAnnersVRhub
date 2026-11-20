@@ -107,6 +107,10 @@ class UpdateTable(QTableWidget):
         self.setFixedHeight(self.horizontalHeader().height() + 4)
 
     def set_records(self, rows):
+        # A previous game's external-link widgets can otherwise survive in
+        # QTableWidget's viewport at their old coordinates during a reflow.
+        # Clear previous cell widgets *before* reusing rows for another game.
+        self.setRowCount(0)
         self.setRowCount(len(rows))
         for idx, record in enumerate(rows):
             self.setRowHeight(idx, 52 if len(record["name"]) > 31 else 44)

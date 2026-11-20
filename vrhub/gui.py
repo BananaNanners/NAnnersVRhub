@@ -24,6 +24,7 @@ from .controller_gui import ControllerBindingsPage
 from .launcher_ui import LauncherSidebar, GameBanner
 from .dashboard_ui import GameDashboard, ResponsiveQuickActions, snapshot as dashboard_snapshot
 from .mod_updates_gui import ModUpdatesPage
+from . import artwork
 
 
 class HeroicInjectorDialog(QDialog):
@@ -716,6 +717,16 @@ class HubWindow(QMainWindow):
         # QTableWidget so legacy install/compatibility/save workflows retain
         # their original recipe IDs, signals and data.
         self.game_banner = GameBanner()
+        self.artwork_label = QLabel("Artwork: NAnnersVRhub original banner")
+        self.artwork_label.setObjectName("launcherArtworkSource")
+        self.artwork_label.setWordWrap(True)
+        self.artwork_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.change_banner_btn = QPushButton("Change banner…")
+        self.change_banner_btn.setObjectName("launcherArtworkAction")
+        self.restore_banner_btn = QPushButton("Restore default")
+        self.restore_banner_btn.setObjectName("launcherArtworkAction")
+        self.change_banner_btn.clicked.connect(self.choose_banner)
+        self.restore_banner_btn.clicked.connect(self.restore_banner)
         self.game_dashboard = GameDashboard()
         self.library_toggle = QPushButton("Show detailed library table")
         self.library_toggle.setObjectName("launcherDisclosure")
@@ -757,6 +768,12 @@ class HubWindow(QMainWindow):
         game_layout.setContentsMargins(10, 10, 10, 10)
         game_layout.setSpacing(7)
         game_layout.addWidget(self.game_banner)
+        artwork_toolbar = QHBoxLayout()
+        artwork_toolbar.setSpacing(7)
+        artwork_toolbar.addWidget(self.artwork_label, 1)
+        artwork_toolbar.addWidget(self.change_banner_btn, 0)
+        artwork_toolbar.addWidget(self.restore_banner_btn, 0)
+        game_layout.addLayout(artwork_toolbar)
         game_layout.addWidget(self.game_dashboard)
         self.quick_actions = ResponsiveQuickActions((
             self.game_play_btn, self.preflight_btn, self.check_btn,
@@ -1011,6 +1028,12 @@ class HubWindow(QMainWindow):
         self.sidebar.select_game(idx)
         row = self.rows[idx] if 0 <= idx < len(self.rows) else None
         self.game_banner.set_game(row, self.update_results.get(r["id"]) if r else None)
+        self.artwork_label.setText("Artwork: " + self.game_banner.artwork_choice.source)
+        self.artwork_label.setToolTip(
+            str(self.game_banner.artwork_choice.path or "Original NAnnersVRhub artwork"))
+        self.change_banner_btn.setEnabled(bool(r))
+        self.restore_banner_btn.setEnabled(bool(
+            r and artwork.custom_artwork_path(r).exists()))
         kharvox = bool(r and r.get('handler') == 'kharvox-gog')
         self.doom_saves_btn.setVisible(bool(r and self.development_tools_enabled and r["id"] in game_saves.LAYOUTS))
         self.kharvox_folder_btn.setVisible(kharvox)
@@ -1147,6 +1170,40 @@ class HubWindow(QMainWindow):
     def set_development_tools_enabled(self, checked):
         self.development_tools_enabled = bool(checked)
         self.show_details()
+
+    # ---- game artwork, isolated from all Steam/Heroic files ---------------
+    def choose_banner(self):
+        recipe = self.current()
+        if not recipe:
+            return
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Choose a custom game banner", str(Path.home()),
+            "Image files (*.jpg *.jpeg *.png *.webp)")
+        if not filename:
+            return
+        try:
+            artwork.import_banner(recipe, filename)
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, "Cannot use artwork", str(exc))
+            return
+        self.show_details()
+        self.statusBar().showMessage(
+            "Custom artwork saved in NAnnersVRhub's own data folder.", 4500)
+
+    def restore_banner(self):
+        recipe = self.current()
+        if not recipe:
+            return
+        try:
+            removed = artwork.restore_default(recipe)
+        except OSError as exc:
+            QMessageBox.warning(self, "Cannot restore banner", str(exc))
+            return
+        self.show_details()
+        if removed:
+            self.statusBar().showMessage(
+                "Custom artwork removed. Restored available Steam/Heroic artwork or original banner.",
+                5000)
 
     def show_doom_saves(self):
         recipe = self.current()
