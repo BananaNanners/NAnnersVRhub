@@ -373,6 +373,25 @@ QLabel#downloadsFolderFeedback {{
     padding: 6px 9px;
     font-size: 11px;
 }}
+QLabel#verifiedDownloadsStatus {{
+    color: #23B7FF;
+    font-size: 11px;
+    padding: 5px 8px;
+    background: #111A21;
+    border: 1px solid #244A61;
+    border-radius: 6px;
+}}
+QProgressBar#verifiedDownloadsProgress {{
+    background: #151D25;
+    border: 1px solid #244A61;
+    border-radius: 5px;
+    text-align: center;
+    min-height: 14px;
+}}
+QProgressBar#verifiedDownloadsProgress::chunk {{
+    background: #23B7FF;
+    border-radius: 4px;
+}}
 QLabel#downloadsScanAge {{
     color: #23B7FF;
     font-size: 11px;
@@ -409,6 +428,12 @@ QPushButton#downloadsScan {{
     border: 1px solid #FFD21A;
     padding: 7px 12px;
     font-weight: 700;
+}}
+QPushButton#downloadsScan:disabled,
+QPushButton#downloadsAction:disabled {{
+    background: #151D25;
+    color: #6D7882;
+    border: 1px solid #2A3139;
 }}
 QPushButton#downloadsAction, QPushButton#downloadsSourceButton {{
     color: #23B7FF;

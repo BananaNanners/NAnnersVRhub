@@ -667,6 +667,7 @@ class HubWindow(QMainWindow):
         self.game_details_tabs.addTab(self.downloads, "Downloads / Install Plan")
         self.downloads.inspect_requested.connect(self.inspect_planned_archive)
         self.downloads.scan_idle.connect(self.close_when_idle)
+        self.downloads.download_idle.connect(self.close_when_idle)
         self.game_details_tabs.currentChanged.connect(
             lambda index: self.refresh_compatibility() if index == 1 else None)
         self.install_btn = QPushButton("Install mod file…")
@@ -961,7 +962,9 @@ class HubWindow(QMainWindow):
         self.close_when_idle()
 
     def close_when_idle(self):
-        downloads_busy = bool(self.downloads.worker and self.downloads.worker.isRunning())
+        downloads_busy = bool(
+            (self.downloads.worker and self.downloads.worker.isRunning()) or
+            (self.downloads.download_worker and self.downloads.download_worker.isRunning()))
         if (self._closing and not self.scan_worker
                 and not (self.worker and self.worker.isRunning())
                 and not self.hub_updates.busy and not downloads_busy):
@@ -985,13 +988,17 @@ class HubWindow(QMainWindow):
                 self.statusBar().showMessage("System report saved.", 4000)
 
     def closeEvent(self, event):
-        # Polling threads must finish before the window can destroy them.
+        # Polling and transfer threads must finish before window teardown.
         self._closing = True
+        if self.downloads.download_worker and self.downloads.download_worker.isRunning():
+            self.downloads.cancel_download()
         self.scan_timer.stop()
         self.hub_updates.shutdown()
         if (self.scan_worker or (self.worker and self.worker.isRunning())
                 or self.hub_updates.busy
-                or (self.downloads.worker and self.downloads.worker.isRunning())):
+                or (self.downloads.worker and self.downloads.worker.isRunning())
+                or (self.downloads.download_worker
+                    and self.downloads.download_worker.isRunning())):
             event.ignore()
             return
         # Save only user-initiated header width edits, never game data.

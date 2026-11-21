@@ -7,16 +7,17 @@ local files and validate pinned checksums, but never download or install.
 """
 from pathlib import Path
 from datetime import datetime
+from threading import Event
 
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView, QFileDialog, QGridLayout, QHBoxLayout, QHeaderView,
-    QLabel, QPlainTextEdit, QProgressBar, QPushButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget
+    QLabel, QInputDialog, QMessageBox, QPlainTextEdit, QProgressBar,
+    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans
+from . import download_planner as planner, archive_scans, verified_download
 from .table_columns import enable_spreadsheet_columns
 
 COLOR = {
@@ -45,6 +46,35 @@ class LocalInventoryWorker(QThread):
             self.failed.emit(str(exc))
         else:
             self.done.emit(result)
+
+
+class VerifiedArchiveDownloadWorker(QThread):
+    """One explicitly authorized, digest-pinned download; never installs."""
+    progress_changed = Signal(object, object)
+    succeeded = Signal(object)
+    rejected = Signal(str)
+    cancelled = Signal(str)
+
+    def __init__(self, authority, parent=None):
+        super().__init__(parent)
+        self.authority = authority
+        self.cancel_flag = Event()
+
+    def cancel(self):
+        self.cancel_flag.set()
+
+    def run(self):
+        try:
+            result = verified_download.download(
+                self.authority, cancel_event=self.cancel_flag,
+                progress=lambda done, total:
+                    self.progress_changed.emit(done, total))
+        except verified_download.DownloadCancelled as exc:
+            self.cancelled.emit(str(exc))
+        except (verified_download.DownloadRejected, OSError, ValueError) as exc:
+            self.rejected.emit(str(exc))
+        else:
+            self.succeeded.emit(result)
 
 
 class ResponsiveDownloadActions(QWidget):
@@ -81,6 +111,7 @@ class GuidedDownloadsPage(QWidget):
     """One plan per selected game; no hidden installer actions."""
     inspect_requested = Signal(str)
     scan_idle = Signal()
+    download_idle = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -90,6 +121,10 @@ class GuidedDownloadsPage(QWidget):
         self._last_folder = None
         self._last_plan = None
         self.worker = None
+        self.download_worker = None
+        self.allow_transfers = True
+        self._download_notice = None  # (game_id, result message, color)
+        self._rescan_after_download = False
         self._saved_error = None
         try:
             self._saved = archive_scans.load_saved()
@@ -211,6 +246,42 @@ class GuidedDownloadsPage(QWidget):
         footer.addStretch()
         outer.addLayout(footer)
 
+        transfer_actions = QHBoxLayout()
+        transfer_actions.setSpacing(8)
+        self.download_button = QPushButton("Download and verify")
+        self.download_button.setObjectName("downloadsScan")
+        self.download_button.setEnabled(False)
+        self.download_button.setToolTip(
+            "Requires a recipe-pinned SHA-256 hash.\n"
+            "Paste an official direct release-asset URL.\n"
+            "Always asks for confirmation first.")
+        transfer_actions.addWidget(self.download_button)
+        self.download_cancel = QPushButton("Cancel download")
+        self.download_cancel.setObjectName("downloadsAction")
+        self.download_cancel.setEnabled(False)
+        self.download_cancel.setToolTip(
+            "Cancel the active transfer.\n"
+            "Any unfinished temporary file is removed.")
+        transfer_actions.addWidget(self.download_cancel)
+        transfer_actions.addStretch()
+        outer.addLayout(transfer_actions)
+
+        self.download_progress = QProgressBar()
+        self.download_progress.setObjectName("verifiedDownloadsProgress")
+        self.download_progress.setRange(0, 100)
+        self.download_progress.hide()
+        outer.addWidget(self.download_progress)
+        self.download_status = QLabel(
+            "Select a component to see whether verified direct download is available.")
+        self.download_status.setObjectName("verifiedDownloadsStatus")
+        self.download_status.setWordWrap(True)
+        self.download_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        outer.addWidget(self.download_status)
+
+        self.download_button.clicked.connect(self._request_download)
+        self.download_cancel.clicked.connect(self.cancel_download)
+        self.table.itemSelectionChanged.connect(self._update_download_button)
+
         self.guidance = QLabel(
             "Only approved installer workflows should modify game files. "
             "The existing Setup guide remains the source for installation order.")
@@ -221,6 +292,10 @@ class GuidedDownloadsPage(QWidget):
         self.set_recipe(None)
 
     def closeEvent(self, event):
+        if self.download_worker and self.download_worker.isRunning():
+            self.download_worker.cancel()
+            event.ignore()
+            return
         if self.worker and self.worker.isRunning():
             self.worker.wait()
         super().closeEvent(event)
@@ -254,9 +329,13 @@ class GuidedDownloadsPage(QWidget):
             self.scan_age.setText(
                 self._saved_error or "No scan saved for this game yet. "
                 "Scan local archives to create a per-game snapshot.")
+        active_download = bool(self.download_worker and
+                               self.download_worker.isRunning())
+        active_scan = bool(self.worker and self.worker.isRunning())
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan):
-            btn.setEnabled(bool(recipe) and (not self.worker or not self.worker.isRunning()))
+            btn.setEnabled(bool(recipe) and not (active_scan or active_download))
+        self._update_download_button()
         if recipe and folder:
             try:
                 prefs = planner.load_preferences()
@@ -381,7 +460,8 @@ class GuidedDownloadsPage(QWidget):
             self.summary.setText(f"Default folder preference was NOT changed: {exc}")
 
     def start_scan(self):
-        if not self.recipe or (self.worker and self.worker.isRunning()):
+        if (not self.recipe or (self.worker and self.worker.isRunning())
+                or (self.download_worker and self.download_worker.isRunning())):
             return
         try:
             folder, _ = self._folder()
@@ -487,6 +567,7 @@ class GuidedDownloadsPage(QWidget):
                 self.table.setItem(i, 4, QTableWidgetItem("—"))
         self.columns.schedule_rows()
         self._update_inspect_button()
+        self._update_download_button()
 
     def _update_inspect_button(self):
         row = self.table.currentRow()
@@ -501,3 +582,201 @@ class GuidedDownloadsPage(QWidget):
             path = cell.data(Qt.UserRole)
             if path and Path(path).is_file():
                 self.inspect_requested.emit(str(path))
+
+    def _selected_component(self):
+        """Resolve selection against the CURRENT recipe, not snapshot data."""
+        if not self.recipe:
+            return None, None
+        index = self.table.currentRow()
+        components = planner.plan_components(self.recipe)
+        if index < 0 or index >= len(components):
+            return None, None
+        component = components[index]
+        status = (self._last_plan["rows"][index]["status"]
+                  if self._last_plan and index < len(self._last_plan["rows"])
+                  else "Not checked")
+        return component, status
+
+    def _update_download_button(self):
+        if not hasattr(self, "download_button"):
+            return
+        active = bool(
+            (self.download_worker and self.download_worker.isRunning()) or
+            (self.worker and self.worker.isRunning()))
+        component, status = self._selected_component()
+        eligible, reason = (
+            verified_download.source_support(self.recipe, component)
+            if component and self.recipe else (False, "Select a component first."))
+        can_download = bool(
+            self.allow_transfers and eligible and not active
+            and status != "Pinned SHA-256 verified")
+        self.download_button.setEnabled(can_download)
+        self.download_cancel.setEnabled(
+            bool(self.download_worker and self.download_worker.isRunning()))
+        if active:
+            return  # never replace transfer progress with row-selection hints
+        if (self._download_notice and self.recipe
+                and self._download_notice[0] == self.recipe["id"]):
+            _, message, color = self._download_notice
+            self.download_status.setText(message)
+            self.download_status.setStyleSheet(f"color: {color};")
+            return
+        self.download_status.setStyleSheet("")
+        if component and status == "Pinned SHA-256 verified":
+            self.download_status.setText(
+                "Already verified in the archive library. No duplicate download needed.")
+        else:
+            self.download_status.setText(reason)
+
+    def _request_download(self):
+        """No transfer until the user provides a direct URL AND confirms."""
+        if not self.allow_transfers or not self.download_button.isEnabled():
+            return
+        component, status = self._selected_component()
+        if not component or not self.recipe:
+            return
+        allowed, explanation = verified_download.source_support(
+            self.recipe, component)
+        if not allowed or status == "Pinned SHA-256 verified":
+            return
+        source = component.get("url", "")
+        direct_url, ok = QInputDialog.getText(
+            self, "Direct archive URL",
+            "Copy a DIRECT archive download link from the official release page.\n"
+            "Nexus login/manual downloads are not supported here.\n"
+            f"Release page: {source}\n"
+            "Paste the exact HTTPS archive URL:")
+        if not ok or not direct_url.strip():
+            return
+        try:
+            folder, _ = self._folder()
+            authority = verified_download.create_authorization(
+                self.recipe, component, direct_url.strip(), folder)
+        except (verified_download.DownloadRejected,
+                OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(self, "Archive URL refused (nothing downloaded)", str(exc))
+            return
+        approval = QMessageBox.question(
+            self, "Confirm verified archive download",
+            f"Game: {self.recipe['name']}\n"
+            f"Package: {authority.label}\n"
+            f"Source: {authority.direct_url}\n"
+            f"Destination: {authority.destination_folder / authority.destination_name}\n"
+            f"Expected SHA-256:\n{authority.expected_sha256}\n\n"
+            "Only the exact SHA-256 match will be retained.\n"
+            "Existing archives will never be overwritten.\n"
+            "THIS WILL NOT INSTALL ANY MOD.\n\n"
+            "Authorize this one download?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if approval != QMessageBox.Yes:
+            return
+        self._start_verified_download(authority)
+
+    def _start_verified_download(self, authority):
+        if not self.allow_transfers:
+            return  # isolated acceptance previews have no network permission
+        if ((self.download_worker and self.download_worker.isRunning())
+                or (self.worker and self.worker.isRunning())):
+            return
+        self._rescan_after_download = False
+        self._download_notice = None
+        self.download_status.setStyleSheet("")
+        self.download_progress.setRange(0, 0)
+        self.download_progress.show()
+        self.download_status.setText(
+            f"Downloading and SHA-256 verifying {authority.label}. "
+            "No mod files will be installed.")
+        self.download_button.setEnabled(False)
+        self.download_cancel.setEnabled(True)
+        for btn in (self.set_global, self.set_game, self.clear_game,
+                    self.reset_global, self.scan):
+            btn.setEnabled(False)
+        worker = VerifiedArchiveDownloadWorker(authority, self)
+        self.download_worker = worker
+        worker.progress_changed.connect(
+            lambda current, total, token=worker:
+                self._download_progress(current, total, token))
+        worker.succeeded.connect(
+            lambda result, token=worker:
+                self._download_succeeded(result, token))
+        worker.rejected.connect(
+            lambda message, token=worker:
+                self._download_failed(message, token))
+        worker.cancelled.connect(
+            lambda message, token=worker:
+                self._download_cancelled(message, token))
+        worker.finished.connect(
+            lambda token=worker: self._download_finished(token))
+        worker.start()
+
+    def _download_progress(self, current, total, worker):
+        if worker is not self.download_worker:
+            return
+        if total > 0:
+            self.download_progress.setRange(0, 100)
+            self.download_progress.setValue(
+                max(0, min(100, int(current * 100 / total))))
+        else:
+            self.download_progress.setRange(0, 0)
+        self.download_status.setText(
+            f"Downloading {worker.authority.label}: "
+            f"{current / 1048576:.1f} MiB"
+            + (f" / {total / 1048576:.1f} MiB" if total else "")
+            + " — no files installed.")
+
+    def _download_succeeded(self, result, worker):
+        if worker is not self.download_worker:
+            return
+        self._rescan_after_download = (
+            self.recipe is not None
+            and self.recipe["id"] == worker.authority.game_id
+            and self._last_folder == worker.authority.destination_folder)
+        message = (
+            ("Reused existing verified archive: " if result.reused_existing else
+             "Downloaded and SHA-256 verified: ") + str(result.file) +
+            "\nNo mods installed.")
+        if self._rescan_after_download:
+            message += " Refreshing this game's local archive plan."
+        else:
+            message += " Return to that game and rescan its library."
+        self._download_notice = (worker.authority.game_id, message, "#4FE39A")
+        self.download_status.setText(message)
+        self.download_status.setStyleSheet("color: #4FE39A;")
+
+    def _download_failed(self, message, worker):
+        if worker is not self.download_worker:
+            return
+        msg = f"Download rejected: {message} Existing archives are untouched."
+        self._download_notice = (worker.authority.game_id, msg, "#FF5B50")
+        self.download_status.setText(msg)
+        self.download_status.setStyleSheet("color: #FF5B50;")
+
+    def _download_cancelled(self, message, worker):
+        if worker is not self.download_worker:
+            return
+        self._download_notice = (worker.authority.game_id, message, "#FFD21A")
+        self.download_status.setText(message)
+        self.download_status.setStyleSheet("color: #FFD21A;")
+
+    def _download_finished(self, worker):
+        if worker is not self.download_worker:
+            return
+        should_scan = self._rescan_after_download
+        self._rescan_after_download = False
+        self.download_progress.hide()
+        self.download_cancel.setEnabled(False)
+        self.download_worker = None
+        worker.deleteLater()
+        self.set_recipe(self.recipe)
+        if should_scan and not getattr(self.window(), "_closing", False):
+            # Start the read-only rescan BEFORE announcing idle. Otherwise
+            # a pending Hub close could destroy the page in this callback.
+            self.start_scan()
+        self.download_idle.emit()
+
+    def cancel_download(self):
+        if self.download_worker and self.download_worker.isRunning():
+            self.download_worker.cancel()
+            self.download_cancel.setEnabled(False)
+            self.download_status.setText(
+                "Cancelling the transfer. Unfinished data will be discarded.")
