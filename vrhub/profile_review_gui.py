@@ -9,7 +9,6 @@ from PySide6.QtCore import Qt
 
 from .profile_safety import ProfilePlan
 from .install_review import human_file_size
-from .install_review import human_file_size
 
 
 class ProfileReviewDialog(QDialog):
@@ -20,7 +19,7 @@ class ProfileReviewDialog(QDialog):
         self.allow_install = bool(allow_install)
         self.setObjectName("uevrProfileReviewDialog")
         self.setWindowTitle("Review UEVR profile replacement — no changes yet")
-        self.resize(990, 670)
+        self.resize(990, 455)
         self.setStyleSheet("""
         QDialog#uevrProfileReviewDialog {background: #0A0D10; color: #E5E8ED;}
         QLabel {color: #E5E8ED;}
@@ -31,8 +30,17 @@ class ProfileReviewDialog(QDialog):
         QCheckBox {color:#E5E8ED;}
         QPushButton {background:#14212B; color:#E5E8ED; padding:9px;}
         QPushButton:disabled {background:#151D25; color:#69717C;}
+        QPushButton#profileManifestDisclosure {
+            background:#14212B; color:#23B7FF; border:1px solid #244A61;
+            border-radius:6px; text-align:left; font-weight:700;
+        }
+        QPushButton#profileManifestDisclosure:checked {
+            color:#FFD21A; border-color:#66591A;
+        }
         """)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(10)
         title = QLabel("UEVR PROFILE — BACKUP AND REPLACEMENT REVIEW")
         title.setObjectName("uevrProfileReviewTitle")
         layout.addWidget(title)
@@ -82,8 +90,20 @@ class ProfileReviewDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         for index, name in enumerate(plan.file_names):
             self.table.setItem(index, 0, QTableWidgetItem(name))
+        self.manifest_seen = False
+        self.manifest_toggle = QPushButton(
+            f"Show profile file inventory ({len(plan.file_names)})")
+        self.manifest_toggle.setObjectName("profileManifestDisclosure")
+        self.manifest_toggle.setCheckable(True)
+        layout.addWidget(self.manifest_toggle)
         layout.addWidget(self.table)
+        self.table.setMinimumHeight(150)
+        self.table.hide()
+        layout.addStretch(1)
+        self.manifest_toggle.toggled.connect(self._toggle_manifest)
         self.ack = QCheckBox("I reviewed the exact destination, full-backup policy and file inventory.")
+        self.ack.setEnabled(False)
+        self.ack.setToolTip("Open the complete file inventory once before acknowledging.")
         self.ack.setObjectName("uevrProfileAck")
         layout.addWidget(self.ack)
         self.apply_btn = QPushButton("Confirm safe profile replacement")
@@ -99,11 +119,23 @@ class ProfileReviewDialog(QDialog):
         self.allow_install = bool(allow_install)
         self._update()
 
+    def _toggle_manifest(self, expanded):
+        self.table.setVisible(expanded)
+        self.manifest_toggle.setText(
+            f"{'Hide' if expanded else 'Show'} profile file inventory ({len(self.plan.file_names)})")
+        if expanded and not self.manifest_seen:
+            self.manifest_seen = True
+            self.ack.setChecked(False)
+            self.ack.setEnabled(True)
+        self._update()
+
     def _update(self):
-        self.apply_btn.setEnabled(self.allow_install and self.plan.ready and self.ack.isChecked())
+        self.apply_btn.setEnabled(self.allow_install and self.manifest_seen
+                                  and self.plan.ready and self.ack.isChecked())
 
     def _confirmed(self):
-        if not (self.allow_install and self.plan.ready and self.ack.isChecked()):
+        if not (self.allow_install and self.manifest_seen
+                and self.plan.ready and self.ack.isChecked()):
             return
         self.confirmed_by_user = True
         self.accept()

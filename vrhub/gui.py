@@ -820,6 +820,9 @@ class HubWindow(QMainWindow):
         install_tools_layout.setSpacing(7)
         install_tools_layout.addLayout(_row(self.install_btn, self.profile_btn,
                                             self.verify_btn, self.inspect_btn))
+        # Explicit per-archive inspection is a secondary investigative tool,
+        # not a required step for every dependency in the main checklist.
+        install_tools_layout.addLayout(_row(self.downloads.inspect))
         install_tools_layout.addLayout(_row(self.kharvox_folder_btn,
                                             self.doom_prepare_btn, self.doom_import_btn))
         self.install_tools_panel.hide()

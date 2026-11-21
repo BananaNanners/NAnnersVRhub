@@ -84,6 +84,10 @@ class InstallDialogAcceptanceTests(unittest.TestCase):
         d.confirm_backup.setChecked(True)
         self.assertFalse(d.apply_button.isEnabled())
         d.confirm_closed.setChecked(True)
+        self.assertFalse(d.apply_button.isEnabled())
+        d.manifest_toggle.setChecked(True)
+        self.assertFalse(d.apply_button.isEnabled())
+        d.confirm_targets.setChecked(True)
         self.assertTrue(d.apply_button.isEnabled())
         self.assertTrue(d.targets.columnCount() == 3)
         self.assertEqual(d.targets.item(0, 0).text(),
@@ -100,6 +104,8 @@ class InstallDialogAcceptanceTests(unittest.TestCase):
             c.setChecked(True)
         self.assertFalse(d.apply_button.isEnabled())
         self.assertFalse(d.confirmed_by_user)
+        d.manifest_toggle.setChecked(True)
+        self.assertFalse(d.apply_button.isEnabled())
         self.assertIn("BLOCKED", d.status.text())
         self.assertIn("Existing mod", d.notes.toPlainText())
 

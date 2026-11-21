@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import install_review
+from .archive_checklist_ui import review_archive_table
 
 
 class InstallReviewDialog(QDialog):
@@ -55,13 +56,31 @@ class InstallReviewDialog(QDialog):
             font-size: 12px;
             background: transparent;
         }
+        QCheckBox::indicator {
+            width: 16px;
+            height: 16px;
+            background: #11161B;
+            border: 1px solid #72808C;
+            border-radius: 3px;
+        }
+        QCheckBox::indicator:checked {
+            background: #FFD21A;
+            border-color: #FFD21A;
+        }
+        QCheckBox::indicator:disabled {
+            background: #151D25;
+            border-color: #39414A;
+        }
+        QCheckBox::indicator:checked:disabled {
+            background: #7C6B25;
+        }
         QTextBrowser#installReviewNotes {
             background: #11161B;
             color: #E5E8ED;
             border: 1px solid #2A3139;
             padding: 6px;
         }
-        QTableWidget#installReviewTargets {
+        QTableWidget#installReviewTargets, QTableWidget#installReviewArchives {
             background: #11161B;
             alternate-background-color: #171D23;
             color: #E5E8ED;
@@ -72,6 +91,19 @@ class InstallReviewDialog(QDialog):
             background: #14212B;
             color: #E5E8ED;
             padding: 7px;
+        }
+        QPushButton#installManifestDisclosure {
+            background: #14212B;
+            color: #23B7FF;
+            border: 1px solid #244A61;
+            border-radius: 6px;
+            padding: 8px 12px;
+            text-align: left;
+            font-weight: 700;
+        }
+        QPushButton#installManifestDisclosure:checked {
+            color: #FFD21A;
+            border-color: #66591A;
         }
         QPushButton#installReviewApply {
             background: #342B0B;
@@ -98,7 +130,7 @@ class InstallReviewDialog(QDialog):
         outer.setContentsMargins(16, 14, 16, 14)
         outer.setSpacing(10)
 
-        title = QLabel("REVIEW GAME FILE CHANGES")
+        title = QLabel("REVIEW SELECTED ARCHIVES")
         title.setObjectName("installReviewTitle")
         outer.addWidget(title)
 
@@ -130,6 +162,19 @@ class InstallReviewDialog(QDialog):
         backup.setObjectName("installReviewBackup")
         backup.setWordWrap(True)
         outer.addWidget(backup)
+
+        # Archive-level presentation is the default. The original exact
+        # target manifest stays complete, accessible, and part of consent.
+        self.archives = review_archive_table(plan, self)
+        outer.addWidget(self.archives)
+        self.manifest_seen = False
+        self.manifest_toggle = QPushButton(
+            f"Show exact file changes ({len(plan.target_rows)})")
+        self.manifest_toggle.setObjectName("installManifestDisclosure")
+        self.manifest_toggle.setCheckable(True)
+        self.manifest_toggle.setToolTip(
+            "Expand the full destination manifest. No individual file selections are needed.")
+        outer.addWidget(self.manifest_toggle)
 
         self.targets = QTableWidget(len(plan.target_rows), 3)
         self.targets.setObjectName("installReviewTargets")
@@ -164,6 +209,8 @@ class InstallReviewDialog(QDialog):
                         "#FFD21A" if item.current_sha256 else "#4FE39A"))
                 self.targets.setItem(i, j, cell)
         outer.addWidget(self.targets, 1)
+        self.targets.hide()
+        self.manifest_toggle.toggled.connect(self._toggle_manifest)
 
         self.notes = QTextBrowser()
         self.notes.setObjectName("installReviewNotes")
@@ -177,6 +224,9 @@ class InstallReviewDialog(QDialog):
             "I reviewed the destination files and understand which would be added or replaced.")
         self.confirm_targets.setObjectName("installConfirmTargets")
         self.confirm_targets.setChecked(False)
+        self.confirm_targets.setEnabled(False)
+        self.confirm_targets.setToolTip(
+            "Open the exact file changes once before acknowledging this review.")
         self.confirm_backup = QCheckBox(
             "I understand the backup policy and will preserve any personal mod changes.")
         self.confirm_backup.setObjectName("installConfirmBackup")
@@ -207,13 +257,25 @@ class InstallReviewDialog(QDialog):
         self.allow_install = bool(allow_install)
         if not allow_install:
             self.status.setText(
-                "PREVIEW ONLY — live installation disabled in this test window")
+                ("PREVIEW ONLY — BLOCKED — live installation disabled"
+                 if plan.blocked else
+                 "PREVIEW ONLY — live installation disabled in this test window"))
             self.status.setStyleSheet(
                 "color: #FFD21A; font-weight: 800; font-size: 13px;")
         self._refresh_apply_button()
 
+    def _toggle_manifest(self, expanded):
+        self.targets.setVisible(expanded)
+        self.manifest_toggle.setText(
+            f"{'Hide' if expanded else 'Show'} exact file changes ({len(self.plan.target_rows)})")
+        if expanded and not self.manifest_seen:
+            self.manifest_seen = True
+            self.confirm_targets.setChecked(False)
+            self.confirm_targets.setEnabled(True)
+        self._refresh_apply_button()
+
     def _refresh_apply_button(self):
-        enabled = (self.allow_install and self.plan.approved_for_review
+        enabled = (self.allow_install and self.manifest_seen and self.plan.approved_for_review
                    and all(box.isChecked() for box in (
                        self.confirm_targets, self.confirm_backup,
                        self.confirm_closed)))

@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
 
 from . import download_planner as planner, archive_scans, verified_download, hub
 from .table_columns import enable_spreadsheet_columns
+from .archive_checklist_ui import status_icon
+from .install_review import human_file_size
 
 COLOR = {
     "Pinned SHA-256 verified": "#4FE39A",
@@ -138,15 +140,15 @@ class GuidedDownloadsPage(QWidget):
         outer.setContentsMargins(10, 10, 10, 10)
         outer.setSpacing(9)
 
-        title = QLabel("GUIDED DOWNLOADS & INSTALL PLAN")
+        title = QLabel("ARCHIVE DEPENDENCIES")
         title.setObjectName("downloadsHeading")
         outer.addWidget(title)
 
         explanation = QLabel(
-            "Use downloaded archives you already own. Pinned hashes can be "
-            "verified automatically; filename-only matches still require review. "
-            "Scanning does NOT download, install, move or delete anything. "
-            "Drag table column borders to resize, or double-click to fit text.")
+            "Scan downloaded archives for this game. A green check means a "
+            "recipe-pinned SHA-256 matched; yellow means a filename match still "
+            "needs review. Red means blocked. Scanning is read-only. "
+            "Drag column dividers to resize or double-click to fit text.")
         explanation.setObjectName("downloadsExplanation")
         explanation.setWordWrap(True)
         outer.addWidget(explanation)
@@ -252,7 +254,7 @@ class GuidedDownloadsPage(QWidget):
         self.table = QTableWidget(0, 5)
         self.table.setObjectName("downloadsTable")
         self.table.setHorizontalHeaderLabels(
-            ("Component / package", "Install stage", "Local archive", "Verification", "Download page"))
+            ("Dependency", "Install stage", "Downloaded archive", "Verification", "Source"))
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -263,10 +265,15 @@ class GuidedDownloadsPage(QWidget):
         self.columns = enable_spreadsheet_columns(
             self.table, "guided-downloads", (225, 160, 345, 230, 142),
             expand_weights=(2, 1, 3, 2, 0), min_row_height=48)
+        # Visual archive-first ordering keeps logical columns unchanged, so
+        # remembered widths, existing row selections and backend IDs survive.
+        header = self.table.horizontalHeader()
+        for visual, logical in enumerate((2, 0, 3, 1, 4)):
+            header.moveSection(header.visualIndex(logical), visual)
         outer.addWidget(self.table, 1)
 
         footer = QHBoxLayout()
-        self.inspect = QPushButton("Inspect selected archive (read-only)")
+        self.inspect = QPushButton("Inspect selected archive")
         self.inspect.setObjectName("downloadsAction")
         self.inspect.setToolTip(
             "Inspect a supported local archive.\n"
@@ -277,8 +284,8 @@ class GuidedDownloadsPage(QWidget):
         self.install_review_button = QPushButton("Review installation")
         self.install_review_button.setObjectName("downloadsAction")
         self.install_review_button.setToolTip(
-            "Preview exact game-file destinations.\n"
-            "Check conflicts and required backups.\n"
+            "Review selected archives and backup policy.\n"
+            "The Hub checks every destination internally.\n"
             "Nothing changes without confirmation.")
         self.install_review_button.clicked.connect(self._request_install_review)
         footer.addWidget(self.install_review_button)
@@ -375,7 +382,18 @@ class GuidedDownloadsPage(QWidget):
             self._last_id = rid
             self._last_folder = folder
         saved = self._saved.get(rid) if rid and folder else None
+        # A historical snapshot from a previous recipe version must never
+        # display a green check for a changed pin or dependency assignment.
+        # Leave the persisted record untouched; only suppress its display.
+        outdated_recipe = False
         if saved and saved["folder"] == str(folder):
+            keys = ("id", "sha256", "phase", "hint", "name", "url")
+            expected = [tuple(c.get(k) for k in keys)
+                        for c in planner.plan_components(recipe)]
+            recorded = [tuple(c.get(k) for k in keys)
+                        for c in saved["plan"]["rows"]]
+            outdated_recipe = expected != recorded
+        if saved and saved["folder"] == str(folder) and not outdated_recipe:
             # Resolve again on game switch: changing or removing an archive
             # must invalidate previously verified status.
             self._last_plan = archive_scans.displayed_record(saved)["plan"]
@@ -383,8 +401,11 @@ class GuidedDownloadsPage(QWidget):
         else:
             self._last_plan = None
             self.scan_age.setText(
-                self._saved_error or "No scan saved for this game yet. "
-                "Scan local archives to create a per-game snapshot.")
+                self._saved_error or (
+                    "Saved scan uses older dependency requirements. "
+                    "Rescan required; historical record retained."
+                    if outdated_recipe else "No scan saved for this game yet. "
+                    "Scan local archives to create a per-game snapshot."))
         active_download = bool(self.download_worker and
                                self.download_worker.isRunning())
         active_scan = bool(self.worker and self.worker.isRunning())
@@ -614,16 +635,16 @@ class GuidedDownloadsPage(QWidget):
         self._set_rows(plan["rows"])
         changed = plan.get("changed", 0)
         self.summary.setText(
-            f'{plan["scanned"]} archives found · {plan["verified"]} pinned hashes verified '
+            f'{len(plan["rows"])} dependencies · {plan["scanned"]} archives found in folder · {plan["verified"]} pinned hashes verified '
             f'· {plan["possible"]} possible matches needing inspection '
             f'· {plan["mismatch"]} mismatched (BLOCKED) '
             f'· {plan["unverified"]} unchecked (BLOCKED) · {plan["missing"]} missing'
             + (f' · {changed} changed — rescan required' if changed else "")
             + (f' — {plan["warning"]}' if plan.get("warning") else ""))
         self.guidance.setText(
-            "Stage 1: inspect and install prerequisites using the existing installer. "
-            "Stage 2 components must wait for the recipe's flat-game first-run step. "
-            "Finding an archive does not establish game compatibility or VR readiness.")
+            "Review archives as packages; the Hub checks internal files and backups "
+            "when preparing installation. Stage 2 must wait for the required flat-game "
+            "first run. A found or verified archive is not a VR readiness result.")
 
     def _set_rows(self, records):
         self.table.setRowCount(0)  # prevent stale QTableWidget link widgets
@@ -640,8 +661,22 @@ class GuidedDownloadsPage(QWidget):
                 cell = QTableWidgetItem(value)
                 cell.setToolTip(
                     str(record["file"]) if col == 2 and record.get("file") else value)
+                if col == 2 and record.get("file"):
+                    size = record.get("size", 0)
+                    count = record.get("matches", 1)
+                    cell.setToolTip(
+                        str(record["file"]) +
+                        (f"\nSize: {human_file_size(size)}" if size else "") +
+                        (f"\n{count} matching candidates; shown archive is the planner's selection."
+                         if count > 1 else ""))
                 if col == 3:
                     cell.setForeground(QColor(COLOR.get(value, "#A7ADB7")))
+                    cell.setIcon(status_icon(value))
+                    cell.setToolTip(value + (
+                        "\nA scan is not permission to install."
+                        if value == "Pinned SHA-256 verified" else
+                        "\nA filename match does not establish archive authenticity."
+                        if value == "Possible archive — inspect first" else ""))
                 cell.setData(Qt.UserRole, record.get("file", ""))
                 self.table.setItem(i, col, cell)
             url = planner.source_url(record.get("url"))
@@ -655,6 +690,21 @@ class GuidedDownloadsPage(QWidget):
             else:
                 self.table.setItem(i, 4, QTableWidgetItem("—"))
         self.columns.schedule_rows()
+        # Make the existing all-pinned-package route discoverable. This is
+        # display only: _request_install_review still passes paths to the
+        # original full manifest builder and revalidation gate.
+        components = planner.plan_components(self.recipe) if self.recipe else []
+        complete_pinned = (
+            bool(self.recipe and self.recipe.get("method") in ("bepinex", "ervr"))
+            and bool(components) and len(records) == len(components)
+            and all(c.get("sha256") for c in components)
+            and all(r.get("file") and r.get("status") == "Pinned SHA-256 verified"
+                    for r in records)
+            and len({r["file"] for r in records}) == len(records)
+            and {r.get("id") for r in records} == {c["id"] for c in components})
+        self.install_review_button.setText(
+            f"Review {len(records)} verified archives" if complete_pinned
+            else "Review installation")
         self._update_inspect_button()
         self._update_download_button()
 
