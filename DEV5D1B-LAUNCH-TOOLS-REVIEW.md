@@ -39,7 +39,11 @@ branding remain unchanged.
 - The previously approved Dev5C2/Dev5C3 file-recovery rules and the closed
   live UEVR **profile installation/restore** gate remain unchanged.
 - No live game, injector or UEVR profile operation was executed during testing.
-- All nine saved game archive scans remain available.
+- The patch did not modify any saved archive-scan snapshot. The shared
+  development-preview snapshot **currently contains one game scan**, although
+  earlier Dev5D1-B verification recorded nine. This change predates the new
+  launch-tools preview and has **not** been automatically repaired or overwritten.
+  Scan persistence needs independent follow-up if those records are still expected.
 - The released Hub and all previously approved dev worktrees remain untouched.
 - The read-only preview uses a separate test state and disables live game,
   installer, injector, updater and download actions.
@@ -64,7 +68,9 @@ branding remain unchanged.
 - [ ] Switching between these games updates the row without stale buttons.
 - [ ] Compatibility retains all reports, dated evidence and diagnostic tools.
 - [ ] The preview keeps launch/injection buttons disabled; no game files change.
-- [ ] The seven tabs, game artwork, saved scans and narrow-width scrolling remain correct.
+- [ ] The seven tabs, game artwork and narrow-width scrolling remain correct.
+- [ ] Separately review saved archive-scan persistence if the prior nine scan
+      records are expected; do not treat this UI acceptance as scan recovery.
 - [ ] User explicitly approves the layout before moving to Dev5D1-C.
 
 **UI acceptance does not enable live UEVR profile install/restore.**
