@@ -185,12 +185,10 @@ class HubGuidedInstallTests(unittest.TestCase):
         install.assert_not_called()
 
     def test_existing_profile_button_cannot_bypass_review(self):
-        with mock.patch("vrhub.gui.hub.install_profile") as install, mock.patch(
-                "vrhub.gui.QMessageBox.information") as info:
+        with mock.patch.object(self.window, "_pick", return_value=None), mock.patch(
+                "vrhub.gui.hub.install_profile") as install:
             self.window.install_profile()
         install.assert_not_called()
-        info.assert_called_once()
-        self.assertIn("manual review", info.call_args.args[1].lower())
 
     def test_cancelling_dialog_never_invokes_install(self):
         with mock.patch("vrhub.gui.install_review.build_install_plan",

@@ -67,10 +67,19 @@ def main(argv=None) -> int:
     i.add_argument("--file", type=Path, required=True, nargs="+",
                    help="the file(s) you downloaded (several allowed for games like Cyberpunk 2077)")
     sub.add_parser("uninstall", help="remove the mod").add_argument("game")
-    p = sub.add_parser("install-profile", help="install a UEVR game profile zip")
+    p = sub.add_parser("review-profile", help="read-only UEVR profile destination/backup review")
     p.add_argument("game")
     p.add_argument("--file", type=Path, required=True)
-    sub.add_parser("uninstall-profile", help="remove the profile (restores the backup)").add_argument("game")
+    p = sub.add_parser("install-profile", help="apply a fully reviewed UEVR profile plan")
+    p.add_argument("game")
+    p.add_argument("--file", type=Path, required=True)
+    p.add_argument("--approve-fingerprint", required=True,
+                   help="SHA-256 review fingerprint from review-profile")
+    p.add_argument("--yes", action="store_true",
+                   help="explicitly confirm reviewed UEVR profile replacement")
+    p = sub.add_parser("uninstall-profile", help="restore ONLY unchanged managed UEVR profiles")
+    p.add_argument("game")
+    p.add_argument("--yes", action="store_true", help="explicitly confirm checksum-protected restore")
     sub.add_parser("mark-current", help="record that your install is the latest release").add_argument("game")
     sub.add_parser("launch-injector", help="run the UEVR injector for a game").add_argument("game")
     sub.add_parser("launch-tool", help="launch a game-specific tool such as MO2").add_argument("game")
@@ -181,11 +190,25 @@ def main(argv=None) -> int:
             if rep:
                 print("\n" + hub.verify_text(rep))
             print(f"\nFull checklist: python -m vrhub.cli info {a.game}")
+        elif a.cmd == "review-profile":
+            plan = hub.review_profile_install(r, a.file, _roots())
+            print(f"Game: {plan.game_name}\nDestination: {plan.destination}")
+            print(f"Archive files: {plan.profile_files}; existing files: "
+                  f"{plan.existing_files}; full backup bytes: {plan.existing_bytes}")
+            if plan.blocked:
+                print("BLOCKED: " + "; ".join(plan.blocked))
+            else:
+                print("Review fingerprint: " + plan.fingerprint)
+                print("Apply only after checking this plan with install-profile --yes --approve-fingerprint")
         elif a.cmd == "install-profile":
-            files = hub.install_profile(r, a.file, _roots())
-            print(f"Installed profile ({len(files)} files) into {Path(files[0]).parent if files else '?'}")
+            files = hub.install_profile(r, a.file, _roots(),
+                                        approved_fingerprint=a.approve_fingerprint,
+                                        confirmed=a.yes)
+            print(f"Installed {len(files)} reviewed UEVR profile files. Persistent original backup retained.")
         elif a.cmd == "uninstall-profile":
-            print(f"Removed {len(hub.uninstall(a.game + ':profile'))} profile files (backup restored if there was one)")
+            if not a.yes:
+                raise RuntimeError("Use --yes only after reviewing checksum-protected UEVR restoration.")
+            print(f"Restored verified UEVR profile; {len(hub.uninstall(a.game + ':profile', profile_confirm=True))} files checked.")
         elif a.cmd == "mark-current":
             done = hub.mark_current(r)
             print(f"Marked as up to date: {', '.join(done)}" if done else "Nothing installed through the hub to mark.")

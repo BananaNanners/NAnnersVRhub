@@ -70,7 +70,12 @@ class HogwartsWorkflowTests(unittest.TestCase):
 
     def install(self):
         hub.install(self.recipe, self.injector, [self.fixture.steam])
-        return hub.install_profile(self.recipe, self.profile, [self.fixture.steam])
+        plan = hub.review_profile_install(self.recipe, self.profile, [self.fixture.steam])
+        with mock.patch("vrhub.profile_safety._assert_game_stopped"), mock.patch(
+                "vrhub.profile_safety._assert_execution_gate"):
+            return hub.install_profile(
+                self.recipe, self.profile, [self.fixture.steam],
+                approved_fingerprint=plan.fingerprint, confirmed=True)
 
     def report(self):
         return compatibility.report(self.recipe, [self.fixture.steam])
@@ -98,7 +103,9 @@ class HogwartsWorkflowTests(unittest.TestCase):
         self.assertFalse(old.exists())
         record = json.loads(self.fixture.state.read_text())["hogwarts-legacy:profile"]
         self.assertEqual((Path(record["backup"]) / "plugins/ue4ss/old.ini").read_bytes(), b"old profile")
-        hub.uninstall("hogwarts-legacy:profile")
+        with mock.patch("vrhub.profile_safety._assert_game_stopped"), mock.patch(
+                "vrhub.profile_safety._assert_execution_gate"):
+            hub.uninstall("hogwarts-legacy:profile", profile_confirm=True)
         self.assertEqual(old.read_bytes(), b"old profile")
         self.assertFalse((self.dest / "plugins/uevr_utils.dll").exists())
 
@@ -138,8 +145,8 @@ class HogwartsWorkflowTests(unittest.TestCase):
         old.write_bytes(b"old")
         bad = self.archive("unsafe.zip", {"config.txt": b"new", "../escape.txt": b"bad"})
         before = self.fixture.state.read_bytes()
-        with self.assertRaisesRegex(RuntimeError, "Unsafe path"):
-            hub.install_profile(self.recipe, bad, [self.fixture.steam])
+        with self.assertRaisesRegex(RuntimeError, "Unsafe ZIP path"):
+            hub.review_profile_install(self.recipe, bad, [self.fixture.steam])
         self.assertEqual(old.read_bytes(), b"old")
         self.assertEqual(self.fixture.state.read_bytes(), before)
         self.assertFalse((self.fixture.home / "escape.txt").exists())

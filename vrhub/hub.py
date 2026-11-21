@@ -754,49 +754,28 @@ def install_many(recipe: dict, mod_files: list[Path], steam_roots=None) -> list[
     return install(recipe, mod_files[0], steam_roots)
 
 
-def install_profile(recipe: dict, zip_file: Path, steam_roots=None) -> list[Path]:
-    """Unpack a UEVR game profile straight into the game's UnrealVRMod folder.
-
-    (UEVR's in-app 'Import Config' under Wine can silently copy only some files.)
-    Anything already in that folder is moved to a backup first."""
-    prof = recipe.get("profile")
-    if not prof:
-        raise RuntimeError(f"{recipe['name']} has no profile step.")
-    if zip_file.suffix.lower() != ".zip" or not zip_file.is_file():
-        raise RuntimeError("Expected the profile .zip file.")
-    key = f"{recipe['id']}:profile"
-    if key in _load_state():
-        raise RuntimeError("A profile is already installed. Remove it first (uninstall-profile).")
-    dest = profile_dir(recipe, steam_roots)
-
-    stage = state_file().parent / "staging" / f"{recipe['id']}-{int(time.time())}"
-    stage.mkdir(parents=True)
-    try:  # unpack + validate in a staging folder before touching the real one
-        with zipfile.ZipFile(zip_file) as z:
-            written = _extract(z, "config.txt", stage)
-        rel = [p.relative_to(stage.resolve()) for p in written]
-        backup = None
-        if dest.exists():
-            backup = state_file().parent / "backups" / f"{recipe['id']}-{time.strftime('%Y%m%d-%H%M%S')}"
-            backup.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(dest), str(backup))
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(stage), str(dest))
-    except Exception:
-        shutil.rmtree(stage, ignore_errors=True)
-        raise
-
-    state = _load_state()
-    state[key] = {"files": [str(dest / r) for r in rel], "root": str(dest),
-                  "backup": str(backup) if backup else None,
-                  "installed_at": int(time.time())}
-    _save_state(state)
-    return [dest / r for r in rel]
+def review_profile_install(recipe: dict, zip_file: Path, steam_roots=None):
+    """Read-only UEVR profile destination, archive and backup review."""
+    from . import profile_safety
+    return profile_safety.build_plan(recipe, zip_file, steam_roots)
 
 
-def uninstall(recipe_id: str) -> list[Path]:
+def install_profile(recipe: dict, zip_file: Path, steam_roots=None, *,
+                    approved_fingerprint: str | None = None,
+                    confirmed: bool = False) -> list[Path]:
+    """Apply only a freshly reviewed, explicitly authorized UEVR profile plan."""
+    from . import profile_safety
+    return profile_safety.install(
+        recipe, zip_file, steam_roots,
+        approved_fingerprint=approved_fingerprint, confirmed=confirmed)
+
+
+def uninstall(recipe_id: str, *, profile_confirm: bool = False) -> list[Path]:
     """Remove what we installed under this key (use '<game>:profile' for a profile)."""
     state = _load_state()
+    if recipe_id.endswith(":profile"):
+        from . import profile_safety
+        return profile_safety.restore(recipe_id, confirmed=profile_confirm)
     if state.get(recipe_id, {}).get("installer") == "gameroot-2":
         return _uninstall_gameroot(recipe_id)
     if state.get(recipe_id, {}).get("installer") == "pak-1":

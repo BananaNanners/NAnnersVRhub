@@ -26,6 +26,8 @@ from .dashboard_ui import GameDashboard, ResponsiveQuickActions, snapshot as das
 from .mod_updates_gui import ModUpdatesPage
 from .downloads_gui import GuidedDownloadsPage
 from .install_review_gui import InstallReviewDialog
+from .profile_review_gui import ProfileReviewDialog
+from . import profile_safety
 from . import artwork, download_planner, install_review
 from .table_columns import enable_spreadsheet_columns
 
@@ -679,10 +681,10 @@ class HubWindow(QMainWindow):
             "The Hub checks exact destinations and backups.\n"
             "Installation requires a separate confirmation.")
         self.uninstall_btn = QPushButton("Uninstall mod")
-        self.profile_btn = QPushButton("UEVR profile status")
+        self.profile_btn = QPushButton("Review UEVR profile…")
         self.profile_btn.setToolTip(
-            "UEVR profile installs are on hold.\n"
-            "Read the safety status and use the Setup guide.")
+            "Review selected ZIP, exact profile destination, persistent backup policy, "
+            "and any legacy/manual-recovery blockers before installation.")
         self.unprofile_btn = QPushButton("Remove profile")
         self.copy_btn = QPushButton("Copy launch options")
         self.inject_btn = QPushButton("Run UEVR injector")
@@ -1388,14 +1390,30 @@ class HubWindow(QMainWindow):
                   "No save files were intentionally changed.")
 
     def install_profile(self):
-        """Prevent a legacy profile-install path from skipping safety review."""
-        QMessageBox.information(
-            self, "UEVR profile installation requires manual review",
-            "This profile installer does not yet have an independently verified "
-            "destination/backup preview. No files have been changed. "
-            "Use the Setup guide and existing UEVR profile instructions. "
-            "Profile installation will be enabled after its safe backup workflow "
-            "has been validated.")
+        """UEVR ZIP plan, explicit confirmation, then stale-plan revalidation."""
+        recipe = self.current()
+        if not recipe or not recipe.get("profile"):
+            return
+        zip_file = self._pick("Review UEVR profile ZIP before replacing anything")
+        if zip_file is None:
+            return
+        try:
+            plan = hub.review_profile_install(recipe, zip_file, _roots())
+        except (RuntimeError, OSError, ValueError, zipfile.BadZipFile) as exc:
+            QMessageBox.warning(self, "UEVR profile review blocked", str(exc))
+            return
+        # Dev5C3 is a read-only milestone: live activation needs separate approval.
+        dialog = ProfileReviewDialog(plan, self, allow_install=False)
+        if dialog.exec() != QDialog.Accepted or not dialog.confirmed_by_user:
+            return
+        self._run(
+            lambda: hub.install_profile(
+                recipe, zip_file, _roots(),
+                approved_fingerprint=plan.fingerprint, confirmed=True),
+            "Verified UEVR profile installed",
+            lambda out: f"Installed {len(out)} reviewed files.\n"
+                        "Persistent original directory backup is retained.\n"
+                        "Restoring later requires full checksum validation.")
 
     def uninstall(self):
         r = self.current()
@@ -1444,11 +1462,35 @@ class HubWindow(QMainWindow):
                       lambda out: f"Removed or restored {len(out)} recorded files.")
 
     def uninstall_profile(self):
-        r = self.current()
-        if r and QMessageBox.question(self, "Remove profile",
-                                      f"Remove the profile for {r['name']} and restore the backup?") == QMessageBox.Yes:
-            hub.uninstall(f"{r['id']}:profile")
-            self.refresh()
+        recipe = self.current()
+        if not recipe or not recipe.get("profile"):
+            return
+        key = recipe["id"] + ":profile"
+        review = profile_safety.review_restore(key)
+        if not review["ready"]:
+            QMessageBox.warning(
+                self, "UEVR profile — recovery review required",
+                review["reason"] + "\n\nAutomatic removal and restoration are blocked. "
+                "Nothing has been changed.")
+            return
+        message = (
+            f"Restore the previous {recipe['name']} UEVR profile?\n\n"
+            f"Exact destination: {review['destination']}\n"
+            f"Managed files verified: {review['installed_files']}\n"
+            f"Original files retained: {review['original_files']} "
+            f"({review['original_bytes']:,} bytes)\n\n"
+            "The Hub will validate the entire installed directory again and "
+            "check the retained original backup. Any additions, removals or "
+            "changes block restoration. The backup remains retained afterward.")
+        choice = QMessageBox.question(
+            self, "Review verified UEVR profile restoration", message,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if choice != QMessageBox.Yes:
+            return
+        self._run(lambda: hub.uninstall(key, profile_confirm=True),
+                  "Verified UEVR profile restored",
+                  lambda out: f"Safely restored the previous profile after "
+                              f"checking {len(out)} installed files.")
 
     def run_injector(self):
         r = self.current()
