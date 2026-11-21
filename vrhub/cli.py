@@ -7,7 +7,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-from . import __version__, compatibility, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
+from . import __version__, compatibility, hub, install_review, live_tests, log_diagnostics, runtime, support_report, system_scan, updates
 from .steam import find_game
 
 
@@ -194,7 +194,8 @@ def main(argv=None) -> int:
             plan = hub.review_profile_install(r, a.file, _roots())
             print(f"Game: {plan.game_name}\nDestination: {plan.destination}")
             print(f"Archive files: {plan.profile_files}; existing files: "
-                  f"{plan.existing_files}; full backup bytes: {plan.existing_bytes}")
+                  f"{plan.existing_files}; full backup size: "
+                  f"{install_review.human_file_size(plan.existing_bytes)}")
             if plan.blocked:
                 print("BLOCKED: " + "; ".join(plan.blocked))
             else:

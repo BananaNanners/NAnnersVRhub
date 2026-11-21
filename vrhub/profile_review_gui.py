@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from .profile_safety import ProfilePlan
+from .install_review import human_file_size
+from .install_review import human_file_size
 
 
 class ProfileReviewDialog(QDialog):
@@ -48,10 +50,14 @@ class ProfileReviewDialog(QDialog):
             f"Game: {plan.game_name}\n"
             f"Exact destination: {plan.destination}\n"
             f"Archive: {plan.archive}\n"
-            f"New profile: {plan.profile_files} files / {plan.profile_bytes:,} bytes\n"
+            f"New profile: {plan.profile_files} files / {human_file_size(plan.profile_bytes)}\n"
             f"Current profile: {plan.existing_files} files, {plan.existing_dirs} directories / "
-            f"{plan.existing_bytes:,} bytes"
+            f"{human_file_size(plan.existing_bytes)}"
         )
+        overview.setObjectName("uevrProfileReviewOverview")
+        overview.setToolTip(
+            f"Exact selected archive contents: {plan.profile_bytes:,} bytes\n"
+            f"Exact existing profile size / backup estimate: {plan.existing_bytes:,} bytes")
         overview.setWordWrap(True)
         overview.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(overview)

@@ -1,0 +1,560 @@
+# SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
+# SPDX-License-Identifier: GPL-3.0-only
+"""Dev5C3a KDE preview: UEVR whole-profile backup and legacy safety (read-only).
+
+Live game installs, downloads, updates, launch and recovery are DISABLED.
+--desktop uses one persistent, isolated development preview store, restores
+the previously saved per-game scans and remains independent of production.
+--verify uses only its caller-supplied throwaway test copy.
+"""
+import argparse
+import os
+import sys
+from pathlib import Path
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QPushButton, QLabel, QHeaderView
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+# Configure the shared private preview store BEFORE importing the Hub GUI.
+# This applies ONLY to --desktop. Automated --verify tests must never
+# update the human preview's saved scan timestamps or folder preferences.
+if "--desktop" in sys.argv:
+    from vrhub import dev_preview_storage
+    try:
+        persistence = dev_preview_storage.activate_desktop_preview()
+    except dev_preview_storage.PreviewStorageError as exc:
+        raise SystemExit(f"Preview storage migration stopped safely: {exc}")
+    print(
+        "STABLE DEV PREVIEW STORAGE:", persistence["root"],
+        "| previously saved game scans:", persistence["count"],
+        "| restored this launch:", persistence["imported"],
+        "| earlier development sources:", persistence["source_count"],
+        flush=True)
+
+from vrhub import gui, hub, updates, table_columns, archive_scans, install_review
+from vrhub.downloads_gui import GuidedDownloadsPage
+from vrhub.install_review_gui import InstallReviewDialog
+from vrhub.profile_review_gui import ProfileReviewDialog
+from vrhub.profile_safety import ProfilePlan
+from vrhub.app_update_gui import HubUpdateController
+
+
+class LauncherPreview(gui.HubWindow):
+    def install_profile(self):
+        """Read-only archive and destination review; apply is NEVER enabled."""
+        from PySide6.QtWidgets import QMessageBox
+        recipe = self.current()
+        if not recipe or "profile" not in recipe:
+            return
+        path = self._pick("Read-only UEVR profile ZIP review")
+        if not path:
+            return
+        try:
+            plan = hub.review_profile_install(recipe, path, gui._roots())
+        except (RuntimeError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "UEVR profile review", str(exc))
+            return
+        dialog = ProfileReviewDialog(plan, self, allow_install=False)
+        dialog.exec()
+
+    def show_details(self):
+        super().show_details()
+        self.disable_mutations()
+
+    def disable_mutations(self):
+        allow = {
+            self.sidebar.games_button,
+            self.sidebar.system_button,
+            self.library_toggle,
+            self.more_tools_toggle,
+            self.sidebar.future_toggle,
+            self.check_btn,
+            self.mod_updates.refresh_button,
+            self.change_banner_btn,
+            self.restore_banner_btn,
+            self.downloads.set_global, self.downloads.set_game,
+            self.downloads.clear_game, self.downloads.reset_global,
+            self.downloads.scan, self.downloads.inspect,
+            self.downloads.install_review_button,
+            self.profile_btn,
+        }
+        # The test window may preview all manifests but is never permitted to
+        # download, install, remove or modify a live game or its mods/saves.
+        self.allow_guided_installs = False
+        self.downloads.allow_transfers = False
+        for button in self.findChildren(QPushButton):
+            if button not in allow and button.objectName() not in ("modSourceButton", "downloadsSourceButton"):
+                button.setEnabled(False)
+        self.downloads.download_button.setEnabled(False)
+        self.downloads.download_cancel.setEnabled(False)
+        self.development_tools_action.setEnabled(False)
+        self.hub_update_btn.setEnabled(False)
+
+
+def main():
+    args = argparse.ArgumentParser()
+    group = args.add_mutually_exclusive_group(required=True)
+    group.add_argument("--verify", action="store_true")
+    group.add_argument("--desktop", action="store_true")
+    opts = args.parse_args()
+
+    data = Path(os.environ.get("VRHUB_STATE", "")).resolve()
+    original = (Path.home() / ".local/share/vrhub/state.json").resolve()
+    if not data.is_file() or data == original:
+        raise SystemExit("Specify an existing private VRHUB_STATE test copy")
+    if not os.environ.get("VRHUB_NEXUS_KEY_FILE"):
+        raise SystemExit("Nexus API key location must be explicitly configured")
+
+    # Prevent the app self-updater and expensive/unrelated runtime scans.
+    HubUpdateController.startup = lambda self: None
+    gui.HubWindow.scan_setup = lambda self, *a, **kw: None
+    app = QApplication([sys.argv[0]])
+    win = LauncherPreview()
+    win.allow_guided_installs = False
+    win.downloads.allow_transfers = False
+    win.setWindowTitle("NAnnersVRhub 0.5.5-dev5C3a — UEVR PROFILE BACKUPS PREVIEW (NO GAME WRITES)")
+    # The installed app's version remains 0.5.4. Label only this isolated
+    # Dev4 preview so screenshots cannot be mistaken for the released app.
+    brand = win.findChild(QLabel, "brandTitle")
+    if brand:
+        brand.setText("NAnnersVRhub  0.5.5-dev5C3a · PREVIEW")
+    # Use the real HubWindow desktop default, including the smaller-screen
+    # fallback. Avoid overriding the very launch size under review.
+    expected_open_size = (
+        gui.preferred_launcher_size(
+            app.primaryScreen().availableGeometry().width(),
+            app.primaryScreen().availableGeometry().height())
+        if app.primaryScreen() else (1630, 1060))
+    win.tabs.setCurrentIndex(1)
+    target = next(i for i, row in enumerate(win.rows)
+                  if row["recipe"]["id"] == "cyberpunk-2077")
+    win.sidebar.game_list.setCurrentRow(target)
+    win.game_details_tabs.setCurrentIndex(4)
+    win.show()
+    win.disable_mutations()
+    completed = [False]
+
+    def verify():
+        if completed[0] or not win.update_results.get("cyberpunk-2077"):
+            return
+        completed[0] = True
+        win.sidebar.game_list.setCurrentRow(target)
+        win.game_details_tabs.setCurrentIndex(4)
+        app.processEvents()
+        win.disable_mutations()
+        summary = win.table.item(target, 4).text()
+        components = win.rows[target]["components"]
+        checks = {
+            "opening_size_close_to_screen_aware_default":
+                abs(win.width() - expected_open_size[0]) <= 2
+                and abs(win.height() - expected_open_size[1]) <= 2,
+            "nine_library_games": len(win.rows) == 9 and win.sidebar.game_list.count() == 9,
+            "cyberpunk_selected": win.current()["id"] == "cyberpunk-2077",
+            "correct_header": win.game_banner.heading.text() == "Cyberpunk 2077",
+            "real_mod_status": (
+                components is not None and
+                f"{components[0]} / {components[1]}" in win.game_banner.status.text()),
+            "updates_loaded": len(win.update_results["cyberpunk-2077"]) == 15,
+            "yellow_brand": "#FFD21A" in win.styleSheet(),
+            "blue_brand": "#23B7FF" in win.styleSheet(),
+            "action_buttons_disabled": all(
+                not getattr(win, x).isEnabled()
+                for x in ("install_btn", "uninstall_btn", "hub_update_btn", "game_play_btn")),
+            "game_nav_enabled": win.sidebar.games_button.isEnabled(),
+            "future_nav_disabled": all(not b.isEnabled()
+                                       for b in win.sidebar.planned_buttons.values()),
+            "summary_in_table": summary == updates.summarize(
+                win.update_results["cyberpunk-2077"]),
+            "dashboard_four_cards": set(win.game_dashboard.cards) ==
+                {"game", "mods", "updates", "vr"},
+            "install_status_is_real": win.game_dashboard.cards["game"].value.text() ==
+                ("Game detected" if win.rows[target]["game_found"] else "Not detected"),
+            "mod_count_matches_existing_hub": win.game_dashboard.cards["mods"].value.text() ==
+                f"{components[0]} / {components[1]} installed",
+            "updates_card_matches_live_data": win.game_dashboard.cards["updates"].value.text() ==
+                gui.dashboard_snapshot(
+                    win.rows[target], win.update_results["cyberpunk-2077"])["updates"][1],
+            "vr_not_assumed_ready": win.game_dashboard.cards["vr"].value.text() == "Not run",
+            "actual_hero_is_tall": win.game_banner.height() >= 140,
+            "no_gameplay_claim": "VR Ready" not in win.game_banner.status.text(),
+            "fourth_tab_is_native_updates":
+                win.game_details_tabs.widget(3) is win.mod_updates,
+            "updates_tab_retained_at_original_index":
+                win.game_details_tabs.widget(3) is win.mod_updates,
+            "setup_guide_compact":
+                "See the Mod updates tab" in win.details.toPlainText()
+                and "Cyber Engine Tweaks —" not in win.details.toPlainText(),
+            "four_status_groups_populated":
+                sum(x.table.rowCount() for x in win.mod_updates.sections.values()) == 15,
+            "updates_rows_match_nexus":
+                win.mod_updates.sections["update"].table.rowCount() ==
+                    sum(x["status"] == "update" for x in win.update_results["cyberpunk-2077"]),
+            "current_rows_collapsed_by_default":
+                not win.mod_updates.sections["current"].table.isVisible(),
+            "uncertain_rows_not_marked_current":
+                all(x["status"] != "current" for x in win.update_results["cyberpunk-2077"]
+                    if x["name"] in ("Visible Bullets (Projectile Restoration)",)),
+            "tab_summary_matches_live":
+                f"{sum(x['status']=='update' for x in win.update_results['cyberpunk-2077'])} updates available"
+                    in win.mod_updates.summary.text(),
+            "read_only_refresh_button":
+                win.mod_updates.refresh_button.isEnabled(),
+            "default_opening_size_retained":
+                gui.preferred_launcher_size(2327, 1309) == (1630, 1060),
+            "fifth_tab_guided_downloads":
+                win.game_details_tabs.widget(4) is win.downloads,
+            "downloads_tab_selected": win.game_details_tabs.currentIndex() == 4,
+            "verified_download_controls_present": (
+                win.downloads.download_button.text() == "Download and verify"
+                and win.downloads.download_cancel.text() == "Cancel download"),
+            "guided_review_button_present": (
+                win.downloads.install_review_button.text() == "Review installation"),
+            "persistent_backup_notice_shows_record_safety":
+                bool(win.downloads.backup_safety_status.text()),
+            "legacy_cyberpunk_has_no_false_restore_claim": (
+                ("LEGACY CYBERPUNK INSTALLATION" in
+                 win.downloads.backup_safety_status.text())
+                if hub.state().get("cyberpunk-2077", {}).get("installer") != "gameroot-2"
+                and "cyberpunk-2077" in hub.state() else True),
+            "no_cyberpunk_install_authorized_in_preview":
+                not win.allow_guided_installs,
+            "guided_review_safe_in_preview": (
+                win.downloads.install_review_button.isEnabled()
+                and not win.allow_guided_installs),
+            "guided_review_tooltip_read_only": (
+                "Nothing changes without confirmation"
+                in win.downloads.install_review_button.toolTip()),
+            "legacy_install_button_now_says_review":
+                win.install_btn.text() == "Review mod archives",
+            "uevr_profile_install_has_safety_hold":
+                win.profile_btn.text() == "Review UEVR profile…",
+            "installed_profile_button_remains_disabled": (
+                not win.profile_btn.isEnabled()),
+            "preview_network_permissions_disabled": (
+                not win.downloads.allow_transfers
+                and not win.downloads.download_button.isEnabled()
+                and not win.downloads.download_cancel.isEnabled()
+                and win.downloads.download_worker is None),
+            "download_folder_isolated":
+                str(gui.download_planner.preferences_file()).startswith(
+                    str(Path(os.environ["VRHUB_STATE"]).parent.resolve())),
+            "real_download_library_auto_discovered":
+                "Archive-Library/VR-Mods" in win.downloads.location.text(),
+            "cyberpunk_15_components_in_plan":
+                win.downloads.table.rowCount() == 15,
+            "stage2_not_silently_installed":
+                "Later" in win.downloads.table.item(14, 1).text(),
+            "all_library_columns_draggable":
+                all(win.table.horizontalHeader().sectionResizeMode(j) ==
+                    QHeaderView.Interactive for j in range(5)),
+            "all_download_columns_draggable":
+                all(win.downloads.table.horizontalHeader().sectionResizeMode(j) ==
+                    QHeaderView.Interactive for j in range(5)),
+            "all_mod_updates_columns_draggable":
+                all(win.mod_updates.sections["update"].table.horizontalHeader()
+                    .sectionResizeMode(j) == QHeaderView.Interactive for j in range(5)),
+            "column_preference_state_isolated":
+                str(table_columns.preferences_file()).startswith(
+                    str(Path(os.environ["VRHUB_STATE"]).parent.resolve())),
+            "custom_banner_button_available": win.change_banner_btn.isEnabled(),
+            "artwork_choice_matches_game":
+                win.artwork_label.text().endswith(win.game_banner.artwork_choice.source),
+            "artwork_storage_is_test_scoped":
+                str(gui.artwork.artwork_directory()).startswith(
+                    str(Path(os.environ["XDG_DATA_HOME"]).resolve())),
+        }
+        if opts.verify:
+            # Verify actual geometry, not just the ability to call resize().
+            # Old Dev2 had a hard Qt minimum HEIGHT >1000px, so a bare
+            # resize(1100, 700) call previously did not shrink its window.
+            win.resize(920, 600)
+            app.processEvents()
+            checks["compact_actual_window_size"] = (win.width(), win.height()) == (920, 600)
+            checks["compact_cards_two_columns"] = win.game_dashboard._columns == 2
+            checks["compact_actions_two_columns"] = win.quick_actions._columns == 2
+            checks["compact_vertical_scroll"] = win.game_page_scroll.verticalScrollBar().maximum() > 0
+            checks["compact_no_horizontal_scroll"] = win.game_page_scroll.horizontalScrollBar().maximum() == 0
+            checks["vr_system_button_visible"] = win.sidebar.system_button.isVisible()
+            win.sidebar.system_button.click()
+            checks["vr_system_navigation"] = win.tabs.currentIndex() == 0
+            win.sidebar.games_button.click()
+            checks["games_navigation"] = win.tabs.currentIndex() == 1
+
+            win.resize(2200, 1200)
+            app.processEvents()
+            checks["maximized_content_width_capped"] = (
+                win.game_page_scroll.widget().width() <= 1420
+                and max(c.width() for c in win.game_dashboard.cards.values()) <= 360)
+            # The simulated 800px offscreen Qt display can report a larger
+            # minimum width after a fully populated Nexus update result.
+            # Use a realistic restored width for the post-maximize check,
+            # while testing actual screen-aware startup separately above.
+            restored_target = (max(1120, expected_open_size[0]),
+                               max(720, expected_open_size[1]))
+            win.resize(*restored_target)
+            app.processEvents()
+            checks["restored_actual_window_size"] = (
+                (win.width(), win.height()) == restored_target)
+            # Offscreen Qt reports a tiny 800px simulated display. Save an
+            # additional fixed-size full dashboard rendering for design QA.
+            # Check Heroic art in the isolated preview, then show it to the
+            # user instead of requiring any Steam/Heroic write.
+            art_game = next(i for i, r in enumerate(win.rows)
+                            if r["recipe"]["id"] == "hogwarts-legacy")
+            win.sidebar.game_list.setCurrentRow(art_game)
+            app.processEvents()
+            # Read-only full archive scan uses the same native Qt worker.
+            win.sidebar.game_list.setCurrentRow(target)
+            win.game_details_tabs.setCurrentIndex(4)
+            win.downloads.start_scan()
+            runner = win.downloads.worker
+            checks["local_scan_worker_completed"] = bool(
+                runner and runner.wait(25000))
+            app.processEvents()
+            checks["real_archive_inventory_found"] = (
+                win.downloads._last_plan is not None
+                and win.downloads._last_plan["scanned"] >= 20)
+            checks["cyberpunk_archives_not_falsely_verified"] = (
+                win.downloads._last_plan is not None
+                and win.downloads._last_plan["verified"] == 0
+                and win.downloads._last_plan["possible"] >= 14)
+            checks["cyberpunk_scan_writes_only_private_hub_snapshot"] = (
+                "cyberpunk-2077" in archive_scans.load_saved()
+                and str(archive_scans.snapshot_file()).startswith(
+                    str(Path(os.environ["VRHUB_STATE"]).parent.resolve())))
+            checks["scan_timestamp_is_visible"] = (
+                "Saved scan:" in win.downloads.scan_age.text()
+                and "Historical snapshot" in win.downloads.scan_age.text())
+
+            # Check two distinct pinned-hash profiles, then return to
+            # Cyberpunk. None of the results may be forgotten or overwritten.
+            for game_id, expected_hashes in (("valheim", 2), ("subnautica", 2)):
+                index = next(i for i, row in enumerate(win.rows)
+                             if row["recipe"]["id"] == game_id)
+                win.sidebar.game_list.setCurrentRow(index)
+                win.downloads.start_scan()
+                scan_thread = win.downloads.worker
+                finished = bool(scan_thread and scan_thread.wait(25000))
+                app.processEvents()
+                checks[f"{game_id}_scan_completed"] = finished
+                checks[f"{game_id}_pinned_hashes_saved"] = (
+                    win.downloads._last_plan is not None
+                    and win.downloads._last_plan["verified"] == expected_hashes
+                    and "Saved scan:" in win.downloads.scan_age.text())
+
+            win.sidebar.game_list.setCurrentRow(target)
+            app.processEvents()
+            from vrhub import verified_download
+            checks["nexus_packages_manual_only"] = not any(
+                verified_download.source_support(win.current(), c)[0]
+                for c in gui.download_planner.plan_components(win.current()))
+            checks["cyberpunk_15_rows_restored_without_rescan"] = (
+                win.downloads._last_plan is not None
+                and win.downloads._last_plan["possible"] >= 14
+                and win.downloads.table.rowCount() == 15
+                and "Saved scan:" in win.downloads.scan_age.text())
+            win.sidebar.game_list.setCurrentRow(
+                next(i for i, row in enumerate(win.rows)
+                     if row["recipe"]["id"] == "valheim"))
+            app.processEvents()
+            checks["valheim_two_verified_restored_after_switch"] = (
+                win.downloads._last_plan is not None
+                and win.downloads._last_plan["verified"] == 2)
+            valheim_recipe = win.current()
+            valheim_parts = gui.download_planner.plan_components(valheim_recipe)
+            checks["pinned_valheim_sources_supported"] = all(
+                verified_download.source_support(valheim_recipe, c)[0]
+                for c in valheim_parts)
+            win.downloads.table.selectRow(1)
+            app.processEvents()
+            checks["even_pinned_transfer_disabled_in_preview"] = (
+                not win.downloads.download_button.isEnabled()
+                and not win.downloads.allow_transfers)
+            win.sidebar.game_list.setCurrentRow(
+                next(i for i, row in enumerate(win.rows)
+                     if row["recipe"]["id"] == "subnautica"))
+            app.processEvents()
+            checks["subnautica_two_verified_restored_after_switch"] = (
+                win.downloads._last_plan is not None
+                and win.downloads._last_plan["verified"] == 2)
+            checks["three_distinct_saved_profiles"] = (
+                {"cyberpunk-2077", "valheim", "subnautica"}
+                <= set(archive_scans.load_saved()))
+            # A synthetic plan exercises the actual QDialog UI in the
+            # isolated, network-disabled preview without inspecting or
+            # modifying ANY user game. Its target path is a label, not a file.
+            demo_target = install_review.Target(
+                "BepInEx/plugins/VRSample.dll",
+                "/sample/game/BepInEx/plugins/VRSample.dll",
+                "Replace; back up original", 18_600_000,
+                "d" * 64, 1, 1, 1)
+            demo = install_review.InstallPlan(
+                "demo", "Demo only — NO GAME FILES", "bepinex",
+                "/sample/game", ("/sample/archives/demo.zip",),
+                ("a" * 64,), ("Demo pinned archive",),
+                (demo_target,), 0, 1, 18_600_000,
+                "Persistent Hub-managed originals; checksum-protected restoration",
+                (), ("The preview cannot install any mod.",), "f" * 64)
+            dlg = InstallReviewDialog(demo, win, allow_install=False)
+            dlg.show()
+            app.processEvents()
+            checks["preview_review_dialog_shows_exact_files"] = (
+                dlg.targets.item(0, 0).text() == demo_target.relative
+                and "Demo" in dlg.notes.toPlainText())
+            checks["review_sizes_use_human_readable_mb"] = (
+                dlg.targets.item(0, 2).text() == "18.6 MB"
+                and "18.6 MB" in dlg.notes.toPlainText()
+                and "18,600,000 bytes" in dlg.targets.item(0, 2).toolTip()
+                and "18,600,000 bytes" in dlg.findChild(
+                    QLabel, "installReviewOverview").toolTip())
+            for box in (dlg.confirm_targets, dlg.confirm_backup, dlg.confirm_closed):
+                box.setChecked(True)
+            checks["review_install_always_blocked_in_preview"] = (
+                not dlg.apply_button.isEnabled()
+                and not dlg.confirmed_by_user)
+            dlg.grab().save(
+                str(Path.home() / ".cache/nannersvrhub-055-dev5c3a-review-dialog.png"),
+                "PNG")
+            dlg.close()
+            dlg.deleteLater()
+            # Profile-specific dialogs are synthetic; no user game is involved.
+            sample = ProfilePlan(
+                "fatekeeper", "Demo only — not a real game",
+                "/sample/archive/profile.zip", "a" * 64,
+                "/sample/ProtonPrefix/UnrealVRMod/Sample",
+                ("config.txt", "plugins/sample.dll"),
+                2, 3_750_000, 3, 54_483_692, 1, True, (), "b" * 64)
+            profdlg = ProfileReviewDialog(sample, win, allow_install=False)
+            profdlg.show()
+            app.processEvents()
+            checks["uevr_profile_read_only_handler_active"] = (
+                LauncherPreview.install_profile is not gui.HubWindow.install_profile)
+            checks["uevr_review_exact_destination_visible"] = (
+                profdlg.table.item(0, 0).text() == "config.txt"
+                and sample.destination in profdlg.findChildren(QLabel)[2].text())
+            from PySide6.QtWidgets import QLabel as GuiLabel
+            uevr_overview = profdlg.findChild(GuiLabel, "uevrProfileReviewOverview")
+            checks["uevr_review_human_readable_size"] = bool(
+                uevr_overview
+                and "3.75 MB" in uevr_overview.text()
+                and "54.48 MB" in uevr_overview.text()
+                and "3,750,000 bytes" in uevr_overview.toolTip()
+                and "54,483,692 bytes" in uevr_overview.toolTip())
+            checks["uevr_review_full_directory_policy_visible"] = (
+                "whole-directory" in profdlg.backup.text()
+                and "SHA-256" in profdlg.backup.text())
+            profdlg.ack.setChecked(True)
+            checks["uevr_preview_never_allows_profile_install"] = (
+                not profdlg.apply_btn.isEnabled() and not profdlg.confirmed_by_user)
+            checks["uevr_review_renders"] = bool(profdlg.grab().save(
+                str(Path.home() / ".cache/nannersvrhub-055-dev5c3a-profile-review.png"), "PNG"))
+            profdlg.close()
+            blocked = ProfilePlan(
+                sample.game_id, sample.game_name, sample.archive, sample.archive_sha256,
+                sample.destination, sample.file_names, sample.profile_files, sample.profile_bytes,
+                sample.existing_files, sample.existing_bytes, sample.existing_dirs,
+                sample.previous_exists,
+                ("Legacy Hub record requires manual recovery review.",), sample.fingerprint)
+            blocked_dlg = ProfileReviewDialog(blocked, win, allow_install=False)
+            blocked_dlg.ack.setChecked(True)
+            checks["uevr_legacy_warning_blocked"] = (
+                "BLOCKED" in blocked_dlg.status.text() and not blocked_dlg.apply_btn.isEnabled())
+            blocked_dlg.close()
+            checks["buttons_use_clear_labels_without_ellipses"] = (
+                [x.text() for x in (
+                    win.downloads.set_global, win.downloads.set_game,
+                    win.downloads.clear_game, win.downloads.reset_global,
+                    win.downloads.scan)] == [
+                    "Choose default folder", "Choose game folder",
+                    "Use default folder", "Auto-detect default",
+                    "Scan local archives"])
+            checks["hover_help_disambiguates_folder_reset_from_scan_reset"] = (
+                "SHARED folder" in win.downloads.reset_global.toolTip()
+                and "Other games" in win.downloads.set_game.toolTip()
+                and "No archives" in win.downloads.scan.toolTip())
+            checks["hover_descriptions_are_compact_multiline"] = all(
+                2 <= len(btn.toolTip().splitlines()) <= 3 and
+                max(len(line) for line in btn.toolTip().splitlines()) <= 58
+                for btn in (win.downloads.set_global, win.downloads.set_game,
+                            win.downloads.clear_game, win.downloads.reset_global,
+                            win.downloads.scan, win.downloads.inspect))
+            checks["default_and_override_are_visible_separately"] = (
+                "Current game folder" in win.downloads.location.text()
+                and "Shared default" in win.downloads.location.text())
+
+            # New page simulates reopening the application. Its view comes
+            # from the isolated on-disk scan snapshot, not the old QWidget.
+            fresh_page = GuidedDownloadsPage()
+            fresh_page.set_recipe(hub.load_recipes()["valheim"])
+            checks["reopen_restores_valheim_from_disk"] = (
+                fresh_page._last_plan is not None
+                and fresh_page._last_plan["verified"] == 2
+                and "Saved scan:" in fresh_page.scan_age.text())
+            fresh_page.close()
+            fresh_page.deleteLater()
+
+            win.sidebar.game_list.setCurrentRow(art_game)
+            app.processEvents()
+            checks["heroic_art_auto_detected"] = (
+                win.game_banner.artwork_choice.source == "Heroic local cover artwork"
+                and not win.game_banner._local_art.isNull())
+            checks["restore_disabled_without_custom"] = (
+                not win.restore_banner_btn.isEnabled())
+            win.resize(1630, 1060)
+            win.sidebar.game_list.setCurrentRow(target)
+            win.game_details_tabs.setCurrentIndex(4)
+            win.library_toggle.setChecked(True)
+            win.game_page_scroll.verticalScrollBar().setValue(0)
+            app.processEvents()
+            checks["library_game_column_balanced"] = (
+                150 <= win.table.columnWidth(0) <= 780
+                and win.table.columnWidth(0) < win.table.viewport().width() * .65)
+            capture = Path.home() / ".cache/nannersvrhub-055-dev5c3a-preview.png"
+            table_capture = Path.home() / ".cache/nannersvrhub-055-dev5c3a-plan-tab.png"
+            checks["render_snapshot"] = bool(win.grab().save(str(capture), "PNG"))
+            checks["render_native_tab"] = bool(
+                win.downloads.grab().save(str(table_capture), "PNG"))
+            print("SNAPSHOT", capture, flush=True)
+            print("TAB_SNAPSHOT", table_capture, flush=True)
+        for name, ok in checks.items():
+            print("DEV5C3A_CHECK", name, "PASS" if ok else "FAIL", flush=True)
+        print("DEV5C3A_GUI_RESULT", "PASS" if all(checks.values()) else "FAIL", flush=True)
+        if opts.verify:
+            QTimer.singleShot(800, lambda: app.exit(0 if all(checks.values()) else 1))
+        else:
+            # Open on Cyberpunk's plan with the detailed library collapsed,
+            # keeping the folder buttons and short hover hints on screen.
+            # The independent spreadsheet acceptance has already passed.
+            win.sidebar.game_list.setCurrentRow(
+                next(i for i, row in enumerate(win.rows)
+                     if row["recipe"]["id"] == "hogwarts-legacy"))
+            win.game_details_tabs.setCurrentIndex(0)
+            win.library_toggle.setChecked(False)
+            win.game_page_scroll.verticalScrollBar().setValue(0)
+            # Select the real CET archive candidate for a one-click,
+            # read-only blocked-file review. This does not touch the archive.
+            if win.downloads.table.rowCount():
+                win.downloads.table.selectRow(0)
+            app.processEvents()
+            win.disable_mutations()
+            print(f"KDE DEV5C3A PROFILE SAFETY PREVIEW READY at {win.width()}x{win.height()}. "
+                  "Hogwarts Legacy is selected; open Advanced Tools and click "
+                  "'Review UEVR profile…' to choose a ZIP and inspect its contents, "
+                  "whole-directory backup policy and any legacy recovery blocker. "
+                  "Profile APPLY is deliberately disabled. Game installs, profile restore, "
+                  "downloads, game launch and update actions are disabled in this preview. "
+                  "Your released Hub and existing VR game files remain untouched.", flush=True)
+
+
+    polling = QTimer()
+    polling.timeout.connect(verify)
+    polling.start(300)
+    if opts.verify:
+        QTimer.singleShot(60000, lambda: app.exit(2) if not completed[0] else None)
+    return app.exec()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

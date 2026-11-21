@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Dev5C3 profile confirmation dialogs, never game mutation."""
 import unittest
+from dataclasses import replace
 
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QLabel
 from vrhub.profile_review_gui import ProfileReviewDialog
 from vrhub.profile_safety import ProfilePlan
 
@@ -19,6 +20,36 @@ class UEVRReviewGuiTests(unittest.TestCase):
             "/test/prefix/UnrealVRMod/SLASHER-Win64-Shipping",
             ("config.txt", "plugins/custom/feature.dll"),
             2, 17, 5, 125, 3, True, tuple(blocked), "b"*64)
+
+    def test_display_uses_consistent_kb_mb_gb_units_and_exact_tooltips(self):
+        scenarios = (
+            (1_250, 2_500, "1.25 KB", "2.5 KB"),
+            (3_750_000, 54_483_692, "3.75 MB", "54.48 MB"),
+            (2_000_000_000, 1_500_000_000, "2 GB", "1.5 GB"),
+        )
+        for new_bytes, original_bytes, new_expected, original_expected in scenarios:
+            with self.subTest(new_bytes=new_bytes, original_bytes=original_bytes):
+                plan = replace(self.plan(), profile_bytes=new_bytes,
+                               existing_bytes=original_bytes)
+                dialog = ProfileReviewDialog(plan, allow_install=False)
+                self.addCleanup(dialog.close)
+                overview = dialog.findChild(QLabel, "uevrProfileReviewOverview")
+                self.assertIsNotNone(overview)
+                self.assertIn(new_expected, overview.text())
+                self.assertIn(original_expected, overview.text())
+                self.assertNotIn("bytes", overview.text().lower())
+                self.assertIn(f"{new_bytes:,} bytes", overview.toolTip())
+                self.assertIn(f"{original_bytes:,} bytes", overview.toolTip())
+                self.assertFalse(dialog.apply_btn.isEnabled())
+
+    def test_small_sizes_and_zero_still_use_normal_formatter(self):
+        plan = replace(self.plan(), profile_bytes=0, existing_bytes=125)
+        dialog = ProfileReviewDialog(plan, allow_install=False)
+        self.addCleanup(dialog.close)
+        overview = dialog.findChild(QLabel, "uevrProfileReviewOverview")
+        self.assertIn("0 B", overview.text())
+        self.assertIn("125 B", overview.text())
+        self.assertIn("0 bytes", overview.toolTip())
 
     def test_ready_review_requires_explicit_checkbox(self):
         dialog = ProfileReviewDialog(self.plan())
