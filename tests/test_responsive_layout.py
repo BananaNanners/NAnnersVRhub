@@ -97,8 +97,11 @@ class ResponsiveLauncherTests(unittest.TestCase):
     def test_mid_width_keeps_shortcuts_and_content(self):
         self.set_dimensions(1200, 750)
         self.assertEqual(self.window.game_dashboard._columns, 2)
-        self.assertEqual(self.window.quick_actions._columns, 5)
+        # Actions now sit inside the Overview tab, whose readable content area
+        # is narrower than the old always-visible page-wide action strip.
+        self.assertEqual(self.window.quick_actions._columns, 2)
         self.assertGreater(self.window.game_details_tabs.width(), 600)
+        self.assertTrue(self.window.game_details_tabs.tabBar().usesScrollButtons())
 
     def test_wide_window_centers_and_caps_content(self):
         self.set_dimensions(2200, 1200)
@@ -135,6 +138,9 @@ class ResponsiveLauncherTests(unittest.TestCase):
 
     def test_scrolling_can_reach_setup_guide_without_maximizing(self):
         self.set_dimensions(920, 600)
+        self.window.game_details_tabs.setCurrentIndex(
+            self.window.game_details_tabs.indexOf(self.window.details))
+        self.app.processEvents()
         scroll = self.window.game_page_scroll.verticalScrollBar()
         self.assertGreater(scroll.maximum(), 0)
         scroll.setValue(scroll.maximum())

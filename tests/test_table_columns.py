@@ -215,7 +215,7 @@ class IntegratedColumnTests(unittest.TestCase):
 
     def test_all_download_columns_are_manually_resizable(self):
         t = self.window.downloads.table
-        self.window.game_details_tabs.setCurrentIndex(4)
+        self.window.game_details_tabs.setCurrentIndex(self.window.game_details_tabs.indexOf(self.window.downloads))
         self.app.processEvents()
         for i in range(5):
             self.assertEqual(t.horizontalHeader().sectionResizeMode(i),
@@ -227,7 +227,7 @@ class IntegratedColumnTests(unittest.TestCase):
         self.assertEqual(t.columnWidth(2), before + 40)
 
     def test_mod_updates_rows_are_resizable_and_keep_links(self):
-        self.window.game_details_tabs.setCurrentIndex(3)
+        self.window.game_details_tabs.setCurrentIndex(self.window.game_details_tabs.indexOf(self.window.mod_updates))
         self.app.processEvents()
         table = self.window.mod_updates.sections["update"].table
         self.assertEqual(table.horizontalHeader().sectionResizeMode(0),
@@ -239,7 +239,7 @@ class IntegratedColumnTests(unittest.TestCase):
 
     def test_compact_920_window_keeps_outer_page_unscrolled_horizontally(self):
         self.window.library_toggle.click()
-        self.window.game_details_tabs.setCurrentIndex(4)
+        self.window.game_details_tabs.setCurrentIndex(self.window.game_details_tabs.indexOf(self.window.downloads))
         self.window.resize(920, 600)
         self.app.processEvents()
         self.assertEqual(self.window.game_page_scroll.horizontalScrollBar().maximum(), 0)

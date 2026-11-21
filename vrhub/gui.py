@@ -6,13 +6,13 @@ import subprocess
 import zipfile
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QSize
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QFileDialog, QFrame, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
                                QComboBox, QDialog, QDialogButtonBox, QFormLayout, QListWidget, QPlainTextEdit,
                                QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget,
-                               QScrollArea, QSizePolicy)
+                               QScrollArea, QSizePolicy, QStyle)
 
 from . import __version__, app_updates, compatibility, heroic_epic, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates, game_saves
 from .handlers import get_handler
@@ -659,22 +659,17 @@ class HubWindow(QMainWindow):
         compat_layout.addLayout(_row(self.record_test_btn, self.test_history_btn, self.log_diagnostics_btn))
         compat_layout.addWidget(self.support_report_btn)
         compat_layout.addWidget(self.compat_details)
-        self.game_details_tabs = QTabWidget()
-        self.game_details_tabs.addTab(self.details, "Setup guide")
-        self.game_details_tabs.addTab(compat_page, "Compatibility profile")
+        # Dev5D1-A: keep existing content widgets and signal paths. Only the
+        # navigation ownership changes; none of the installer logic changes.
+        self.compat_page = compat_page
         self.controller_bindings = ControllerBindingsPage()
-        self.game_details_tabs.addTab(self.controller_bindings, "Controller bindings")
         self.mod_updates = ModUpdatesPage()
-        self.game_details_tabs.addTab(self.mod_updates, "Mod updates")
         self.mod_updates.refresh_requested.connect(self.check_updates)
         self.downloads = GuidedDownloadsPage()
-        self.game_details_tabs.addTab(self.downloads, "Downloads / Install Plan")
         self.downloads.inspect_requested.connect(self.inspect_planned_archive)
         self.downloads.install_review_requested.connect(self.review_requested_install)
         self.downloads.scan_idle.connect(self.close_when_idle)
         self.downloads.download_idle.connect(self.close_when_idle)
-        self.game_details_tabs.currentChanged.connect(
-            lambda index: self.refresh_compatibility() if index == 1 else None)
         self.install_btn = QPushButton("Review mod archives")
         self.install_btn.setToolTip(
             "Choose archive files for review.\n"
@@ -774,8 +769,8 @@ class HubWindow(QMainWindow):
         advanced_layout = QVBoxLayout(self.more_tools_panel)
         advanced_layout.setContentsMargins(0, 0, 0, 0)
         advanced_layout.setSpacing(5)
-        advanced_layout.addLayout(_row(self.uninstall_btn, self.profile_btn,
-                                       self.unprofile_btn, self.verify_btn))
+        # Removal actions now live under Rollback, separate from everyday tools.
+        advanced_layout.addLayout(_row(self.profile_btn, self.verify_btn))
         advanced_layout.addLayout(_row(self.copy_btn, self.inject_btn,
                                        self.game_launch_btn, self.inspect_btn))
         advanced_layout.addLayout(_row(self.diag_btn, self.bridge_log_btn, self.mark_btn))
@@ -789,6 +784,79 @@ class HubWindow(QMainWindow):
             lambda enabled: self.more_tools_toggle.setText(
                 "Hide advanced actions" if enabled else "More tools and advanced actions"))
 
+        # The game banner and artwork controls remain visible on every tab.
+        # Everything else belongs to the chosen game-page context.
+        self.overview_page = QWidget()
+        self.overview_page.setObjectName("gameOverviewPage")
+        overview_layout = QVBoxLayout(self.overview_page)
+        overview_layout.setContentsMargins(8, 12, 8, 12)
+        overview_layout.setSpacing(8)
+        overview_layout.addWidget(self.game_dashboard)
+        self.quick_actions = ResponsiveQuickActions((
+            self.game_play_btn, self.preflight_btn, self.check_btn,
+            self.install_btn, self.kharvox_folder_btn,
+        ))
+        overview_layout.addWidget(self.quick_actions)
+        overview_layout.addLayout(_row(self.library_toggle, self.more_tools_toggle))
+        overview_layout.addWidget(self.library_panel)
+        overview_layout.addWidget(self.more_tools_panel)
+        overview_layout.addStretch(1)
+
+        self.rollback_page = QWidget()
+        self.rollback_page.setObjectName("gameRollbackPage")
+        rollback_layout = QVBoxLayout(self.rollback_page)
+        rollback_layout.setContentsMargins(14, 15, 14, 15)
+        rollback_layout.setSpacing(12)
+        rollback_title = QLabel("BACKUPS & ROLLBACK")
+        rollback_title.setObjectName("rollbackHeading")
+        rollback_layout.addWidget(rollback_title)
+        self.rollback_summary = QLabel(
+            "Choose a game to view its Hub-managed recovery records.")
+        self.rollback_summary.setObjectName("rollbackSummary")
+        self.rollback_summary.setWordWrap(True)
+        rollback_layout.addWidget(self.rollback_summary)
+        rollback_notice = QLabel(
+            "Recorded does not mean verified or recoverable. The Hub checks "
+            "current files and retained originals when an operation is requested. "
+            "Legacy and modified UEVR profile installations remain protected; "
+            "Dev5C3 live-profile execution is disabled.")
+        rollback_notice.setObjectName("rollbackNotice")
+        rollback_notice.setWordWrap(True)
+        rollback_layout.addWidget(rollback_notice)
+        rollback_layout.addLayout(_row(self.uninstall_btn, self.unprofile_btn))
+        rollback_layout.addStretch(1)
+
+        self.game_details_tabs = QTabWidget()
+        self.game_details_tabs.setObjectName("gameDetailsTabs")
+        self.game_details_tabs.setDocumentMode(True)
+        # Ignore the combined seven-tab size hint: the tab bar has its own
+        # arrows, and must not force the entire game page to scroll sideways.
+        self.game_details_tabs.setMinimumWidth(0)
+        self.game_details_tabs.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
+        self.game_details_tabs.setIconSize(QSize(18, 18))
+        bar = self.game_details_tabs.tabBar()
+        bar.setExpanding(False)
+        bar.setUsesScrollButtons(True)
+        bar.setElideMode(Qt.ElideNone)
+        # KDE icon themes are preferred. Qt-native icons are a safe fallback.
+        icon_data = (
+            (self.overview_page, "Overview", "go-home-symbolic", QStyle.SP_DirHomeIcon),
+            (self.mod_updates, "Mod Updates", "download-symbolic", QStyle.SP_ArrowDown),
+            (self.downloads, "Install / Update", "package-x-generic", QStyle.SP_DriveHDIcon),
+            (self.rollback_page, "Rollback", "view-history", QStyle.SP_BrowserReload),
+            (self.compat_page, "Compatibility", "video-display", QStyle.SP_ComputerIcon),
+            (self.controller_bindings, "Controller Bindings", "applications-games", QStyle.SP_MediaPlay),
+            (self.details, "Setup Guide", "documentation", QStyle.SP_DialogHelpButton),
+        )
+        for page, label, themed_icon, fallback_icon in icon_data:
+            icon = QIcon.fromTheme(themed_icon)
+            if icon.isNull():
+                icon = self.style().standardIcon(fallback_icon)
+            self.game_details_tabs.addTab(page, icon, label)
+        self.game_details_tabs.currentChanged.connect(
+            lambda index: self.refresh_compatibility()
+            if self.game_details_tabs.widget(index) is self.compat_page else None)
+
         game_layout = QVBoxLayout()
         game_layout.setContentsMargins(10, 10, 10, 10)
         game_layout.setSpacing(7)
@@ -799,15 +867,6 @@ class HubWindow(QMainWindow):
         artwork_toolbar.addWidget(self.change_banner_btn, 0)
         artwork_toolbar.addWidget(self.restore_banner_btn, 0)
         game_layout.addLayout(artwork_toolbar)
-        game_layout.addWidget(self.game_dashboard)
-        self.quick_actions = ResponsiveQuickActions((
-            self.game_play_btn, self.preflight_btn, self.check_btn,
-            self.install_btn, self.kharvox_folder_btn,
-        ))
-        game_layout.addWidget(self.quick_actions)
-        game_layout.addLayout(_row(self.library_toggle, self.more_tools_toggle))
-        game_layout.addWidget(self.library_panel)
-        game_layout.addWidget(self.more_tools_panel)
         game_layout.addWidget(self.game_details_tabs, 1)
         games_page = QWidget()
         games_page.setObjectName("gamesPage")
@@ -1095,10 +1154,11 @@ class HubWindow(QMainWindow):
             dashboard_snapshot(row, available, verification, checked))
         self.mod_updates.set_recipe(r, available)
         self.downloads.set_recipe(r)
+        self.refresh_rollback_summary(r)
         update_count = sum(item.get("status") == "update" for item in available or [])
         idx = self.game_details_tabs.indexOf(self.mod_updates)
         self.game_details_tabs.setTabText(
-            idx, f"Mod updates ({update_count})" if update_count else "Mod updates")
+            idx, f"Mod Updates ({update_count})" if update_count else "Mod Updates")
         self.details.setHtml(hub.details_html(
             r, available, verification, compact_updates=True) if r else "")
         can_install = bool(r and get_handler(r).install_supported(r))
@@ -1125,6 +1185,37 @@ class HubWindow(QMainWindow):
         if r:
             self.bridge_log_btn.setText(hub.game_bridge_log_label(r))
         self.update_live_status()
+
+    def refresh_rollback_summary(self, recipe):
+        """Describe records without implying that a backup is validated."""
+        if not recipe:
+            self.rollback_summary.setText("Select a game to inspect recovery records.")
+            return
+        try:
+            records = hub.state()
+        except (OSError, ValueError, RuntimeError) as exc:
+            self.rollback_summary.setText(
+                "Recovery records could not be inspected. No restoration is authorized. "
+                f"Reason: {exc}")
+            return
+        installed = records.get(recipe["id"])
+        profile = records.get(recipe["id"] + ":profile")
+        if installed is None:
+            mod_status = "No Hub-managed mod installation record."
+        elif installed.get("installer") == "gameroot-2":
+            mod_status = "Recorded game-root install with retained originals; revalidation required."
+        else:
+            mod_status = "Existing mod installation record; recovery policy depends on installer."
+        if "profile" not in recipe:
+            profile_status = "No UEVR profile step for this game."
+        elif profile is None:
+            profile_status = "No Hub-managed UEVR profile record."
+        elif profile.get("installer") == "uevr-profile-2":
+            profile_status = "Recorded profile backup; full SHA-256 recheck required before restore."
+        else:
+            profile_status = "Legacy UEVR profile record: automatic restoration blocked."
+        self.rollback_summary.setText(
+            f"{recipe['name']}\nMods: {mod_status}\nProfile: {profile_status}")
 
     def refresh_compatibility(self):
         self.compat_report = None

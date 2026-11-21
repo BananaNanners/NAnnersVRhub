@@ -278,22 +278,23 @@ class HubIntegrationTests(unittest.TestCase):
 
     def test_fourth_tab_preserves_existing_tab_indices(self):
         self.assertEqual(
-            [self.win.game_details_tabs.tabText(i) for i in range(4)],
-            ["Setup guide", "Compatibility profile",
-             "Controller bindings", "Mod updates"])
-        self.assertIs(self.win.game_details_tabs.widget(3), self.win.mod_updates)
+            [self.win.game_details_tabs.tabText(i)
+             for i in range(self.win.game_details_tabs.count())],
+            ["Overview", "Mod Updates", "Install / Update", "Rollback",
+             "Compatibility", "Controller Bindings", "Setup Guide"])
+        self.assertIs(self.win.game_details_tabs.widget(self.win.game_details_tabs.indexOf(self.win.mod_updates)), self.win.mod_updates)
 
     def test_game_switch_refreshes_mod_update_tab(self):
         self.select_cyberpunk()
         self.win.update_results["cyberpunk-2077"] = sample_updates()
         self.win.show_details()
-        self.assertEqual(self.win.game_details_tabs.tabText(3), "Mod updates (4)")
+        self.assertEqual(self.win.game_details_tabs.tabText(self.win.game_details_tabs.indexOf(self.win.mod_updates)), "Mod Updates (4)")
         self.assertEqual(self.win.mod_updates.sections["update"].table.rowCount(), 4)
         self.assertEqual(self.win.mod_updates.sections["current"].table.rowCount(), 9)
         self.assertNotIn("Cyber Engine Tweaks —", self.win.details.toPlainText())
         self.win.select_launcher_game(next(
             i for i, v in enumerate(self.win.rows) if v["recipe"]["id"] == "valheim"))
-        self.assertEqual(self.win.game_details_tabs.tabText(3), "Mod updates")
+        self.assertEqual(self.win.game_details_tabs.tabText(self.win.game_details_tabs.indexOf(self.win.mod_updates)), "Mod Updates")
         self.assertEqual(self.win.mod_updates.sections["update"].table.rowCount(), 0)
 
     def test_update_worker_controls_are_synchronized(self):
@@ -311,7 +312,7 @@ class HubIntegrationTests(unittest.TestCase):
         self.select_cyberpunk()
         self.win.update_results["cyberpunk-2077"] = sample_updates()
         self.win.show_details()
-        self.win.game_details_tabs.setCurrentIndex(3)
+        self.win.game_details_tabs.setCurrentIndex(self.win.game_details_tabs.indexOf(self.win.mod_updates))
         for width, height in ((1630, 1060), (920, 600)):
             with self.subTest(dimensions=(width, height)):
                 self.win.resize(width, height)

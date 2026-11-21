@@ -141,9 +141,9 @@ class QtDashboardTests(unittest.TestCase):
     def test_four_actual_cards_and_original_game_tabs(self):
         self.assertIsInstance(self.win.game_dashboard, GameDashboard)
         self.assertEqual(set(self.win.game_dashboard.cards), {"game", "mods", "updates", "vr"})
-        self.assertEqual(self.win.game_details_tabs.tabText(0), "Setup guide")
-        self.assertEqual(self.win.game_details_tabs.tabText(1), "Compatibility profile")
-        self.assertEqual(self.win.game_details_tabs.tabText(2), "Controller bindings")
+        self.assertEqual(self.win.game_details_tabs.tabText(0), "Overview")
+        self.assertEqual(self.win.game_details_tabs.tabText(4), "Compatibility")
+        self.assertEqual(self.win.game_details_tabs.tabText(5), "Controller Bindings")
         self.assertEqual(self.win.game_dashboard.cards["vr"].value.text(), "Not run")
 
     def test_game_change_refreshes_all_cards(self):

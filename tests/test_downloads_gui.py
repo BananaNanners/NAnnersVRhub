@@ -393,12 +393,13 @@ class DownloadsHubWindowTests(unittest.TestCase):
         QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
         self.app.processEvents()
 
-    def test_fifth_tab_does_not_move_existing_four_tabs(self):
+    def test_install_page_is_preserved_in_seven_tab_navigation(self):
         self.assertEqual(
-            [self.window.game_details_tabs.tabText(i) for i in range(5)],
-            ["Setup guide", "Compatibility profile", "Controller bindings",
-             "Mod updates", "Downloads / Install Plan"])
-        self.assertIs(self.window.game_details_tabs.widget(4), self.window.downloads)
+            [self.window.game_details_tabs.tabText(i)
+             for i in range(self.window.game_details_tabs.count())],
+            ["Overview", "Mod Updates", "Install / Update", "Rollback",
+             "Compatibility", "Controller Bindings", "Setup Guide"])
+        self.assertIs(self.window.game_details_tabs.widget(2), self.window.downloads)
         self.assertEqual(self.window.sidebar.game_list.count(), 9)
 
     def test_existing_installer_file_picker_starts_at_selected_directory(self):

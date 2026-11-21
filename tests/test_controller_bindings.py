@@ -137,8 +137,8 @@ class ControllerQtTests(unittest.TestCase):
              mock.patch.object(hub,'_save_state',side_effect=AssertionError('guide must not save game state')):
             window=HubWindow()
             try:
-                self.assertEqual(window.game_details_tabs.tabText(2),'Controller bindings')
-                window.game_details_tabs.setCurrentIndex(2)
+                self.assertEqual(window.game_details_tabs.tabText(5),'Controller Bindings')
+                window.game_details_tabs.setCurrentIndex(window.game_details_tabs.indexOf(window.controller_bindings))
                 self.assertEqual(window.table.rowCount(),9)
                 for i in range(9):
                     window.table.selectRow(i);self.app.processEvents()

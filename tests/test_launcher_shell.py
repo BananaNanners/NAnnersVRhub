@@ -50,9 +50,9 @@ class LauncherShellTests(unittest.TestCase):
         self.assertEqual(self.window.game_banner.heading.text(), "Cyberpunk 2077")
         self.assertIn("Game ", self.window.game_banner.status.text())
         self.assertNotIn("VR Ready", self.window.game_banner.status.text())
-        self.assertEqual(self.window.game_details_tabs.tabText(0), "Setup guide")
-        self.assertEqual(self.window.game_details_tabs.tabText(1), "Compatibility profile")
-        self.assertEqual(self.window.game_details_tabs.tabText(2), "Controller bindings")
+        self.assertEqual(self.window.game_details_tabs.tabText(0), "Overview")
+        self.assertEqual(self.window.game_details_tabs.tabText(4), "Compatibility")
+        self.assertEqual(self.window.game_details_tabs.tabText(5), "Controller Bindings")
 
     def test_original_table_selection_syncs_back_to_sidebar(self):
         self.window.library_toggle.click()
@@ -86,8 +86,8 @@ class LauncherShellTests(unittest.TestCase):
             "diag_btn", "mark_btn", "key_btn",
         ):
             self.assertIsNotNone(getattr(self.window, name))
-        self.window.game_details_tabs.setCurrentIndex(1)
-        self.assertEqual(self.window.game_details_tabs.tabText(1), "Compatibility profile")
+        self.window.game_details_tabs.setCurrentIndex(self.window.game_details_tabs.indexOf(self.window.compat_page))
+        self.assertEqual(self.window.game_details_tabs.tabText(4), "Compatibility")
         self.assertIsNotNone(self.window.compat_refresh_btn)
 
     def test_sidebar_text_hierarchy_and_row_spacing(self):

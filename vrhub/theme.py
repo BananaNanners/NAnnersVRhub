@@ -64,6 +64,40 @@ QTabBar::tab:selected {{
     background: {PANEL};
     border-bottom-color: {PANEL};
 }}
+/* Dev5D1-A: a compact icon-and-text launcher navigation strip.
+   Uses the original yellow selection and blue hover accents. */
+QTabWidget#gameDetailsTabs QTabBar::tab {{
+    color: {TEXT};
+    background: {PANEL_2};
+    padding: 10px 13px;
+    margin-right: 3px;
+    border: 1px solid {BORDER};
+    border-radius: 7px;
+    min-height: 22px;
+}}
+QTabWidget#gameDetailsTabs QTabBar::tab:selected {{
+    background: {YELLOW};
+    color: {BG};
+    border: 1px solid {YELLOW};
+    font-weight: 800;
+}}
+QTabWidget#gameDetailsTabs QTabBar::tab:hover:!selected {{
+    color: {BLUE};
+    border-color: {BLUE};
+}}
+QLabel#rollbackHeading {{
+    color: {YELLOW};
+    font-size: 16px;
+    font-weight: 800;
+}}
+QLabel#rollbackSummary, QLabel#rollbackNotice {{
+    color: {TEXT};
+    background: {PANEL_2};
+    border: 1px solid {BORDER};
+    border-radius: 8px;
+    padding: 12px;
+}}
+QLabel#rollbackNotice {{ color: {MUTED}; }}
 QFrame#brandHeader {{
     background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
         stop:0 #090B0E, stop:0.55 #15130A, stop:1 #08131C);
