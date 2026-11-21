@@ -1,12 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
 # SPDX-License-Identifier: GPL-3.0-only
-"""Isolated KDE preview for Dev5B2's explicitly authorized downloads.
+"""Dev5C KDE preview; persistent *development-only* state across versions.
 
-Game installs, app updates, removals, launches and save recovery are DISABLED.
-Folder preferences and custom banners write ONLY inside isolated test data.
-Uses VRHUB_STATE pointing at a private copy of production state.
---verify exercises real Qt navigation and saves a screenshot to a test path.
---desktop opens the preview for human layout acceptance.
+Live game installs, downloads, updates, launch and recovery are DISABLED.
+--desktop uses one persistent, isolated development preview store, restores
+the previously saved per-game scans and remains independent of production.
+--verify uses only its caller-supplied throwaway test copy.
 """
 import argparse
 import os
@@ -17,6 +16,22 @@ from PySide6.QtWidgets import QApplication, QPushButton, QLabel, QHeaderView
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+# Configure the shared private preview store BEFORE importing the Hub GUI.
+# This applies ONLY to --desktop. Automated --verify tests must never
+# update the human preview's saved scan timestamps or folder preferences.
+if "--desktop" in sys.argv:
+    from vrhub import dev_preview_storage
+    try:
+        persistence = dev_preview_storage.activate_desktop_preview()
+    except dev_preview_storage.PreviewStorageError as exc:
+        raise SystemExit(f"Preview storage migration stopped safely: {exc}")
+    print(
+        "STABLE DEV PREVIEW STORAGE:", persistence["root"],
+        "| previously saved game scans:", persistence["count"],
+        "| restored this launch:", persistence["imported"],
+        "| earlier development sources:", persistence["source_count"],
+        flush=True)
 
 from vrhub import gui, hub, updates, table_columns, archive_scans, install_review
 from vrhub.downloads_gui import GuidedDownloadsPage

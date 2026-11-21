@@ -218,6 +218,10 @@ class GuidedDownloadsPage(QWidget):
         self.scan_age.setObjectName("downloadsScanAge")
         self.scan_age.setWordWrap(True)
         outer.addWidget(self.scan_age)
+        self.saved_scan_count = QLabel("")
+        self.saved_scan_count.setObjectName("downloadsSavedScanCount")
+        self.saved_scan_count.setWordWrap(True)
+        outer.addWidget(self.saved_scan_count)
 
         self.table = QTableWidget(0, 5)
         self.table.setObjectName("downloadsTable")
@@ -314,6 +318,13 @@ class GuidedDownloadsPage(QWidget):
 
     def set_recipe(self, recipe):
         self.recipe = recipe
+        if self._saved_error:
+            self.saved_scan_count.setText(
+                "Saved scan history needs review; original data was preserved.")
+        else:
+            self.saved_scan_count.setText(
+                f"Saved archive scans: {len(self._saved)} game profiles · "
+                "Historical results retained across Hub updates.")
         rid = recipe.get("id") if recipe else None
         error = None
         try:

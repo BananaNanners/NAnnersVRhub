@@ -437,6 +437,11 @@ QProgressBar#verifiedDownloadsProgress::chunk {{
     background: #23B7FF;
     border-radius: 4px;
 }}
+QLabel#downloadsSavedScanCount {{
+    color: #A7ADB7;
+    font-size: 10px;
+    padding: 1px 5px;
+}}
 QLabel#downloadsScanAge {{
     color: #23B7FF;
     font-size: 11px;
