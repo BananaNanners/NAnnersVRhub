@@ -103,7 +103,7 @@ class ConsolidatedHubControlsTests(unittest.TestCase):
             "kharvox_folder_btn", "doom_prepare_btn", "doom_import_btn",
         )
         compat = (
-            "copy_btn", "inject_btn", "game_launch_btn", "diag_btn",
+            "game_launch_btn", "diag_btn",
             "bridge_log_btn", "log_diagnostics_btn", "support_report_btn",
             "doom_probe_btn", "doom_logs_btn",
         )
@@ -111,6 +111,9 @@ class ConsolidatedHubControlsTests(unittest.TestCase):
             self.assertIs(getattr(self.win, name).parent(), self.win.install_tools_panel)
         for name in compat:
             self.assertIs(getattr(self.win, name).parent(), self.win.more_tools_panel)
+        self.assertIs(self.win.copy_btn.parent(), self.win.launch_tools_panel)
+        self.assertIs(self.win.inject_btn.parent(), self.win.launch_tools_panel)
+        self.assertIs(self.win.launch_tools_panel.parent(), self.win.overview_page)
         self.assertIs(self.win.check_btn.parent(), self.win.mod_updates)
         self.assertIs(self.win.mark_btn.parent(), self.win.update_tools_panel)
 

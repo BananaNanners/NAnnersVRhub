@@ -776,7 +776,7 @@ class HubWindow(QMainWindow):
         advanced_layout = QVBoxLayout(self.more_tools_panel)
         advanced_layout.setContentsMargins(4, 5, 4, 5)
         advanced_layout.setSpacing(7)
-        advanced_layout.addLayout(_row(self.copy_btn, self.inject_btn, self.game_launch_btn))
+        advanced_layout.addLayout(_row(self.game_launch_btn))
         advanced_layout.addLayout(_row(self.diag_btn, self.bridge_log_btn,
                                        self.log_diagnostics_btn, self.support_report_btn))
         advanced_layout.addLayout(_row(self.doom_probe_btn, self.doom_logs_btn))
@@ -838,6 +838,22 @@ class HubWindow(QMainWindow):
         ))
         self.quick_actions.setMaximumWidth(760)
         overview_layout.addWidget(self.quick_actions)
+
+        # Dev5D1-B refinement: secondary launch actions should live beside
+        # Launch Game/Preflight, not inside Compatibility diagnostics. Reuse
+        # the two original buttons and their original click handlers.
+        self.launch_tools_panel = QWidget()
+        self.launch_tools_panel.setObjectName("overviewLaunchTools")
+        self.launch_tools_panel.setMaximumWidth(760)
+        launch_tools_layout = QVBoxLayout(self.launch_tools_panel)
+        launch_tools_layout.setContentsMargins(0, 5, 0, 0)
+        launch_tools_layout.setSpacing(6)
+        self.launch_tools_label = QLabel("LAUNCH TOOLS")
+        self.launch_tools_label.setObjectName("launchToolsLabel")
+        launch_tools_layout.addWidget(self.launch_tools_label)
+        launch_tools_layout.addLayout(_row(self.copy_btn, self.inject_btn))
+        overview_layout.addWidget(self.launch_tools_panel)
+
         overview_layout.addWidget(self.library_toggle)
         overview_layout.addWidget(self.library_panel)
         overview_layout.addStretch(1)
@@ -1184,7 +1200,7 @@ class HubWindow(QMainWindow):
         for button in (self.doom_prepare_btn, self.doom_probe_btn, self.doom_logs_btn, self.doom_import_btn):
             button.setVisible(kharvox)
         for button in [self.install_btn,self.uninstall_btn,self.profile_btn,self.unprofile_btn,
-                       self.copy_btn,self.inject_btn,self.verify_btn,self.inspect_btn,self.key_btn]:
+                       self.verify_btn,self.inspect_btn,self.key_btn]:
             button.setVisible(not kharvox)
         self.controller_bindings.set_recipe(r)
         self.refresh_compatibility()
@@ -1205,9 +1221,21 @@ class HubWindow(QMainWindow):
         can_install = bool(r and get_handler(r).install_supported(r))
         self.install_btn.setEnabled(can_install)
         self.uninstall_btn.setEnabled(bool(r and r.get("method") != "guide"))
-        self.inject_btn.setEnabled(bool(r and r.get("method") == "uevr"))
+        # Context-sensitive visibility is based on existing recipe support,
+        # never on game detection or a guessed "ready" status. A supported
+        # action stays available even when the game is not installed yet;
+        # its original handler still reports missing prerequisites.
+        supports_injector = bool(r and r.get("method") == "uevr")
+        supports_steam_options = bool(
+            r and r.get("store", "steam") == "steam"
+            and r.get("steam_appid") is not None)
         self.inject_btn.setText("Run UEVR injector")
-        self.copy_btn.setEnabled(bool(r and r.get("store", "steam") == "steam"))
+        self.inject_btn.setEnabled(supports_injector)
+        self.inject_btn.setVisible(supports_injector)
+        self.copy_btn.setEnabled(supports_steam_options)
+        self.copy_btn.setVisible(supports_steam_options)
+        self.launch_tools_panel.setVisible(
+            supports_injector or supports_steam_options)
         label = hub.game_launcher_label(r) if r else None
         self.game_launch_btn.setText(label or "Launch game tool")
         self.game_launch_btn.setVisible(bool(label))

@@ -85,6 +85,11 @@ QTabWidget#gameDetailsTabs QTabBar::tab:hover:!selected {{
     color: {BLUE};
     border-color: {BLUE};
 }}
+QLabel#launchToolsLabel {{
+    color: {MUTED};
+    font-size: 11px;
+    font-weight: 800;
+}}
 QLabel#rollbackHeading {{
     color: {YELLOW};
     font-size: 16px;
