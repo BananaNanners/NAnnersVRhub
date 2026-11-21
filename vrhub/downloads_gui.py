@@ -6,6 +6,7 @@ Changing a folder only updates Hub-specific preferences. Archive scans hash
 local files and validate pinned checksums, but never download or install.
 """
 from pathlib import Path
+from html import escape
 from datetime import datetime
 from threading import Event
 
@@ -152,6 +153,15 @@ class GuidedDownloadsPage(QWidget):
         explanation.setObjectName("downloadsExplanation")
         explanation.setWordWrap(True)
         outer.addWidget(explanation)
+        self.upstream_link = QLabel()
+        self.upstream_link.setObjectName("downloadsExplanation")
+        self.upstream_link.setWordWrap(True)
+        self.upstream_link.setTextFormat(Qt.RichText)
+        self.upstream_link.setOpenExternalLinks(False)
+        self.upstream_link.linkActivated.connect(
+            lambda url: QDesktopServices.openUrl(QUrl(url)) if planner.source_url(url) else None)
+        self.upstream_link.hide()
+        outer.addWidget(self.upstream_link)
 
         self.location = QLabel("Select a game to review its archive library.")
         self.location.setObjectName("downloadsLocation")
@@ -360,6 +370,18 @@ class GuidedDownloadsPage(QWidget):
 
     def set_recipe(self, recipe):
         self.recipe = recipe
+        upstream = next((planner.source_url(item.get("reference_page"))
+                         for item in (recipe or {}).get("updates", [])
+                         if item.get("upstream_reference") is True
+                         and planner.source_url(item.get("reference_page"))), "")
+        if upstream:
+            self.upstream_link.setText(
+                f'<a style="color:#23B7FF" href="{escape(upstream, quote=True)}">'
+                'UEVR downloads (JoeyHodge)</a> — upstream reference; '
+                'the matched Hogwarts bundle remains the recommended archive source.')
+        else:
+            self.upstream_link.clear()
+        self.upstream_link.setVisible(bool(upstream))
         if self._saved_error:
             self.saved_scan_count.setText(
                 "Saved scan history needs review; original data was preserved.")

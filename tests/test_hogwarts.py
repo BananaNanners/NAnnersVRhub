@@ -185,3 +185,23 @@ class HogwartsWorkflowTests(unittest.TestCase):
         self.assertEqual(update["github"], "jbusfield/HL_UEVR")
         self.assertEqual(set(update["tracks"]), {"hogwarts-legacy", "hogwarts-legacy:profile"})
         self.assertIn("/v2.0.6", self.recipe["mod_page"])
+
+
+    def test_upstream_is_checked_separately_without_false_installed_version(self):
+        from vrhub import updates
+        seen=[]
+        def fetch(repo):
+            seen.append(repo)
+            return {"tag":"111726DecadeofUnreal" if repo=="joeyhodge/UEVR" else "v2.0.6",
+                    "published":"2026-11-17T00:00:00Z",
+                    "url":f"https://github.com/{repo}/releases"}
+        rows=updates.check_recipe(self.recipe,
+             {"hogwarts-legacy":{"installed_at":9999999999},
+              "hogwarts-legacy:profile":{"installed_at":9999999999}},fetch=fetch)
+        self.assertEqual(seen,["jbusfield/HL_UEVR","joeyhodge/UEVR"])
+        self.assertEqual(rows[1]["status"],"unknown")
+        self.assertEqual(rows[1]["latest_version"],"111726DecadeofUnreal")
+        self.assertNotIn("installed_version",rows[1])
+        self.assertIn("Installed upstream version not established",rows[1]["detail"])
+        link=next(x for x in self.recipe["links"] if x["label"]=="UEVR downloads (JoeyHodge)")
+        self.assertEqual(link["url"],"https://github.com/joeyhodge/UEVR/releases#release-100526UE58_6RefreshUpdate")

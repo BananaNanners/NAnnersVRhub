@@ -16,7 +16,7 @@ class InstallReviewDialog(QDialog):
     """The caller may apply only if confirmed_by_user and a fresh plan matches."""
 
     def __init__(self, plan: install_review.InstallPlan, parent=None, *,
-                 allow_install=True):
+                 allow_install=True, recipe=None):
         super().__init__(parent)
         self.plan = plan
         self.confirmed_by_user = False
@@ -165,9 +165,8 @@ class InstallReviewDialog(QDialog):
 
         # Archive-level presentation is the default. The original exact
         # target manifest stays complete, accessible, and part of consent.
-        self.archives = review_archive_table(plan, self)
+        self.archives = review_archive_table(plan, self, recipe=recipe)
         outer.addWidget(self.archives)
-        self.manifest_seen = False
         self.manifest_toggle = QPushButton(
             f"Show exact file changes ({len(plan.target_rows)})")
         self.manifest_toggle.setObjectName("installManifestDisclosure")
@@ -221,12 +220,11 @@ class InstallReviewDialog(QDialog):
         outer.addWidget(self.notes)
 
         self.confirm_targets = QCheckBox(
-            "I reviewed the destination files and understand which would be added or replaced.")
+            "I reviewed the archive summary and understand the planned file additions or replacements.")
         self.confirm_targets.setObjectName("installConfirmTargets")
         self.confirm_targets.setChecked(False)
-        self.confirm_targets.setEnabled(False)
         self.confirm_targets.setToolTip(
-            "Open the exact file changes once before acknowledging this review.")
+            "Exact file changes are available for optional detailed review.")
         self.confirm_backup = QCheckBox(
             "I understand the backup policy and will preserve any personal mod changes.")
         self.confirm_backup.setObjectName("installConfirmBackup")
@@ -268,14 +266,10 @@ class InstallReviewDialog(QDialog):
         self.targets.setVisible(expanded)
         self.manifest_toggle.setText(
             f"{'Hide' if expanded else 'Show'} exact file changes ({len(self.plan.target_rows)})")
-        if expanded and not self.manifest_seen:
-            self.manifest_seen = True
-            self.confirm_targets.setChecked(False)
-            self.confirm_targets.setEnabled(True)
         self._refresh_apply_button()
 
     def _refresh_apply_button(self):
-        enabled = (self.allow_install and self.manifest_seen and self.plan.approved_for_review
+        enabled = (self.allow_install and self.plan.approved_for_review
                    and all(box.isChecked() for box in (
                        self.confirm_targets, self.confirm_backup,
                        self.confirm_closed)))

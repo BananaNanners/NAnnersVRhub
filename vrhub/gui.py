@@ -1571,7 +1571,7 @@ class HubWindow(QMainWindow):
                 self, "Installation review refused (nothing changed)", str(exc))
             return
         dialog = InstallReviewDialog(
-            plan, self, allow_install=self.allow_guided_installs)
+            plan, self, allow_install=self.allow_guided_installs, recipe=recipe)
         if dialog.exec() != QDialog.Accepted or not dialog.confirmed_by_user:
             return
         # This remains a hard safety gate even if a future preview accidentally

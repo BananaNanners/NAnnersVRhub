@@ -84,10 +84,9 @@ class InstallDialogAcceptanceTests(unittest.TestCase):
         d.confirm_backup.setChecked(True)
         self.assertFalse(d.apply_button.isEnabled())
         d.confirm_closed.setChecked(True)
-        self.assertFalse(d.apply_button.isEnabled())
+        self.assertTrue(d.apply_button.isEnabled())
+        self.assertFalse(d.targets.isVisible())
         d.manifest_toggle.setChecked(True)
-        self.assertFalse(d.apply_button.isEnabled())
-        d.confirm_targets.setChecked(True)
         self.assertTrue(d.apply_button.isEnabled())
         self.assertTrue(d.targets.columnCount() == 3)
         self.assertEqual(d.targets.item(0, 0).text(),

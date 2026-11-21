@@ -40,8 +40,8 @@ label = "HL profile guide and controls"
 url = "https://github.com/jbusfield/HL_UEVR"
 
 [[links]]
-label = "UEVR setup documentation"
-url = "https://docs.uevr.io/"
+label = "UEVR downloads (JoeyHodge)"
+url = "https://github.com/joeyhodge/UEVR/releases#release-100526UE58_6RefreshUpdate"
 
 [[links]]
 label = "Windows .NET 6 downloads (if requested by injector)"
@@ -59,6 +59,12 @@ env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
 name = "HL_UEVR (matching UEVR build + Hogwarts profile)"
 github = "jbusfield/HL_UEVR"
 tracks = ["hogwarts-legacy", "hogwarts-legacy:profile"]
+
+[[updates]]
+name = "UEVR (JoeyHodge upstream)"
+github = "joeyhodge/UEVR"
+upstream_reference = true
+reference_page = "https://github.com/joeyhodge/UEVR/releases#release-100526UE58_6RefreshUpdate"
 
 [requirements]
 openxr = "wivrn"

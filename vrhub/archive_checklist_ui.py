@@ -37,30 +37,58 @@ def status_icon(status):
     return QIcon(pix)
 
 
-def review_archive_table(plan, parent=None):
-    """Show exact archive names and recorded digests, never infer pinned trust.
-
-    Package labels may be sorted by recipe order while paths retain selection
-    order. Do not pair them by index; the original summary lists packages.
-    """
-    table = QTableWidget(len(plan.archives), 2, parent)
+def archive_table(rows, parent=None):
+    """Display archive, dependency and evidence without granting authority."""
+    table = QTableWidget(len(rows), 3, parent)
     table.setObjectName("installReviewArchives")
-    table.setHorizontalHeaderLabels(("Selected archive", "Review evidence"))
+    table.setHorizontalHeaderLabels(("Selected archive", "Dependency", "Review evidence"))
     table.verticalHeader().hide()
     table.setEditTriggers(QAbstractItemView.NoEditTriggers)
     table.setSelectionBehavior(QAbstractItemView.SelectRows)
     table.setAlternatingRowColors(True)
     table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
     table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-    for i, path in enumerate(plan.archives):
+    table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+    for i, (path, name, digest) in enumerate(rows):
         archive = QTableWidgetItem(Path(path).name)
         archive.setToolTip(path)
         table.setItem(i, 0, archive)
-        evidence = QTableWidgetItem("Review SHA-256 recorded")
-        if i < len(plan.archive_sha256):
-            evidence.setToolTip("Exact archive SHA-256: " + plan.archive_sha256[i]
+        dependency = QTableWidgetItem(name)
+        dependency.setToolTip(name)
+        table.setItem(i, 1, dependency)
+        evidence = QTableWidgetItem("Review SHA-256 recorded" if digest else "Not recorded")
+        if digest:
+            evidence.setToolTip("Exact archive SHA-256: " + digest
                                 + "\nA review digest alone is not pinned verification.")
-        table.setItem(i, 1, evidence)
+        table.setItem(i, 2, evidence)
     table.setMinimumHeight(95)
-    table.setMaximumHeight(min(180, 42 + 34 * max(1, len(plan.archives))))
+    table.setMaximumHeight(min(180, 42 + 34 * max(1, len(rows))))
     return table
+
+
+def review_archive_table(plan, parent=None, *, recipe=None):
+    """Map archive to dependency using the same recipe identifiers as the planner.
+
+    Package labels may be in recipe order while archives are in selection order.
+    Never guess a mapping from index or from a mere filename for pinned packages.
+    """
+    from . import hub
+    rows = []
+    for i, path in enumerate(plan.archives):
+        digest = plan.archive_sha256[i] if i < len(plan.archive_sha256) else ""
+        name = None
+        if recipe and recipe.get("id") == plan.game_id:
+            if plan.method in ("bepinex", "ervr"):
+                matches = [p["name"] for p in recipe.get("packages", [])
+                           if digest and p.get("sha256", "").lower() == digest.lower()]
+                if len(matches) == 1:
+                    name = matches[0]
+            elif plan.method == "gameroot":
+                comp = hub._component_for(recipe, Path(path).name)
+                if comp:
+                    name = comp["name"]
+        if name not in plan.package_labels:
+            name = (plan.package_labels[0] if len(plan.archives) == len(plan.package_labels) == 1
+                    else "See package summary")
+        rows.append((path, name, digest))
+    return archive_table(rows, parent)

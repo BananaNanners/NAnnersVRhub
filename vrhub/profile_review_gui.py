@@ -3,12 +3,13 @@
 """UEVR profile read-only review with explicit guarded confirmation."""
 from PySide6.QtWidgets import (
     QCheckBox, QDialog, QHBoxLayout, QLabel, QPushButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QAbstractItemView, QHeaderView
+    QTableWidgetItem, QVBoxLayout, QAbstractItemView, QHeaderView, QSizePolicy
 )
 from PySide6.QtCore import Qt
 
 from .profile_safety import ProfilePlan
 from .install_review import human_file_size
+from .archive_checklist_ui import archive_table
 
 
 class ProfileReviewDialog(QDialog):
@@ -19,7 +20,7 @@ class ProfileReviewDialog(QDialog):
         self.allow_install = bool(allow_install)
         self.setObjectName("uevrProfileReviewDialog")
         self.setWindowTitle("Review UEVR profile replacement — no changes yet")
-        self.resize(990, 455)
+        self.resize(990, 590)
         self.setStyleSheet("""
         QDialog#uevrProfileReviewDialog {background: #0A0D10; color: #E5E8ED;}
         QLabel {color: #E5E8ED;}
@@ -67,6 +68,7 @@ class ProfileReviewDialog(QDialog):
             f"Exact selected archive contents: {plan.profile_bytes:,} bytes\n"
             f"Exact existing profile size / backup estimate: {plan.existing_bytes:,} bytes")
         overview.setWordWrap(True)
+        overview.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         overview.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(overview)
         self.backup = QLabel(
@@ -75,13 +77,18 @@ class ProfileReviewDialog(QDialog):
             "Restore stops if the installed profile changes.")
         self.backup.setObjectName("uevrProfileReviewBackup")
         self.backup.setWordWrap(True)
+        self.backup.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         layout.addWidget(self.backup)
         if plan.blocked:
             warning = QLabel("\n".join(plan.blocked))
             warning.setObjectName("uevrProfileReviewBlocker")
             warning.setWordWrap(True)
+            warning.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
             warning.setStyleSheet("color:#FFD21A; font-weight:700")
             layout.addWidget(warning)
+        self.archives = archive_table(
+            [(plan.archive, "Matching game profile", plan.archive_sha256)], self)
+        layout.addWidget(self.archives)
         self.table = QTableWidget(len(plan.file_names), 1)
         self.table.setObjectName("uevrProfileArchiveFiles")
         self.table.setHorizontalHeaderLabels(["Archive file to place inside the reviewed profile directory"])
@@ -90,7 +97,6 @@ class ProfileReviewDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         for index, name in enumerate(plan.file_names):
             self.table.setItem(index, 0, QTableWidgetItem(name))
-        self.manifest_seen = False
         self.manifest_toggle = QPushButton(
             f"Show profile file inventory ({len(plan.file_names)})")
         self.manifest_toggle.setObjectName("profileManifestDisclosure")
@@ -101,9 +107,8 @@ class ProfileReviewDialog(QDialog):
         self.table.hide()
         layout.addStretch(1)
         self.manifest_toggle.toggled.connect(self._toggle_manifest)
-        self.ack = QCheckBox("I reviewed the exact destination, full-backup policy and file inventory.")
-        self.ack.setEnabled(False)
-        self.ack.setToolTip("Open the complete file inventory once before acknowledging.")
+        self.ack = QCheckBox("I reviewed the selected archive, exact destination and full-backup policy.")
+        self.ack.setToolTip("The complete profile file inventory is available for optional review.")
         self.ack.setObjectName("uevrProfileAck")
         layout.addWidget(self.ack)
         self.apply_btn = QPushButton("Confirm safe profile replacement")
@@ -123,19 +128,13 @@ class ProfileReviewDialog(QDialog):
         self.table.setVisible(expanded)
         self.manifest_toggle.setText(
             f"{'Hide' if expanded else 'Show'} profile file inventory ({len(self.plan.file_names)})")
-        if expanded and not self.manifest_seen:
-            self.manifest_seen = True
-            self.ack.setChecked(False)
-            self.ack.setEnabled(True)
         self._update()
 
     def _update(self):
-        self.apply_btn.setEnabled(self.allow_install and self.manifest_seen
-                                  and self.plan.ready and self.ack.isChecked())
+        self.apply_btn.setEnabled(self.allow_install and self.plan.ready and self.ack.isChecked())
 
     def _confirmed(self):
-        if not (self.allow_install and self.manifest_seen
-                and self.plan.ready and self.ack.isChecked()):
+        if not (self.allow_install and self.plan.ready and self.ack.isChecked()):
             return
         self.confirmed_by_user = True
         self.accept()

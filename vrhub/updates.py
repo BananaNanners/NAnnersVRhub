@@ -275,6 +275,15 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
                                 f"reported Nexus version {tag}; verify manually.")
             out.append(item)
             continue
+        if u.get("upstream_reference") is True:
+            # A community-bundled injector is not necessarily a tagged upstream
+            # release. Installation timestamps cannot establish that identity.
+            item.update(status="unknown", detail=(
+                f"Latest upstream UEVR release: {tag} ({day}). "
+                "Installed upstream version not established; review compatibility "
+                "with the matched game profile before updating."))
+            out.append(item)
+            continue
         tracked = [state[k] for k in u.get("tracks", [recipe["id"]]) if k in state]
         stamps = [t.get("installed_at") for t in tracked]
         if not tracked:

@@ -140,9 +140,9 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertEqual(dialog.archives.rowCount(),2)
         self.assertEqual(dialog.archives.item(0,0).text(),"A.zip")
         self.assertEqual(dialog.archives.item(1,0).toolTip(),"/two/B.zip")
-        self.assertIn("not pinned verification",dialog.archives.item(0,1).toolTip())
+        self.assertIn("not pinned verification",dialog.archives.item(0,2).toolTip())
         self.assertFalse(dialog.targets.isVisible())
-        self.assertFalse(dialog.confirm_targets.isEnabled())
+        self.assertTrue(dialog.confirm_targets.isEnabled())
         dialog.manifest_toggle.click();self.app.processEvents()
         self.assertTrue(dialog.targets.isVisible())
         self.assertEqual(dialog.targets.rowCount(),len(plan.target_rows))
@@ -152,6 +152,41 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertFalse(dialog.apply_button.isEnabled())
         dialog.manifest_toggle.click();self.app.processEvents()
         self.assertFalse(dialog.targets.isVisible())
+
+    def test_dependency_mapping_uses_digest_not_selection_order(self):
+        plan = replace(fixture_plan(), archives=("/one/A.zip","/two/B.zip"),
+                       archive_sha256=("a"*64,"b"*64),package_labels=("B","A"))
+        recipe = {"id":plan.game_id, "packages":[
+            {"name":"B","sha256":"b"*64},{"name":"A","sha256":"a"*64}]}
+        dialog=InstallReviewDialog(plan,allow_install=False,recipe=recipe)
+        self.addCleanup(dialog.close)
+        self.assertEqual(dialog.archives.item(0,1).text(),"A")
+        self.assertEqual(dialog.archives.item(1,1).text(),"B")
+        self.assertTrue(dialog.confirm_targets.isEnabled())
+        dialog.confirm_targets.setChecked(True)
+        self.assertTrue(dialog.targets.isHidden())
+        dialog.manifest_toggle.setChecked(True)
+        self.assertTrue(dialog.confirm_targets.isChecked())
+
+    def test_cyberpunk_review_dependency_identified(self):
+        recipe=hub.load_recipes()["cyberpunk-2077"]
+        plan=replace(fixture_plan(),game_id=recipe["id"],method="gameroot",
+                     archives=("/test/CET-107.zip",),
+                     package_labels=("Cyber Engine Tweaks",))
+        dialog=InstallReviewDialog(plan,allow_install=False,recipe=recipe)
+        self.addCleanup(dialog.close)
+        self.assertEqual(dialog.archives.item(0,1).text(),"Cyber Engine Tweaks")
+
+    def test_hogwarts_upstream_download_link_only_on_matching_recipe(self):
+        recipe=hub.load_recipes()["hogwarts-legacy"]
+        self.page.set_recipe(recipe)
+        self.assertFalse(self.page.upstream_link.isHidden())
+        self.assertIn("releases#release-100526UE58_6RefreshUpdate",
+                      self.page.upstream_link.text())
+        self.assertIn("jbusfield/HL_UEVR",planner.plan_components(recipe)[0]["url"])
+        self.page.set_recipe(hub.load_recipes()["fatekeeper"])
+        self.assertTrue(self.page.upstream_link.isHidden())
+        self.assertEqual(self.page.upstream_link.text(),"")
 
     def test_blocked_archive_review_does_not_hide_blocker_in_preview(self):
         dialog=InstallReviewDialog(fixture_plan(blocked=("Overlapping destination",)),
@@ -170,6 +205,10 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.addCleanup(dialog.close)
         dialog.show();self.app.processEvents()
         self.assertFalse(dialog.table.isVisible())
+        self.assertEqual(dialog.archives.item(0,1).text(),"Matching game profile")
+        self.assertTrue(dialog.ack.isEnabled())
+        dialog.ack.setChecked(True)
+        self.assertFalse(dialog.apply_btn.isEnabled())
         dialog.manifest_toggle.click();self.app.processEvents()
         self.assertTrue(dialog.table.isVisible())
         self.assertEqual(dialog.table.rowCount(),len(plan.file_names))
