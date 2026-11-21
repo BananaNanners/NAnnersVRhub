@@ -1042,10 +1042,12 @@ SECTIONS = (("One-time setup", "setup", True), ("Each time you play", "play", Tr
 
 def details_text(recipe: dict) -> str:
     launch = recipe.get("launch", {})
-    lines = [recipe["name"], "", f"Mod page: {recipe['mod_page']}"]
+    lines = [recipe["name"], ""]
+    if not recipe.get("guide_links_only"):
+        lines.append(f"Mod page: {recipe['mod_page']}")
     for link in recipe.get("links", []):
         lines.append(f"{link['label']}: {link['url']}")
-    if recipe.get("profile", {}).get("page"):
+    if not recipe.get("guide_links_only") and recipe.get("profile", {}).get("page"):
         lines.append(f"Profile:  {recipe['profile']['page']}")
     if recipe.get("store", "steam") == "steam":
         lines += ["", "Steam launch options:", f"  {launch_options(recipe)}"]
@@ -1080,9 +1082,12 @@ def details_html(recipe: dict, update_items: list[dict] | None = None,
         "</style>",
         f"<h2>{e(recipe['name'])}</h2>"
     ]
-    links = [f'<a href="{e(recipe["mod_page"])}">Mod page</a>']
+    # Explicitly labeled guide links may differ from the pinned archive
+    # candidate sources; do not change dependency identities or scan history.
+    links = [] if recipe.get("guide_links_only") else [
+        f'<a href="{e(recipe["mod_page"])}">Mod page</a>']
     links += [f'<a href="{e(x["url"])}">{e(x["label"])}</a>' for x in recipe.get("links", [])]
-    if recipe.get("profile", {}).get("page"):
+    if not recipe.get("guide_links_only") and recipe.get("profile", {}).get("page"):
         links.append(f'<a href="{e(recipe["profile"]["page"])}">Profile page</a>')
     out.append("<p>" + " &nbsp;|&nbsp; ".join(links) + "</p>")
     if update_items:
