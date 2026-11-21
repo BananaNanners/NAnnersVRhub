@@ -76,6 +76,9 @@ class LauncherShellTests(unittest.TestCase):
         self.assertTrue(self.window.sidebar.games_button.isChecked())
 
     def test_all_existing_advanced_actions_are_accessible(self):
+        self.window.game_details_tabs.setCurrentIndex(
+            self.window.game_details_tabs.indexOf(self.window.compat_page))
+        self.app.processEvents()
         self.assertFalse(self.window.more_tools_panel.isVisible())
         self.window.more_tools_toggle.click()
         self.app.processEvents()

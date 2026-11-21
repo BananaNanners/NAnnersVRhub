@@ -173,25 +173,26 @@ class ResponsiveQuickActions(QWidget):
         super().__init__(parent)
         self.setObjectName("responsiveQuickActions")
         self.buttons = tuple(buttons)
-        self._columns = 5
+        self._columns = max(1, len(self.buttons))
         grid = QGridLayout(self)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(7)
         grid.setVerticalSpacing(6)
         for i, button in enumerate(self.buttons):
             grid.addWidget(button, 0, i)
-        for i in range(5):
+        for i in range(len(self.buttons)):
             grid.setColumnStretch(i, 1)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        columns = 2 if self.width() < 840 else 5
+        columns = min(len(self.buttons), 1 if self.width() < 520 else
+                      (2 if self.width() < 840 else len(self.buttons)))
         if columns != self._columns:
             self._columns = columns
             grid = self.layout()
             for i, button in enumerate(self.buttons):
                 grid.addWidget(button, i // columns, i % columns)
-            for i in range(5):
+            for i in range(len(self.buttons)):
                 grid.setColumnStretch(i, 1 if i < columns else 0)
             grid.invalidate()
             self.setMinimumHeight(grid.minimumSize().height())

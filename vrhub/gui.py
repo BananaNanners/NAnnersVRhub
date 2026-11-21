@@ -656,8 +656,7 @@ class HubWindow(QMainWindow):
         compat_page = QWidget()
         compat_layout = QVBoxLayout(compat_page)
         compat_layout.addLayout(_row(self.compat_refresh_btn, self.compat_copy_btn))
-        compat_layout.addLayout(_row(self.record_test_btn, self.test_history_btn, self.log_diagnostics_btn))
-        compat_layout.addWidget(self.support_report_btn)
+        compat_layout.addLayout(_row(self.record_test_btn, self.test_history_btn))
         compat_layout.addWidget(self.compat_details)
         # Dev5D1-A: keep existing content widgets and signal paths. Only the
         # navigation ownership changes; none of the installer logic changes.
@@ -685,8 +684,11 @@ class HubWindow(QMainWindow):
         self.inject_btn = QPushButton("Run UEVR injector")
         self.game_launch_btn = QPushButton("Launch game tool")
         self.game_play_btn = QPushButton("Launch game")
-        self.check_btn = QPushButton("Refresh update status")
-        self.check_btn.setToolTip("Read-only lookup: does not download, install, remove or update mods.")
+        # Use the Mod Updates page's own refresh button: one visible action,
+        # one backend, one in-progress status, and no duplicated signal.
+        self.check_btn = self.mod_updates.refresh_button
+        self.check_btn.setToolTip(
+            "Read-only version lookup. Does not download, install or remove mods.")
         self.mark_btn = QPushButton("Mark as up to date")
         self.key_btn = QPushButton("Nexus API key…")
         self.verify_btn = QPushButton("Verify mods")
@@ -701,7 +703,8 @@ class HubWindow(QMainWindow):
         self.doom_import_btn = QPushButton("Import bridge package…")
         self.doom_saves_btn = QPushButton("Development: restore game saves…")
         self.bridge_log_btn.setObjectName("secondaryAction")
-        refresh_btn = QPushButton("Refresh")
+        refresh_btn = QPushButton("Refresh library")
+        self.refresh_library_btn = refresh_btn
         self.install_btn.clicked.connect(self.install)
         self.uninstall_btn.clicked.connect(self.uninstall)
         self.profile_btn.clicked.connect(self.install_profile)
@@ -710,7 +713,6 @@ class HubWindow(QMainWindow):
         self.inject_btn.clicked.connect(self.run_injector)
         self.game_launch_btn.clicked.connect(self.launch_game_tool)
         self.game_play_btn.clicked.connect(self.launch_game_play)
-        self.check_btn.clicked.connect(self.check_updates)
         self.mark_btn.clicked.connect(self.mark_current)
         self.key_btn.clicked.connect(self.set_nexus_key)
         self.verify_btn.clicked.connect(self.verify_mods)
@@ -754,6 +756,7 @@ class HubWindow(QMainWindow):
             "Drag column dividers to resize · Double-click a divider to fit text · Widths are remembered")
         self.library_column_hint.setObjectName("tableColumnHint")
         library_layout.addWidget(self.library_column_hint)
+        library_layout.addLayout(_row(refresh_btn))
         self.table.setMaximumHeight(205)
         library_layout.addWidget(self.table)
         self.library_panel.hide()
@@ -762,27 +765,65 @@ class HubWindow(QMainWindow):
             lambda enabled: self.library_toggle.setText(
                 "Hide detailed library table" if enabled else "Show detailed library table"))
 
-        self.more_tools_toggle = QPushButton("More tools and advanced actions")
+        # Dev5D1-B: keep original QPushButtons and their handlers, but
+        # relocate them into task-specific disclosures, collapsed by default.
+        # No "buttons for buttons' sake" on the Overview dashboard.
+        self.more_tools_toggle = QPushButton("More compatibility tools")
         self.more_tools_toggle.setObjectName("launcherDisclosure")
         self.more_tools_toggle.setCheckable(True)
         self.more_tools_panel = QWidget()
+        self.more_tools_panel.setObjectName("compatibilityAdvancedTools")
         advanced_layout = QVBoxLayout(self.more_tools_panel)
-        advanced_layout.setContentsMargins(0, 0, 0, 0)
-        advanced_layout.setSpacing(5)
-        # Removal actions now live under Rollback, separate from everyday tools.
-        advanced_layout.addLayout(_row(self.profile_btn, self.verify_btn))
-        advanced_layout.addLayout(_row(self.copy_btn, self.inject_btn,
-                                       self.game_launch_btn, self.inspect_btn))
-        advanced_layout.addLayout(_row(self.diag_btn, self.bridge_log_btn, self.mark_btn))
-        advanced_layout.addLayout(_row(self.key_btn, refresh_btn))
-        advanced_layout.addLayout(_row(self.doom_prepare_btn, self.doom_probe_btn,
-                                       self.doom_logs_btn))
-        advanced_layout.addLayout(_row(self.doom_import_btn, self.doom_saves_btn))
+        advanced_layout.setContentsMargins(4, 5, 4, 5)
+        advanced_layout.setSpacing(7)
+        advanced_layout.addLayout(_row(self.copy_btn, self.inject_btn, self.game_launch_btn))
+        advanced_layout.addLayout(_row(self.diag_btn, self.bridge_log_btn,
+                                       self.log_diagnostics_btn, self.support_report_btn))
+        advanced_layout.addLayout(_row(self.doom_probe_btn, self.doom_logs_btn))
         self.more_tools_panel.hide()
         self.more_tools_toggle.toggled.connect(self.more_tools_panel.setVisible)
         self.more_tools_toggle.toggled.connect(
-            lambda enabled: self.more_tools_toggle.setText(
-                "Hide advanced actions" if enabled else "More tools and advanced actions"))
+            lambda active: self.more_tools_toggle.setText(
+                "Hide compatibility tools" if active else "More compatibility tools"))
+        compat_layout.insertWidget(2, self.more_tools_toggle)
+        compat_layout.insertWidget(3, self.more_tools_panel)
+
+        self.install_tools_toggle = QPushButton("More installation tools")
+        self.install_tools_toggle.setObjectName("launcherDisclosure")
+        self.install_tools_toggle.setCheckable(True)
+        self.install_tools_panel = QWidget()
+        self.install_tools_panel.setObjectName("installationAdvancedTools")
+        install_tools_layout = QVBoxLayout(self.install_tools_panel)
+        install_tools_layout.setContentsMargins(4, 5, 4, 5)
+        install_tools_layout.setSpacing(7)
+        install_tools_layout.addLayout(_row(self.install_btn, self.profile_btn,
+                                            self.verify_btn, self.inspect_btn))
+        install_tools_layout.addLayout(_row(self.kharvox_folder_btn,
+                                            self.doom_prepare_btn, self.doom_import_btn))
+        self.install_tools_panel.hide()
+        self.install_tools_toggle.toggled.connect(self.install_tools_panel.setVisible)
+        self.install_tools_toggle.toggled.connect(
+            lambda active: self.install_tools_toggle.setText(
+                "Hide installation tools" if active else "More installation tools"))
+        self.downloads.layout().insertWidget(5, self.install_tools_toggle)
+        self.downloads.layout().insertWidget(6, self.install_tools_panel)
+
+        self.update_tools_toggle = QPushButton("More update tools")
+        self.update_tools_toggle.setObjectName("launcherDisclosure")
+        self.update_tools_toggle.setCheckable(True)
+        self.update_tools_panel = QWidget()
+        self.update_tools_panel.setObjectName("updatesAdvancedTools")
+        update_tools_layout = QHBoxLayout(self.update_tools_panel)
+        update_tools_layout.setContentsMargins(4, 5, 4, 5)
+        update_tools_layout.addWidget(self.mark_btn)
+        update_tools_layout.addWidget(self.key_btn)
+        self.update_tools_panel.hide()
+        self.update_tools_toggle.toggled.connect(self.update_tools_panel.setVisible)
+        self.update_tools_toggle.toggled.connect(
+            lambda active: self.update_tools_toggle.setText(
+                "Hide update tools" if active else "More update tools"))
+        self.mod_updates.layout().insertWidget(1, self.update_tools_toggle)
+        self.mod_updates.layout().insertWidget(2, self.update_tools_panel)
 
         # The game banner and artwork controls remain visible on every tab.
         # Everything else belongs to the chosen game-page context.
@@ -793,13 +834,12 @@ class HubWindow(QMainWindow):
         overview_layout.setSpacing(8)
         overview_layout.addWidget(self.game_dashboard)
         self.quick_actions = ResponsiveQuickActions((
-            self.game_play_btn, self.preflight_btn, self.check_btn,
-            self.install_btn, self.kharvox_folder_btn,
+            self.game_play_btn, self.preflight_btn,
         ))
+        self.quick_actions.setMaximumWidth(760)
         overview_layout.addWidget(self.quick_actions)
-        overview_layout.addLayout(_row(self.library_toggle, self.more_tools_toggle))
+        overview_layout.addWidget(self.library_toggle)
         overview_layout.addWidget(self.library_panel)
-        overview_layout.addWidget(self.more_tools_panel)
         overview_layout.addStretch(1)
 
         self.rollback_page = QWidget()
@@ -823,7 +863,8 @@ class HubWindow(QMainWindow):
         rollback_notice.setObjectName("rollbackNotice")
         rollback_notice.setWordWrap(True)
         rollback_layout.addWidget(rollback_notice)
-        rollback_layout.addLayout(_row(self.uninstall_btn, self.unprofile_btn))
+        rollback_layout.addLayout(_row(self.uninstall_btn, self.unprofile_btn,
+                                       self.doom_saves_btn))
         rollback_layout.addStretch(1)
 
         self.game_details_tabs = QTabWidget()
@@ -1181,6 +1222,9 @@ class HubWindow(QMainWindow):
         has_profile = bool(r and "profile" in r)
         self.profile_btn.setEnabled(has_profile)
         self.unprofile_btn.setEnabled(has_profile)
+        # Do not show a nonsensical "Remove profile" control for games
+        # with no UEVR profile workflow. Existing guarded behavior is intact.
+        self.unprofile_btn.setVisible(has_profile and not kharvox)
         self.bridge_log_btn.setVisible(bool(r and hub.game_bridge_log(r)))
         if r:
             self.bridge_log_btn.setText(hub.game_bridge_log_label(r))
@@ -1351,8 +1395,6 @@ class HubWindow(QMainWindow):
     def check_updates(self):
         if self.worker and self.worker.isRunning():
             return
-        self.check_btn.setEnabled(False)
-        self.check_btn.setText("Checking…")
         self.mod_updates.set_checking(True)
         self.worker = UpdateWorker()
         self.worker.done.connect(self._updates_done)
@@ -1361,8 +1403,6 @@ class HubWindow(QMainWindow):
 
     def _updates_done(self, results):
         self.update_results = results or {}
-        self.check_btn.setEnabled(True)
-        self.check_btn.setText("Refresh update status")
         self.mod_updates.set_checking(False)
         self.refresh()
 

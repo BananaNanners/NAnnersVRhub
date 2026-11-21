@@ -109,7 +109,7 @@ class ResponsiveLauncherTests(unittest.TestCase):
         self.assertLessEqual(page.width(), 1420)
         self.assertGreaterEqual(page.width(), 1300)
         self.assertEqual(self.window.game_dashboard._columns, 4)
-        self.assertEqual(self.window.quick_actions._columns, 5)
+        self.assertEqual(self.window.quick_actions._columns, 2)
         self.assertEqual(self.window.game_page_scroll.horizontalScrollBar().maximum(), 0)
         self.assertLessEqual(max(card.width() for card
                                  in self.window.game_dashboard.cards.values()), 360)
@@ -126,11 +126,17 @@ class ResponsiveLauncherTests(unittest.TestCase):
 
     def test_expanding_old_tools_does_not_resize_main_window(self):
         self.set_dimensions(1000, 700)
+        self.window.game_details_tabs.setCurrentIndex(
+            self.window.game_details_tabs.indexOf(self.window.compat_page))
+        self.app.processEvents()
         self.window.more_tools_toggle.click()
         self.app.processEvents()
         self.assertTrue(self.window.more_tools_panel.isVisible())
         self.assertEqual((self.window.width(), self.window.height()), (1000, 700))
         self.assertGreater(self.window.game_page_scroll.verticalScrollBar().maximum(), 0)
+        self.window.game_details_tabs.setCurrentIndex(
+            self.window.game_details_tabs.indexOf(self.window.overview_page))
+        self.app.processEvents()
         self.window.library_toggle.click()
         self.app.processEvents()
         self.assertTrue(self.window.library_panel.isVisible())
@@ -143,7 +149,11 @@ class ResponsiveLauncherTests(unittest.TestCase):
         self.app.processEvents()
         scroll = self.window.game_page_scroll.verticalScrollBar()
         self.assertGreater(scroll.maximum(), 0)
-        scroll.setValue(scroll.maximum())
+        # QTextBrowser and the new tab strip settle their page geometry on
+        # subsequent Qt layout passes; scroll to the final bottom after each.
+        for _ in range(3):
+            self.app.processEvents()
+            scroll.setValue(scroll.maximum())
         self.app.processEvents()
         self.assertEqual(scroll.value(), scroll.maximum())
         self.assertTrue(self.window.game_details_tabs.isVisible())

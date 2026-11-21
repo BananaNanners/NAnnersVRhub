@@ -13,7 +13,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QUrl
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView, QFileDialog, QGridLayout, QHBoxLayout, QHeaderView,
-    QLabel, QInputDialog, QMessageBox, QPlainTextEdit, QProgressBar,
+    QLabel, QInputDialog, QMessageBox, QMenu, QPlainTextEdit, QProgressBar,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
@@ -104,7 +104,8 @@ class ResponsiveDownloadActions(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._set_columns(5 if self.width() >= 930 else 2)
+        self._set_columns(min(len(self.buttons),
+                              5 if self.width() >= 930 else 2))
 
 
 class GuidedDownloadsPage(QWidget):
@@ -188,9 +189,29 @@ class GuidedDownloadsPage(QWidget):
             "Scan this game's selected archive folder.\n"
             "Update its saved verification results.\n"
             "No archives are installed or changed.")
+        # Dev5D1-B: one folder menu replaces four persistent buttons.
+        # Keep each original action object and its signal handler so folder
+        # selection, default clearing, and saved scans behave exactly as before.
+        self.folder_menu_button = QPushButton("Archive folder")
+        self.folder_menu_button.setObjectName("downloadsAction")
+        self.folder_menu_button.setToolTip(
+            "Choose or change a shared/game-specific archive folder.\n"
+            "No archives are moved or installed.")
+        self.folder_menu = QMenu(self.folder_menu_button)
+        self.folder_menu_actions = {}
+        for btn in (self.set_game, self.set_global,
+                    self.clear_game, self.reset_global):
+            btn.setParent(self)
+            btn.hide()
+            action = self.folder_menu.addAction(btn.text())
+            action.triggered.connect(
+                lambda _checked=False, original=btn:
+                    original.click() if original.isEnabled() else None)
+            self.folder_menu_actions[btn] = action
+        self.folder_menu.aboutToShow.connect(self._sync_folder_actions)
+        self.folder_menu_button.setMenu(self.folder_menu)
         self.action_toolbar = ResponsiveDownloadActions((
-            self.set_global, self.set_game, self.clear_game,
-            self.reset_global, self.scan,
+            self.folder_menu_button, self.scan,
         ))
         outer.addWidget(self.action_toolbar)
         self.folder_action_feedback = QLabel("")
@@ -309,6 +330,15 @@ class GuidedDownloadsPage(QWidget):
         self.table.itemSelectionChanged.connect(self._update_inspect_button)
         self.set_recipe(None)
 
+    def _sync_folder_actions(self):
+        """Reflect current scan/download safety state in the folder menu."""
+        for button, action in self.folder_menu_actions.items():
+            action.setEnabled(button.isEnabled())
+            action.setText(button.text())
+            action.setToolTip(button.toolTip())
+        self.folder_menu_button.setEnabled(
+            any(button.isEnabled() for button in self.folder_menu_actions))
+
     def closeEvent(self, event):
         if self.download_worker and self.download_worker.isRunning():
             self.download_worker.cancel()
@@ -361,6 +391,8 @@ class GuidedDownloadsPage(QWidget):
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan):
             btn.setEnabled(bool(recipe) and not (active_scan or active_download))
+        self.folder_menu_button.setEnabled(
+            bool(recipe) and not (active_scan or active_download))
         self.install_review_button.setEnabled(bool(recipe) and not (active_scan or active_download))
         self._update_download_button()
         if recipe and folder:
@@ -529,6 +561,7 @@ class GuidedDownloadsPage(QWidget):
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan, self.install_review_button):
             btn.setEnabled(False)
+        self.folder_menu_button.setEnabled(False)
         worker = LocalInventoryWorker(dict(self.recipe), folder, self)
         self.worker = worker
         worker.done.connect(lambda result, token=worker: self._completed(result, token))
@@ -771,6 +804,7 @@ class GuidedDownloadsPage(QWidget):
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan, self.install_review_button):
             btn.setEnabled(False)
+        self.folder_menu_button.setEnabled(False)
         worker = VerifiedArchiveDownloadWorker(authority, self)
         self.download_worker = worker
         worker.progress_changed.connect(
