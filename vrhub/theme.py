@@ -66,14 +66,17 @@ QTabBar::tab:selected {{
 }}
 /* Dev5D1-A: a compact icon-and-text launcher navigation strip.
    Uses the original yellow selection and blue hover accents. */
+/* Dev5D1-C: clear selected-tab contrast and consistent launcher spacing.
+   Icons are recolored at presentation time, never replaced with new artwork. */
 QTabWidget#gameDetailsTabs QTabBar::tab {{
     color: {TEXT};
-    background: {PANEL_2};
+    background: #171D23;
     padding: 10px 13px;
-    margin-right: 3px;
-    border: 1px solid {BORDER};
-    border-radius: 7px;
-    min-height: 22px;
+    margin-right: 4px;
+    border: 1px solid #34404B;
+    border-radius: 8px;
+    min-height: 24px;
+    font-weight: 650;
 }}
 QTabWidget#gameDetailsTabs QTabBar::tab:selected {{
     background: {YELLOW};
@@ -83,12 +86,39 @@ QTabWidget#gameDetailsTabs QTabBar::tab:selected {{
 }}
 QTabWidget#gameDetailsTabs QTabBar::tab:hover:!selected {{
     color: {BLUE};
+    background: #182734;
     border-color: {BLUE};
 }}
+QTabWidget#gameDetailsTabs QTabBar::tab:focus {{
+    border-color: {BLUE};
+}}
+QWidget#overviewLaunchTools {{
+    background: #101820;
+    border: 1px solid #253748;
+    border-radius: 9px;
+    padding: 7px 10px;
+}}
 QLabel#launchToolsLabel {{
-    color: {MUTED};
-    font-size: 11px;
+    color: {BLUE};
+    font-size: 12px;
     font-weight: 800;
+    padding: 1px 3px;
+    border: none;
+}}
+QPushButton#overviewSecondaryLaunch {{
+    background: #17212A;
+    color: {TEXT};
+    border: 1px solid #3A4A57;
+    min-height: 26px;
+}}
+QPushButton#overviewSecondaryLaunch:hover {{
+    border-color: {BLUE};
+    color: {BLUE};
+}}
+QPushButton#overviewSecondaryLaunch:disabled {{
+    color: #76828E;
+    background: #121820;
+    border-color: #2B343E;
 }}
 QLabel#rollbackHeading {{
     color: {YELLOW};
@@ -313,9 +343,31 @@ QLabel#launcherBannerStatus {{
     font-size: 10px;
 }}
 QPushButton#launcherDisclosure {{
-    color: #23B7FF;
+    color: {BLUE};
     text-align: left;
-    font-size: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    min-height: 28px;
+    padding: 7px 12px;
+    background: #101B25;
+    border: 1px solid #284658;
+    border-radius: 8px;
+}}
+QPushButton#launcherDisclosure:hover {{
+    color: {BLUE};
+    background: #142636;
+    border-color: {BLUE};
+}}
+QPushButton#launcherDisclosure:checked {{
+    color: {YELLOW};
+    background: #24210F;
+    border-color: #66591A;
+}}
+QPushButton:focus {{
+    border-color: {BLUE};
+}}
+QPushButton#primaryAction:focus, QPushButton#downloadsScan:focus {{
+    border-color: {YELLOW_HOVER};
 }}
 
 /* Match scrollbars to the existing charcoal theme in the game library. */

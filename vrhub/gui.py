@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QSize
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap, QPainter, QColor
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QFileDialog, QFrame, QHBoxLayout,
                                QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
                                QComboBox, QDialog, QDialogButtonBox, QFormLayout, QListWidget, QPlainTextEdit,
@@ -18,7 +18,7 @@ from . import __version__, app_updates, compatibility, heroic_epic, hub, live_te
 from .handlers import get_handler
 from .cli import _roots
 from .display_time import age_text, filename_stamp, local_time
-from .theme import BLUE, GREEN, LOGO_PATH, MUTED, RED, STYLESHEET, TEXT, YELLOW
+from .theme import BG, BLUE, GREEN, LOGO_PATH, MUTED, RED, STYLESHEET, TEXT, YELLOW
 from .app_update_gui import HubUpdateController
 from .controller_gui import ControllerBindingsPage
 from .launcher_ui import LauncherSidebar, GameBanner
@@ -30,6 +30,21 @@ from .profile_review_gui import ProfileReviewDialog
 from . import profile_safety
 from . import artwork, download_planner, install_review
 from .table_columns import enable_spreadsheet_columns
+
+
+def _tab_icon_with_color(original: QIcon, color: str, edge: int = 18) -> QIcon:
+    """Retain the theme/fallback pictogram while matching its tab contrast."""
+    pixmap = original.pixmap(QSize(edge, edge))
+    if pixmap.isNull():
+        return original
+    painter = QPainter(pixmap)
+    try:
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(pixmap.rect(), QColor(color))
+    finally:
+        painter.end()
+    return QIcon(pixmap)
+
 
 
 class HeroicInjectorDialog(QDialog):
@@ -654,7 +669,10 @@ class HubWindow(QMainWindow):
         self.compat_refresh_btn.clicked.connect(self.refresh_compatibility)
         self.compat_copy_btn.clicked.connect(self.copy_compatibility)
         compat_page = QWidget()
+        compat_page.setObjectName("compatibilityGamePage")
         compat_layout = QVBoxLayout(compat_page)
+        compat_layout.setContentsMargins(12, 12, 12, 12)
+        compat_layout.setSpacing(9)
         compat_layout.addLayout(_row(self.compat_refresh_btn, self.compat_copy_btn))
         compat_layout.addLayout(_row(self.record_test_btn, self.test_history_btn))
         compat_layout.addWidget(self.compat_details)
@@ -682,6 +700,8 @@ class HubWindow(QMainWindow):
         self.unprofile_btn = QPushButton("Remove profile")
         self.copy_btn = QPushButton("Copy launch options")
         self.inject_btn = QPushButton("Run UEVR injector")
+        self.copy_btn.setObjectName("overviewSecondaryLaunch")
+        self.inject_btn.setObjectName("overviewSecondaryLaunch")
         self.game_launch_btn = QPushButton("Launch game tool")
         self.game_play_btn = QPushButton("Launch game")
         # Use the Mod Updates page's own refresh button: one visible action,
@@ -699,6 +719,7 @@ class HubWindow(QMainWindow):
         self.kharvox_folder_btn = QPushButton("Choose KHARVOX folder…")
         self.doom_prepare_btn = QPushButton("Install VR runner")
         self.doom_probe_btn = QPushButton("Test VR bridge")
+        self.doom_probe_btn.setObjectName("overviewSecondaryLaunch")
         self.doom_logs_btn = QPushButton("Open DOOM diagnostics")
         self.doom_import_btn = QPushButton("Import bridge package…")
         self.doom_saves_btn = QPushButton("Development: restore game saves…")
@@ -909,11 +930,15 @@ class HubWindow(QMainWindow):
             (self.controller_bindings, "Controller Bindings", "applications-games", QStyle.SP_MediaPlay),
             (self.details, "Setup Guide", "documentation", QStyle.SP_DialogHelpButton),
         )
+        self._game_tab_original_icons = []
         for page, label, themed_icon, fallback_icon in icon_data:
             icon = QIcon.fromTheme(themed_icon)
             if icon.isNull():
                 icon = self.style().standardIcon(fallback_icon)
+            self._game_tab_original_icons.append(icon)
             self.game_details_tabs.addTab(page, icon, label)
+        self.game_details_tabs.currentChanged.connect(self._update_game_tab_icon_colors)
+        self._update_game_tab_icon_colors(self.game_details_tabs.currentIndex())
         self.game_details_tabs.currentChanged.connect(
             lambda index: self.refresh_compatibility()
             if self.game_details_tabs.widget(index) is self.compat_page else None)
@@ -1266,6 +1291,13 @@ class HubWindow(QMainWindow):
                 "Open MO2 bridge log" if r.get("handler") == "skyrim-vr"
                 else hub.game_bridge_log_label(r))
         self.update_live_status()
+
+    def _update_game_tab_icon_colors(self, selected: int) -> None:
+        """Selected navigation icon is dark on banana-yellow; others stay muted."""
+        for index, original in enumerate(self._game_tab_original_icons):
+            color = BG if index == selected else MUTED
+            self.game_details_tabs.setTabIcon(
+                index, _tab_icon_with_color(original, color))
 
     def refresh_rollback_summary(self, recipe):
         """Describe records without implying that a backup is validated."""
