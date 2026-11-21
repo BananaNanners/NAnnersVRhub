@@ -358,12 +358,13 @@ def main():
             demo_target = install_review.Target(
                 "BepInEx/plugins/VRSample.dll",
                 "/sample/game/BepInEx/plugins/VRSample.dll",
-                "Add new file", 0, None, None, None, None)
+                "Replace; back up original", 18_600_000,
+                "d" * 64, 1, 1, 1)
             demo = install_review.InstallPlan(
                 "demo", "Demo only — NO GAME FILES", "bepinex",
                 "/sample/game", ("/sample/archives/demo.zip",),
                 ("a" * 64,), ("Demo pinned archive",),
-                (demo_target,), 1, 0, 0,
+                (demo_target,), 0, 1, 18_600_000,
                 "Demo: persistent backup policy, no actual installation",
                 (), ("The preview cannot install any mod.",), "f" * 64)
             dlg = InstallReviewDialog(demo, win, allow_install=False)
@@ -372,6 +373,12 @@ def main():
             checks["preview_review_dialog_shows_exact_files"] = (
                 dlg.targets.item(0, 0).text() == demo_target.relative
                 and "Demo" in dlg.notes.toPlainText())
+            checks["review_sizes_use_human_readable_mb"] = (
+                dlg.targets.item(0, 2).text() == "18.6 MB"
+                and "18.6 MB" in dlg.notes.toPlainText()
+                and "18,600,000 bytes" in dlg.targets.item(0, 2).toolTip()
+                and "18,600,000 bytes" in dlg.findChild(
+                    QLabel, "installReviewOverview").toolTip())
             for box in (dlg.confirm_targets, dlg.confirm_backup, dlg.confirm_closed):
                 box.setChecked(True)
             checks["review_install_always_blocked_in_preview"] = (

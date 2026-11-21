@@ -395,6 +395,21 @@ def revalidate(plan: InstallPlan, recipe: dict, steam_roots=None) -> InstallPlan
     return fresh
 
 
+def human_file_size(size_bytes: int) -> str:
+    """Friendly decimal units for the UI only; safety math stays in bytes.
+
+    MB = 1,000,000 bytes; GB = 1,000,000,000 bytes.
+    """
+    if type(size_bytes) is not int or size_bytes < 0:
+        raise ValueError("File size must be a non-negative integer")
+    for unit, scale in (("GB", 1_000_000_000), ("MB", 1_000_000),
+                        ("KB", 1_000)):
+        if size_bytes >= scale:
+            number = f"{size_bytes / scale:.2f}".rstrip("0").rstrip(".")
+            return f"{number} {unit}"
+    return f"{size_bytes} B"
+
+
 def summary(plan: InstallPlan) -> str:
     state = "BLOCKED" if plan.blocked else "READY FOR EXPLICIT CONFIRMATION"
     lines = [
@@ -403,7 +418,7 @@ def summary(plan: InstallPlan) -> str:
         f"Packages: {', '.join(plan.package_labels)}",
         f"New files: {plan.new_files}",
         f"Existing files to replace: {plan.overwrites}",
-        f"Original backup size estimate: {plan.backup_bytes:,} bytes",
+        f"Original backup size estimate: {human_file_size(plan.backup_bytes)}",
         f"Backup policy: {plan.backup_policy}",
     ]
     if plan.blocked:

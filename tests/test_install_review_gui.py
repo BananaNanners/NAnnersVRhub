@@ -45,6 +45,37 @@ class InstallDialogAcceptanceTests(unittest.TestCase):
         self.addCleanup(d.close)
         return d
 
+    def test_backup_overview_and_file_sizes_show_mb_gb_with_exact_hover_bytes(self):
+        from dataclasses import replace
+        for size, rendered in ((24_500_000, "24.5 MB"),
+                               (2_500_000_000, "2.5 GB")):
+            with self.subTest(size=size):
+                row = replace(
+                    fixture_plan().target_rows[0],
+                    action="Replace; back up original",
+                    current_bytes=size,
+                    current_sha256="a" * 64)
+                plan = replace(
+                    fixture_plan(files=1),
+                    target_rows=(row,), new_files=0, overwrites=1,
+                    backup_bytes=size)
+                d = InstallReviewDialog(plan, allow_install=False)
+                try:
+                    self.assertIn(rendered, d.findChild(
+                        type(d.status), "installReviewOverview").text())
+                    self.assertIn(f"{size:,} bytes", d.findChild(
+                        type(d.status), "installReviewOverview").toolTip())
+                    self.assertEqual(d.targets.item(0, 2).text(), rendered)
+                    self.assertIn(f"{size:,} bytes",
+                                  d.targets.item(0, 2).toolTip())
+                    self.assertIn(rendered, d.notes.toPlainText())
+                    self.assertFalse(d.apply_button.isEnabled())
+                    self.assertEqual(d.plan.backup_bytes, size)
+                finally:
+                    d.close()
+                    d.deleteLater()
+                    self.app.processEvents()
+
     def test_install_cannot_be_enabled_without_all_three_checks(self):
         d = self.create_dialog()
         self.assertFalse(d.apply_button.isEnabled())

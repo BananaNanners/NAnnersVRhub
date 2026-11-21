@@ -13,6 +13,40 @@ from unittest import mock
 from vrhub import hub, install_review as review
 
 
+class HumanReadableSizeTests(unittest.TestCase):
+    def test_decimal_units_are_clear_and_consistent(self):
+        cases = (
+            (0, "0 B"), (999, "999 B"), (1_000, "1 KB"),
+            (12_345, "12.35 KB"), (1_000_000, "1 MB"),
+            (24_500_000, "24.5 MB"), (1_000_000_000, "1 GB"),
+            (1_200_000_000, "1.2 GB"),
+            (2_567_890_123, "2.57 GB"),
+        )
+        for count, expected in cases:
+            with self.subTest(bytes=count):
+                self.assertEqual(review.human_file_size(count), expected)
+        for bad in (-1, 2.5, None, True):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    review.human_file_size(bad)
+
+    def test_summary_is_human_readable_but_plan_retains_exact_byte_count(self):
+        from dataclasses import replace
+        from vrhub import install_review
+        row = install_review.Target(
+            "Content/Paks/existing.pak", "/game/Content/Paks/existing.pak",
+            "Replace; back up original", 2_500_000_000, "a"*64, 1, 1, 1)
+        plan = install_review.InstallPlan(
+            "fixture", "Test", "pak", "/game",
+            ("/archive/mod.pak",), ("b"*64,), ("Mod",),
+            (row,), 0, 1, 2_500_000_000,
+            "Persistent original backup", (), ("No files touched",), "c"*64)
+        self.assertEqual(plan.backup_bytes, 2_500_000_000)
+        self.assertEqual(plan.target_rows[0].current_bytes, 2_500_000_000)
+        self.assertIn("2.5 GB", install_review.summary(plan))
+        self.assertNotIn("2,500,000,000 bytes", install_review.summary(plan))
+
+
 class InstallReviewTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

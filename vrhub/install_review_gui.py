@@ -118,8 +118,10 @@ class InstallReviewDialog(QDialog):
             f"Destination: {plan.game_root}\n"
             f"Packages: {', '.join(plan.package_labels)}\n"
             f"{plan.new_files} new files · {plan.overwrites} replacements · "
-            f"{plan.backup_bytes:,} bytes of originals to back up")
+            f"{install_review.human_file_size(plan.backup_bytes)} of originals to back up")
         overview.setObjectName("installReviewOverview")
+        overview.setToolTip(
+            f"Exact original-file backup estimate: {plan.backup_bytes:,} bytes")
         overview.setWordWrap(True)
         overview.setTextInteractionFlags(Qt.TextSelectableByMouse)
         outer.addWidget(overview)
@@ -146,12 +148,17 @@ class InstallReviewDialog(QDialog):
         self.targets.setColumnWidth(1, 315)
         self.targets.setColumnWidth(2, 125)
         for i, item in enumerate(plan.target_rows):
-            values = (item.relative, item.action,
-                      f"{item.current_bytes:,} bytes" if item.current_sha256
-                      else "Not present")
+            values = (
+                item.relative, item.action,
+                install_review.human_file_size(item.current_bytes)
+                if item.current_sha256 else "Not present")
             for j, val in enumerate(values):
                 cell = QTableWidgetItem(val)
-                cell.setToolTip(item.path if j == 0 else val)
+                if j == 2 and item.current_sha256:
+                    cell.setToolTip(
+                        f"Exact existing size: {item.current_bytes:,} bytes")
+                else:
+                    cell.setToolTip(item.path if j == 0 else val)
                 if j == 1:
                     cell.setForeground(QColor(
                         "#FFD21A" if item.current_sha256 else "#4FE39A"))
