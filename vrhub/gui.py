@@ -1401,9 +1401,45 @@ class HubWindow(QMainWindow):
         r = self.current()
         if not r:
             return
-        message = (f"Remove the mod files for {r['name']} and restore backed-up originals?"
-                   if r.get("method") in {"bepinex", "ervr"} else f"Remove the mod files for {r['name']}?")
-        if QMessageBox.question(self, "Uninstall", message) == QMessageBox.Yes:
+        if r.get("method") == "gameroot":
+            try:
+                entry = hub.state().get(r["id"])
+            except (OSError, ValueError) as exc:
+                QMessageBox.warning(self, "Cannot review original-file backup", str(exc))
+                return
+            if not entry:
+                QMessageBox.information(
+                    self, "No recorded game-root installation",
+                    "No Hub-managed Cyberpunk installation is recorded. "
+                    "Nothing will be removed.")
+                return
+            if entry.get("installer") != "gameroot-2":
+                QMessageBox.warning(
+                    self, "Legacy Cyberpunk install — automatic removal blocked",
+                    "This installation record predates persistent originals. "
+                    "The Hub cannot guarantee restoration of the working mod files. "
+                    "Nothing has been removed. Preserve your game and review "
+                    "the existing files manually before attempting migration.")
+                return
+            originals = entry.get("originals", {})
+            restored = sum(v is not None for v in originals.values())
+            removed = sum(v is None for v in originals.values())
+            message = (
+                f"Restore {restored} original Cyberpunk file(s) from verified "
+                f"persistent backups, and remove {removed} files added by "
+                "this recorded install?\n\n"
+                "Every current file and original backup will be rehashed. "
+                "Changes, missing backups and symlinks block all restoration. "
+                "The retained originals remain in Hub storage afterward.\n\n"
+                "Confirm the game is closed before proceeding.")
+        else:
+            message = (
+                f"Remove the mod files for {r['name']} and restore backed-up originals?"
+                if r.get("method") in {"bepinex", "ervr"}
+                else f"Remove the mod files for {r['name']}?")
+        if QMessageBox.question(
+                self, "Review removal and restoration", message,
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
             self._run(lambda: hub.uninstall(r["id"]), "Removed",
                       lambda out: f"Removed or restored {len(out)} recorded files.")
 

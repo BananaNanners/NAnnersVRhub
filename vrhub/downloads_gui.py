@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, verified_download
+from . import download_planner as planner, archive_scans, verified_download, hub
 from .table_columns import enable_spreadsheet_columns
 
 COLOR = {
@@ -222,6 +222,11 @@ class GuidedDownloadsPage(QWidget):
         self.saved_scan_count.setObjectName("downloadsSavedScanCount")
         self.saved_scan_count.setWordWrap(True)
         outer.addWidget(self.saved_scan_count)
+        self.backup_safety_status = QLabel("")
+        self.backup_safety_status.setObjectName("downloadsBackupSafety")
+        self.backup_safety_status.setWordWrap(True)
+        self.backup_safety_status.hide()
+        outer.addWidget(self.backup_safety_status)
 
         self.table = QTableWidget(0, 5)
         self.table.setObjectName("downloadsTable")
@@ -326,6 +331,7 @@ class GuidedDownloadsPage(QWidget):
                 f"Saved archive scans: {len(self._saved)} game profiles · "
                 "Historical results retained across Hub updates.")
         rid = recipe.get("id") if recipe else None
+        self._show_backup_safety(recipe)
         error = None
         try:
             folder, source = self._folder()
@@ -379,6 +385,35 @@ class GuidedDownloadsPage(QWidget):
             self._display_unsanned(recipe, error)
         else:
             self._show_plan(self._last_plan)
+
+    def _show_backup_safety(self, recipe):
+        if not recipe or recipe.get("method") != "gameroot":
+            self.backup_safety_status.hide()
+            return
+        try:
+            state = hub.state().get(recipe["id"])
+        except (ValueError, OSError) as exc:
+            self.backup_safety_status.setText(
+                f"Cannot read game-root backup status: {exc}. "
+                "Guided installation must be reviewed manually.")
+        else:
+            if not state:
+                self.backup_safety_status.setText(
+                    "New game-root installs retain original files for checksum-"
+                    "protected restoration. Review installation before applying.")
+            elif state.get("installer") == "gameroot-2":
+                originals = state.get("originals", {})
+                count = sum(v is not None for v in originals.values())
+                self.backup_safety_status.setText(
+                    f"Persistent Cyberpunk backups recorded for {count} original "
+                    "file(s). Restore requires all original and installed "
+                    "hashes to match. No automatic updates are performed.")
+            else:
+                self.backup_safety_status.setText(
+                    "LEGACY CYBERPUNK INSTALLATION: No verified retained "
+                    "original-file backups. Replacement and automatic "
+                    "uninstall remain BLOCKED. Preserve the working setup.")
+        self.backup_safety_status.show()
 
     def _folder_feedback(self, message):
         self.folder_action_feedback.setText(message)

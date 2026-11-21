@@ -2,6 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """NAnnersVRhub core: recipes, install/uninstall bookkeeping, UEVR + profile handling."""
 import html
+import hashlib
+import fcntl
+import stat
+import uuid
+from contextlib import contextmanager
 import json
 import os
 import re
@@ -312,14 +317,59 @@ def _validate_component_plan(comp: dict | None, plan: list[tuple[Path, Path]], a
         )
 
 
+@contextmanager
+def _gameroot_lock():
+    """Serialize game-root state changes and backup commit/recovery."""
+    path = state_file().parent / "gameroot-install.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        yield
+
+
+def _file_digest(path: Path) -> str:
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def _gameroot_checked(base: Path, relative: Path) -> Path:
+    """Reject symlinked target/ancestors before any game-root file changes."""
+    if relative.is_absolute() or any(x in ("", ".", "..") for x in relative.parts):
+        raise RuntimeError(f"Invalid game-root destination: {relative}")
+    target = base / relative
+    if not target.is_relative_to(base):
+        raise RuntimeError(f"Game-root path leaves game tree: {relative}")
+    current = base
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise RuntimeError(f"Refusing symbolic link destination: {current}")
+    if target.exists() and not target.is_file():
+        raise RuntimeError(f"Game-root destination is not a regular file: {target}")
+    return target
+
+
 def _install_gameroot(recipe: dict, mod_files: list[Path], steam_roots=None) -> list[Path]:
-    """Stage/validate all archives, then install transactionally into the game root."""
+    """Stage first; keep ORIGINAL backups after successful game-root installs.
+
+    Existing legacy installs are NEVER silently adopted or overwritten. A new
+    record is tagged gameroot-2 and stores SHA-256 for installed and original
+    files. A later explicit uninstall can then safely restore originals.
+    """
     game = find_game(recipe["steam_appid"], steam_roots)
-    if not game:
-        raise RuntimeError(f"{recipe['name']}: not found in any Steam library.")
+    if not game or Path(game).is_symlink():
+        raise RuntimeError(f"{recipe['name']}: game not found or symlinked.")
+    base = Path(game).resolve()
+    if not base.is_dir():
+        raise RuntimeError("Game-root destination is not a directory.")
+    if not mod_files or len(mod_files) > 15:
+        raise RuntimeError("Select between one and fifteen mod archives.")
     for f in mod_files:
-        if not f.is_file():
-            raise RuntimeError(f"File not found: {f}")
+        if Path(f).is_symlink() or not Path(f).is_file():
+            raise RuntimeError(f"Mod archive is not a regular file: {f}")
+        if Path(f).resolve().is_relative_to(base):
+            raise RuntimeError("Mod archives inside the live game tree are refused.")
 
     comp_of: list[dict | None] = [None] * len(mod_files)
     comps = recipe.get("components")
@@ -329,110 +379,255 @@ def _install_gameroot(recipe: dict, mod_files: list[Path], steam_roots=None) -> 
             c = _component_for(recipe, f.name)
             if c is None:
                 known = ", ".join(str(x["nexus_mod"]) for x in comps)
-                raise RuntimeError(f"{f.name}: can't tell which mod this is. Nexus puts the mod number in the "
-                                   f"file name (like 'Cyber Engine Tweaks-107-1-37-1-….zip'), so keep it. "
-                                   f"Known mod numbers: {known}")
+                raise RuntimeError(
+                    f"{f.name}: cannot identify a unique Nexus component. "
+                    f"Keep the mod number in its archive name. Known IDs: {known}")
             key = str(c["nexus_mod"])
             if key in mapped:
-                raise RuntimeError(f"Two files for {c['name']}: {mapped[key][1].name} and {f.name}. Pick one.")
+                raise RuntimeError(
+                    f"Two archives selected for {c['name']}. Pick one.")
             mapped[key] = (c, f)
         index = {str(c["nexus_mod"]): i for i, c in enumerate(comps)}
-        ordered = sorted(mapped.values(), key=lambda cf: index[str(cf[0]["nexus_mod"])])
+        ordered = sorted(mapped.values(),
+                         key=lambda cf: index[str(cf[0]["nexus_mod"])])
         mod_files = [f for _, f in ordered]
         comp_of = [c for c, _ in ordered]
 
-    base = game.resolve()
-    token = f"{recipe['id']}-{time.time_ns()}"
-    app_root = state_file().parent
-    stage_root = app_root / "staging" / token
-    txn_root = app_root / "transactions" / token
-    backup_root = txn_root / "backup"
-    written_by: list[list[Path]] = []
-    original_backups: dict[Path, Path] = {}
-    originally_missing: set[Path] = set()
-    # Read before modifying the game, and keep backups until this record commits.
-    st = _load_state()
-    retain_backups = False
+    with _gameroot_lock():
+        st = _load_state()  # while locked, before any game modifications
+        if recipe["id"] in st:
+            raise RuntimeError(
+                "This game already has a Hub installation record. "
+                "Existing and legacy game-root installs cannot be overwritten "
+                "until their recorded files and rollback policy are reviewed.")
+        token = f"{recipe['id']}-{uuid.uuid4().hex}"
+        app_root = state_file().parent.resolve()
+        for folder in ("staging", "transactions", "backups"):
+            if (app_root / folder).is_symlink():
+                raise RuntimeError(
+                    f"Unsafe symlink in Hub-managed backup directories: {folder}")
+        stage_root = app_root / "staging" / token
+        txn_root = app_root / "transactions" / token
+        backup_root = txn_root / "backup"
+        retained_root = app_root / "backups" / token
+        original_backups: dict[Path, Path] = {}
+        originally_missing: set[Path] = set()
+        originals: dict[str, dict | None] = {}
+        written_by: list[list[Path]] = []
+        installed_hashes: dict[str, str] = {}
+        retaining_for_recovery = False
+        state_saved = False
+        try:
+            plans = []
+            root_dirs = recipe.get("root_dirs")
+            for i, (f, comp) in enumerate(zip(mod_files, comp_of)):
+                # Reuse the same bounded ZIP safety preflight as Dev5C's
+                # confirmation planner. No unreviewed .rar/.7z extraction.
+                from .install_review import _zip_preflight
+                _zip_preflight(Path(f))
+                stage = stage_root / str(i)
+                stage.mkdir(parents=True)
+                rels = _stage_archive(Path(f), stage)
+                plan = _plan_gameroot(rels, f.name, root_dirs)
+                _validate_component_plan(comp, plan, f.name)
+                plans.append((stage, plan))
 
-    try:
-        plans = []
-        root_dirs = recipe.get("root_dirs")
-        for i, (f, comp) in enumerate(zip(mod_files, comp_of)):
-            stage = stage_root / str(i)
-            stage.mkdir(parents=True)
-            rels = _stage_archive(f, stage)
-            plan = _plan_gameroot(rels, f.name, root_dirs)
-            _validate_component_plan(comp, plan, f.name)
-            plans.append((stage, plan))
+            all_rel = [dest for _stage, plan in plans for _src, dest in plan]
+            if not all_rel or len(all_rel) > 2500:
+                raise RuntimeError("No valid game-root files or too many destinations.")
+            if len({str(dest).casefold() for dest in all_rel}) != len(all_rel):
+                raise RuntimeError("Two archive members map to the same game-root destination.")
 
-        # Back up every destination that existed before this transaction exactly once.
-        all_targets: list[Path] = []
-        for _stage, plan in plans:
-            for _src, dest in plan:
-                target = (base / dest).resolve()
-                if not target.is_relative_to(base):
-                    raise RuntimeError(f"Unsafe path: {dest}")
-                all_targets.append(target)
-        for target in dict.fromkeys(all_targets):
-            if target.exists():
-                if not target.is_file():
-                    raise RuntimeError(f"Install target is not a regular file: {target}")
+            all_targets = [_gameroot_checked(base, rel) for rel in all_rel]
+            for target in all_targets:
                 rel = target.relative_to(base)
-                backup = backup_root / rel
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(target, backup)
-                original_backups[target] = backup
-            else:
-                originally_missing.add(target)
+                if target.exists():
+                    size = target.stat().st_size
+                    if size > 512 * 1024 * 1024:
+                        raise RuntimeError(f"Existing original too large to back up: {rel}")
+                    backup = backup_root / rel
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(target, backup)
+                    digest = _file_digest(target)
+                    if _file_digest(backup) != digest:
+                        raise RuntimeError(f"Original backup checksum mismatch: {rel}")
+                    original_backups[target] = backup
+                    originals[str(rel)] = {"sha256": digest, "size": size}
+                else:
+                    originally_missing.add(target)
+                    originals[str(rel)] = None
 
-        for stage, plan in plans:
-            written: list[Path] = []
-            for src, dest in plan:
-                target = (base / dest).resolve()
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(stage / src, target)
-                written.append(target)
-            written_by.append(written)
+            # Keep the old transaction copies alive through state commit, as
+            # required for error recovery. Publish a hard-linked second name
+            # in Hub-owned backups; no actual file copies need to be doubled.
+            retained_root.mkdir(parents=True, exist_ok=False)
+            for target, backup in original_backups.items():
+                rel = target.relative_to(base)
+                preserved = retained_root / "files" / rel
+                preserved.parent.mkdir(parents=True, exist_ok=True)
+                os.link(backup, preserved, follow_symlinks=False)
+                if _file_digest(preserved) != originals[str(rel)]["sha256"]:
+                    raise RuntimeError(f"Persistent backup failed verification: {rel}")
 
-        now = int(time.time())
-        entry = st.get(recipe["id"], {})
-        comp_state = entry.get("components", {})
-        all_new = [str(w) for ws in written_by for w in ws]
-        for c, f, ws in zip(comp_of, mod_files, written_by):
-            if c is not None:
-                comp_state[str(c["nexus_mod"])] = {
-                    "files": [str(w) for w in ws], "installed_at": now, "archive": f.name
-                }
-        st[recipe["id"]] = {"files": list(dict.fromkeys(entry.get("files", []) + all_new)),
-                            "keep": str(base), "installed_at": now, "components": comp_state}
-        _save_state(st)
+            for stage, plan in plans:
+                written = []
+                for src, rel in plan:
+                    target = _gameroot_checked(base, rel)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(stage / src, target)
+                    installed_hashes[str(rel)] = _file_digest(target)
+                    written.append(target)
+                written_by.append(written)
 
-    except Exception as e:
-        # Roll back the game tree to exactly how it looked before this transaction.
-        recovery_errors = []
-        for target in originally_missing:
+            now = int(time.time())
+            comp_state = {}
+            for comp, archive, files in zip(comp_of, mod_files, written_by):
+                if comp is not None:
+                    comp_state[str(comp["nexus_mod"])] = {
+                        "files": [str(f) for f in files],
+                        "installed_at": now, "archive": archive.name}
+            all_new = [str(w) for batch in written_by for w in batch]
+            st[recipe["id"]] = {
+                "installer": "gameroot-2",
+                "files": list(dict.fromkeys(all_new)),
+                "keep": str(base),
+                "backup": str(retained_root),
+                "originals": originals,
+                "installed_sha256": installed_hashes,
+                "installed_at": now,
+                "components": comp_state,
+            }
+            _save_state(st)
+            state_saved = True
+        except Exception as exc:
+            recovery_errors = []
+            for target in originally_missing:
+                try:
+                    target.unlink(missing_ok=True)
+                except OSError as error:
+                    recovery_errors.append(f"{target}: {error}")
+            for target, backup in original_backups.items():
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(backup, target)
+                except OSError as error:
+                    recovery_errors.append(f"{target}: {error}")
+            _log("install_rollback", recipe=recipe["id"],
+                 error=str(exc), archives=[f.name for f in mod_files])
+            if recovery_errors:
+                retaining_for_recovery = True
+                raise RuntimeError(
+                    f"Game-root install failed and restoration was incomplete. "
+                    f"Recovery files preserved at {txn_root} and {retained_root}: "
+                    + "; ".join(recovery_errors)) from exc
+            raise
+        finally:
+            shutil.rmtree(stage_root, ignore_errors=True)
+            if not retaining_for_recovery:
+                shutil.rmtree(txn_root, ignore_errors=True)
+                if not state_saved:
+                    shutil.rmtree(retained_root, ignore_errors=True)
+
+        _log("install_ok", recipe=recipe["id"], files=len(all_new),
+             backups=str(retained_root), archives=[f.name for f in mod_files])
+        return [w for batch in written_by for w in batch]
+
+
+def _uninstall_gameroot(recipe_id: str) -> list[Path]:
+    """Restore original game files ONLY when all post-install hashes match.
+
+    Backups remain retained in Hub storage after uninstall. A changed file,
+    missing/corrupt original, or symlink blocks the entire operation.
+    """
+    with _gameroot_lock():
+        state = _load_state()
+        entry = state.get(recipe_id)
+        if not isinstance(entry, dict) or entry.get("installer") != "gameroot-2":
+            raise RuntimeError("No verified persistent game-root install is recorded.")
+        base = Path(entry.get("keep", ""))
+        if (not base.is_absolute() or base.is_symlink() or
+                not base.is_dir() or base.resolve() != base):
+            raise RuntimeError("Recorded game directory is missing or unsafe.")
+        backups = Path(entry.get("backup", ""))
+        backup_base = state_file().parent.resolve() / "backups"
+        if backup_base.is_symlink():
+            raise RuntimeError("Hub backup directory is a symlink; restore blocked.")
+        allowed = backup_base.resolve()
+        if (not backups.is_absolute() or backups.is_symlink() or
+                not backups.is_relative_to(allowed) or
+                backups.parent != allowed or not backups.is_dir()):
+            raise RuntimeError("Recorded backup directory is missing or outside Hub storage.")
+        originals = entry.get("originals")
+        installed = entry.get("installed_sha256")
+        if (not isinstance(originals, dict) or not isinstance(installed, dict)
+                or not originals or set(originals) != set(installed)):
+            raise RuntimeError("Game-root install record is incomplete; manual recovery required.")
+        validated: list[tuple[Path, Path | None]] = []
+        for text, expected in installed.items():
+            relative = Path(text)
+            target = _gameroot_checked(base, relative)
+            if (not target.is_file() or not isinstance(expected, str)
+                    or _file_digest(target) != expected):
+                raise RuntimeError(
+                    f"Installed file changed since install: {text}. "
+                    "Nothing was removed; review manually.")
+            record = originals[text]
+            backup = None
+            if record is not None:
+                if (not isinstance(record, dict) or
+                        set(record) != {"sha256", "size"}):
+                    raise RuntimeError(f"Original inventory invalid: {text}")
+                backup = backups / "files" / relative
+                if (backup.is_symlink() or not backup.is_file() or
+                        not backup.resolve().is_relative_to(backups.resolve()) or
+                        backup.stat().st_size != record["size"] or
+                        _file_digest(backup) != record["sha256"]):
+                    raise RuntimeError(
+                        f"Original backup missing or changed: {text}. "
+                        "Nothing was removed.")
+            validated.append((target, backup))
+
+        txn = state_file().parent / "transactions" / (recipe_id + "-restore-" + uuid.uuid4().hex)
+        preserve_txn = False
+        try:
+            # Preserve the installed bytes in case restoring original files
+            # or committing the state update fails after the first mutation.
+            snapshots = []
+            for target, backup in validated:
+                snap = txn / "installed" / target.relative_to(base)
+                snap.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(target, snap)
+                if _file_digest(snap) != installed[str(target.relative_to(base))]:
+                    raise RuntimeError(f"Cannot protect installed file during restore: {target}")
+                snapshots.append((target, snap, backup))
             try:
-                target.unlink(missing_ok=True)
-            except OSError as exc:
-                recovery_errors.append(f"{target}: {exc}")
-        for target, backup in original_backups.items():
-            try:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(backup, target)
-            except OSError as exc:
-                recovery_errors.append(f"{target}: {exc}")
-        _log("install_rollback", recipe=recipe["id"], error=str(e), archives=[f.name for f in mod_files])
-        if recovery_errors:
-            retain_backups = True
-            raise RuntimeError(f"Installation failed and rollback was incomplete. Recovery files preserved at {txn_root}: "
-                               + "; ".join(recovery_errors)) from e
-        raise
-    finally:
-        shutil.rmtree(stage_root, ignore_errors=True)
-        if not retain_backups:
-            shutil.rmtree(txn_root, ignore_errors=True)
-    _log("install_ok", recipe=recipe["id"], files=len(all_new), archives=[f.name for f in mod_files])
-    return [w for ws in written_by for w in ws]
+                for target, snap, original in snapshots:
+                    if original is None:
+                        target.unlink()
+                    else:
+                        shutil.copy2(original, target)
+                state.pop(recipe_id)
+                _save_state(state)
+            except Exception as exc:
+                errors = []
+                for target, snap, _original in snapshots:
+                    try:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(snap, target)
+                    except OSError as rollback_exc:
+                        errors.append(f"{target}: {rollback_exc}")
+                if errors:
+                    preserve_txn = True
+                    raise RuntimeError(
+                        "Restore failed; recovery copies preserved at "
+                        f"{txn}: " + "; ".join(errors)) from exc
+                raise
+        finally:
+            if not preserve_txn:
+                shutil.rmtree(txn, ignore_errors=True)
+        _log("gameroot_restore_ok", recipe=recipe_id, retained_backup=str(backups))
+        return [target for target, backup in validated]
+
 
 
 def inspect_archive(recipe: dict, archive: Path) -> dict:
@@ -602,12 +797,20 @@ def install_profile(recipe: dict, zip_file: Path, steam_roots=None) -> list[Path
 def uninstall(recipe_id: str) -> list[Path]:
     """Remove what we installed under this key (use '<game>:profile' for a profile)."""
     state = _load_state()
+    if state.get(recipe_id, {}).get("installer") == "gameroot-2":
+        return _uninstall_gameroot(recipe_id)
     if state.get(recipe_id, {}).get("installer") == "pak-1":
         from . import pak
         return pak.uninstall(recipe_id)
     if state.get(recipe_id, {}).get("installer") in {"submersed-vr-1", "vhvr-1", "ervr-1"}:
         from . import bepinex
         return bepinex.uninstall(recipe_id)
+    if (isinstance(state.get(recipe_id), dict)
+            and state[recipe_id].get("keep")
+            and state[recipe_id].get("installer") != "gameroot-2"):
+        raise RuntimeError(
+            "Legacy game-root installation has no verified retained originals. "
+            "Automatic removal is blocked; preserve the game and review manually.")
     entry = state.pop(recipe_id, {})
     removed = []
     for p in entry.get("files", []):

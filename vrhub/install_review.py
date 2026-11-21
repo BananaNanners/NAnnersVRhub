@@ -279,8 +279,17 @@ def _game_root_plan(recipe, files, base):
     rows = []
     packages = []
     blocked = []
-    notes = ["The existing game-root installer restores temporary backups after failure.",
-             "It does not retain originals after success. Existing destinations are blocked."]
+    notes = [
+        "New game-root installations retain original-file backups after success.",
+        "Original and installed file SHA-256 hashes are saved for later safe restoration.",
+        "Existing Hub/legacy installation records must be reviewed separately; never overwritten.",
+        "Manual changes to installed files or retained backups block automatic restore.",
+    ]
+    if hub._load_state().get(recipe["id"]) is not None:
+        blocked.append(
+            "A Hub installation record already exists for this game. "
+            "Legacy installs do not contain verified retained originals; "
+            "installation remains blocked until a separate recovery/migration review.")
     with tempfile.TemporaryDirectory(prefix="nannersvrhub-install-review-") as tmp:
         for i, (comp, archive) in enumerate(ordered):
             if comp and int(comp.get("phase", 1)) > 1:
@@ -297,13 +306,8 @@ def _game_root_plan(recipe, files, base):
                 rows.append(_target_row(base, str(dest), max_existing=MAX_EXISTING_HASH_BYTES))
     if not rows or len(rows) > MAX_DESTINATIONS or len({r.relative.casefold() for r in rows}) != len(rows):
         raise PlanRejected("No destinations or overlapping destinations; install blocked.")
-    if any(r.current_sha256 is not None for r in rows):
-        blocked.append(
-            "One or more existing game files would be replaced, but this "
-            "installer does not retain their backups after success. "
-            "Installation remains blocked until a supported backup policy exists.")
     return tuple(rows), tuple(packages), (
-        "Failure-only rollback; existing-file replacement is BLOCKED"), tuple(blocked), tuple(notes)
+        "Persistent Hub-managed originals; checksum-protected restoration"), tuple(blocked), tuple(notes)
 
 
 def _storage_check(backup_bytes):

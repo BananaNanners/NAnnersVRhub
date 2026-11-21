@@ -203,22 +203,40 @@ class InstallReviewTests(unittest.TestCase):
         self.assertTrue(plan.approved_for_review)
         self.assertEqual(plan.new_files, 2)
         self.assertEqual(plan.overwrites, 0)
-        self.assertIn("failure", plan.backup_policy.lower())
+        self.assertIn("Persistent", plan.backup_policy)
         self.assertEqual(sorted(x.relative for x in plan.target_rows),
                          ["bin/x64/plugins/test.dll", "r6/scripts/cet.reds"])
         self.assertEqual(
             sorted(x.relative_to(self.game) for x in self.game.rglob("*")), before)
         self.assertFalse((self.statefile.parent / "transactions").exists())
 
-    def test_game_root_existing_replacement_is_blocked(self):
+    def test_game_root_existing_replacement_has_persistent_backup_policy(self):
         archive = self.make_cyber()
         self.file("bin/x64/plugins/test.dll", b"protected original")
         plan = review.build_install_plan(self.gameroot_recipe(), [archive])
-        self.assertFalse(plan.approved_for_review)
+        self.assertTrue(plan.approved_for_review)
         self.assertEqual(plan.overwrites, 1)
-        self.assertIn("does not retain", " ".join(plan.blocked))
+        self.assertEqual(plan.backup_bytes, len(b"protected original"))
+        self.assertIn("Persistent", plan.backup_policy)
+        self.assertIn("checksum", plan.backup_policy.lower())
         self.assertEqual((self.game / "bin/x64/plugins/test.dll").read_bytes(),
                          b"protected original")
+        self.assertEqual(review.revalidate(plan, self.gameroot_recipe()).fingerprint,
+                         plan.fingerprint)
+
+    def test_pre_existing_legacy_cyberpunk_record_blocks_new_install(self):
+        archive = self.make_cyber()
+        original = self.file("bin/x64/plugins/test.dll", b"protected original")
+        self.statefile.write_text(json.dumps({"cyberpunk-2077": {
+            "keep": str(self.game), "files": [str(original)],
+            "components": {"107": {"files": [str(original)]}}
+        }}))
+        plan = review.build_install_plan(self.gameroot_recipe(), [archive])
+        self.assertFalse(plan.approved_for_review)
+        self.assertIn("Legacy", " ".join(plan.blocked))
+        self.assertEqual(plan.overwrites, 1)
+        self.assertIn("Persistent", plan.backup_policy)
+        self.assertEqual(original.read_bytes(), b"protected original")
 
     def test_cyberpunk_later_stage_is_blocked_even_without_existing_targets(self):
         later = self.zip("CyberpunkVR Port-30093-v0.zip", [
