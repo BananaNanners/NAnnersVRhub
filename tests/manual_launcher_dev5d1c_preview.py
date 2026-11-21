@@ -776,10 +776,10 @@ def main():
                 win.downloads.table.selectRow(0)
             app.processEvents()
             win.disable_mutations()
-            print(f"KDE DEV5D1B VISUAL POLISH PREVIEW READY at {win.width()}x{win.height()}. "
+            print(f"KDE DEV5D1C VISUAL POLISH PREVIEW READY at {win.width()}x{win.height()}. "
                    "DOOM (2016) is selected. Overview shows Test VR bridge and "
                   "Launch DOOM VR below Launch DOOM (flat) and Preflight. "
-                  "Preflight; Mod Updates has one Refresh; Install / Update has "
+                   "Mod Updates has one Refresh; Install / Update has "
                   "Archive folder and Scan with advanced installation actions "
                   "collapsed; Compatibility and Updates have scoped tools; "
                   "Rollback keeps guarded removal and restoration. "
