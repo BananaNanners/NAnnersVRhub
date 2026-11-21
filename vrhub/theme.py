@@ -356,6 +356,51 @@ QTableWidget QHeaderView {{
 QWidget#guidedDownloadsPage {{
     background: #0A0D10;
 }}
+/* Dev5C: read-only target review and explicit install consent. */
+QLabel#installReviewTitle {{
+    color: #FFD21A;
+    font-size: 18px;
+    font-weight: 800;
+}}
+QLabel#installReviewOverview {{
+    background: #151D25;
+    border: 1px solid #2A3139;
+    border-radius: 7px;
+    padding: 9px;
+    color: #E5E8ED;
+    font-size: 12px;
+}}
+QLabel#installReviewBackup {{
+    color: #23B7FF;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 5px;
+}}
+QTableWidget#installReviewTargets {{
+    background: #11161B;
+    alternate-background-color: #171D23;
+    border: 1px solid #2A3139;
+    border-radius: 8px;
+    selection-background-color: #3B3108;
+}}
+QPushButton#installReviewApply {{
+    color: #FFD21A;
+    border: 1px solid #FFD21A;
+    background: #342B0B;
+    padding: 9px 16px;
+    font-weight: 700;
+}}
+QPushButton#installReviewApply:disabled {{
+    color: #69717C;
+    border: 1px solid #2A3139;
+    background: #151D25;
+}}
+QPushButton#installReviewCancel {{
+    color: #23B7FF;
+    border: 1px solid #244A61;
+    background: #14212B;
+    padding: 9px 16px;
+}}
 QLabel#downloadsHeading {{
     color: #FFD21A;
     font-size: 17px;

@@ -25,7 +25,8 @@ from .launcher_ui import LauncherSidebar, GameBanner
 from .dashboard_ui import GameDashboard, ResponsiveQuickActions, snapshot as dashboard_snapshot
 from .mod_updates_gui import ModUpdatesPage
 from .downloads_gui import GuidedDownloadsPage
-from . import artwork, download_planner
+from .install_review_gui import InstallReviewDialog
+from . import artwork, download_planner, install_review
 from .table_columns import enable_spreadsheet_columns
 
 
@@ -578,6 +579,7 @@ class HubWindow(QMainWindow):
         self.scan_worker: ScanWorker | None = None
         self.scan_report: dict | None = None
         self._closing = False
+        self.allow_guided_installs = True
         self.development_tools_enabled = False
         tools_menu = self.menuBar().addMenu("Tools")
         self.development_tools_action = QAction("Enable development tools", self)
@@ -666,13 +668,21 @@ class HubWindow(QMainWindow):
         self.downloads = GuidedDownloadsPage()
         self.game_details_tabs.addTab(self.downloads, "Downloads / Install Plan")
         self.downloads.inspect_requested.connect(self.inspect_planned_archive)
+        self.downloads.install_review_requested.connect(self.review_requested_install)
         self.downloads.scan_idle.connect(self.close_when_idle)
         self.downloads.download_idle.connect(self.close_when_idle)
         self.game_details_tabs.currentChanged.connect(
             lambda index: self.refresh_compatibility() if index == 1 else None)
-        self.install_btn = QPushButton("Install mod file…")
+        self.install_btn = QPushButton("Review mod archives")
+        self.install_btn.setToolTip(
+            "Choose archive files for review.\n"
+            "The Hub checks exact destinations and backups.\n"
+            "Installation requires a separate confirmation.")
         self.uninstall_btn = QPushButton("Uninstall mod")
-        self.profile_btn = QPushButton("Install profile…")
+        self.profile_btn = QPushButton("UEVR profile status")
+        self.profile_btn.setToolTip(
+            "UEVR profile installs are on hold.\n"
+            "Read the safety status and use the Setup guide.")
         self.unprofile_btn = QPushButton("Remove profile")
         self.copy_btn = QPushButton("Copy launch options")
         self.inject_btn = QPushButton("Run UEVR injector")
@@ -1326,21 +1336,66 @@ class HubWindow(QMainWindow):
         return [Path(f) for f in files]
 
     def install(self):
+        """Both legacy and new install buttons use the same explicit preview."""
         r = self.current()
-        files = r and self._pick_many(f"Choose the {r['name']} file(s) you downloaded")
+        if not r:
+            return
+        files = self._pick_many(f"Choose {r['name']} archive(s) to review")
         if files:
-            self._run(lambda: hub.install_many(r, files, _roots()), "Installed",
-                      lambda out: (f"Installed {len(out)} files." if len(out) > 8 else
-                                   "Installed:\n" + "\n".join(map(str, out))) +
-                      "\n\nNow set the Steam launch options shown on the right.")
+            self.review_installation(r, files)
+
+    def review_requested_install(self, request):
+        r = self.current()
+        if not r or request.get("game_id") != r["id"]:
+            return
+        files = [Path(f) for f in request.get("archives", [])]
+        if not files:
+            files = self._pick_many(f"Choose {r['name']} archive(s) to review")
+        if files:
+            self.review_installation(r, files)
+
+    def review_installation(self, recipe, files):
+        """Read-only manifest -> three explicit consents -> fresh recheck."""
+        if not recipe or self.current() is None or recipe["id"] != self.current()["id"]:
+            return
+        try:
+            plan = install_review.build_install_plan(recipe, files, _roots())
+        except (install_review.PlanRejected, RuntimeError, OSError,
+                zipfile.BadZipFile) as exc:
+            QMessageBox.warning(
+                self, "Installation review refused (nothing changed)", str(exc))
+            return
+        dialog = InstallReviewDialog(
+            plan, self, allow_install=self.allow_guided_installs)
+        if dialog.exec() != QDialog.Accepted or not dialog.confirmed_by_user:
+            return
+        # This remains a hard safety gate even if a future preview accidentally
+        # enables an install button or a test invokes a dialog directly.
+        if not self.allow_guided_installs or not plan.approved_for_review:
+            return
+        try:
+            install_review.revalidate(plan, recipe, _roots())
+        except (install_review.PlanRejected, OSError, RuntimeError,
+                zipfile.BadZipFile) as exc:
+            QMessageBox.warning(
+                self, "Game or archives changed — install cancelled", str(exc))
+            return
+        self._run(lambda: hub.install_many(recipe,
+                                           [Path(f) for f in plan.archives], _roots()),
+                  "Guided installation completed",
+                  lambda out: f"Installed {len(out)} reviewed game files.\n"
+                  "Original-file backups follow the reviewed installer policy.\n"
+                  "No save files were intentionally changed.")
 
     def install_profile(self):
-        r = self.current()
-        f = r and self._pick("Choose the profile .zip you downloaded")
-        if f:
-            self._run(lambda: hub.install_profile(r, f, _roots()), "Profile installed",
-                      lambda files: f"Installed {len(files)} profile files.\n"
-                      "Anything that was there before is backed up.")
+        """Prevent a legacy profile-install path from skipping safety review."""
+        QMessageBox.information(
+            self, "UEVR profile installation requires manual review",
+            "This profile installer does not yet have an independently verified "
+            "destination/backup preview. No files have been changed. "
+            "Use the Setup guide and existing UEVR profile instructions. "
+            "Profile installation will be enabled after its safe backup workflow "
+            "has been validated.")
 
     def uninstall(self):
         r = self.current()

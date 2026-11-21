@@ -110,6 +110,7 @@ class ResponsiveDownloadActions(QWidget):
 class GuidedDownloadsPage(QWidget):
     """One plan per selected game; no hidden installer actions."""
     inspect_requested = Signal(str)
+    install_review_requested = Signal(object)
     scan_idle = Signal()
     download_idle = Signal()
 
@@ -243,6 +244,14 @@ class GuidedDownloadsPage(QWidget):
         self.inspect.setEnabled(False)
         self.inspect.clicked.connect(self._inspect)
         footer.addWidget(self.inspect)
+        self.install_review_button = QPushButton("Review installation")
+        self.install_review_button.setObjectName("downloadsAction")
+        self.install_review_button.setToolTip(
+            "Preview exact game-file destinations.\n"
+            "Check conflicts and required backups.\n"
+            "Nothing changes without confirmation.")
+        self.install_review_button.clicked.connect(self._request_install_review)
+        footer.addWidget(self.install_review_button)
         footer.addStretch()
         outer.addLayout(footer)
 
@@ -335,6 +344,7 @@ class GuidedDownloadsPage(QWidget):
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan):
             btn.setEnabled(bool(recipe) and not (active_scan or active_download))
+        self.install_review_button.setEnabled(bool(recipe) and not (active_scan or active_download))
         self._update_download_button()
         if recipe and folder:
             try:
@@ -471,7 +481,7 @@ class GuidedDownloadsPage(QWidget):
         self.progress.show()
         self.summary.setText("Scanning local archives and checking any pinned release hashes…")
         for btn in (self.set_global, self.set_game, self.clear_game,
-                    self.reset_global, self.scan):
+                    self.reset_global, self.scan, self.install_review_button):
             btn.setEnabled(False)
         worker = LocalInventoryWorker(dict(self.recipe), folder, self)
         self.worker = worker
@@ -583,6 +593,30 @@ class GuidedDownloadsPage(QWidget):
             if path and Path(path).is_file():
                 self.inspect_requested.emit(str(path))
 
+    def _request_install_review(self):
+        """Emit only file selections. Parent must rebuild the exact manifest."""
+        if not self.recipe or not self.install_review_button.isEnabled():
+            return
+        rid = self.recipe["id"]
+        paths = []
+        method = self.recipe.get("method")
+        if self._last_plan and self._last_plan.get("game_id") == rid:
+            records = self._last_plan["rows"]
+            if method in ("bepinex", "ervr"):
+                # An ordered set is required for pinned multi-package installs.
+                paths = [row["file"] for row in records
+                         if row.get("status") == "Pinned SHA-256 verified"
+                         and row.get("file") and Path(row["file"]).is_file()]
+            else:
+                i = self.table.currentRow()
+                if 0 <= i < len(records):
+                    row = records[i]
+                    if (row.get("file") and Path(row["file"]).is_file()
+                            and row.get("status") != "Archive changed — rescan required"):
+                        paths = [row["file"]]
+        self.install_review_requested.emit({
+            "game_id": rid, "archives": paths, "origin": "downloads-page"})
+
     def _selected_component(self):
         """Resolve selection against the CURRENT recipe, not snapshot data."""
         if not self.recipe:
@@ -689,7 +723,7 @@ class GuidedDownloadsPage(QWidget):
         self.download_button.setEnabled(False)
         self.download_cancel.setEnabled(True)
         for btn in (self.set_global, self.set_game, self.clear_game,
-                    self.reset_global, self.scan):
+                    self.reset_global, self.scan, self.install_review_button):
             btn.setEnabled(False)
         worker = VerifiedArchiveDownloadWorker(authority, self)
         self.download_worker = worker
