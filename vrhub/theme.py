@@ -365,6 +365,14 @@ QLabel#downloadsExplanation {{
     color: #A7ADB7;
     font-size: 11px;
 }}
+QLabel#downloadsFolderFeedback {{
+    background: #14212B;
+    color: #23B7FF;
+    border: 1px solid #244A61;
+    border-radius: 6px;
+    padding: 6px 9px;
+    font-size: 11px;
+}}
 QLabel#downloadsScanAge {{
     color: #23B7FF;
     font-size: 11px;

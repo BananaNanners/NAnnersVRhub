@@ -297,12 +297,21 @@ def main():
                     win.downloads.clear_game, win.downloads.reset_global,
                     win.downloads.scan)] == [
                     "Choose default folder", "Choose game folder",
-                    "Use default folder", "Auto-detect folder",
+                    "Use default folder", "Auto-detect default",
                     "Scan local archives"])
             checks["hover_help_disambiguates_folder_reset_from_scan_reset"] = (
-                "does NOT clear saved scan" in win.downloads.reset_global.toolTip()
-                and "other games" in win.downloads.set_game.toolTip()
-                and "does not download" in win.downloads.scan.toolTip().lower())
+                "SHARED folder" in win.downloads.reset_global.toolTip()
+                and "Other games" in win.downloads.set_game.toolTip()
+                and "No archives" in win.downloads.scan.toolTip())
+            checks["hover_descriptions_are_compact_multiline"] = all(
+                2 <= len(btn.toolTip().splitlines()) <= 3 and
+                max(len(line) for line in btn.toolTip().splitlines()) <= 58
+                for btn in (win.downloads.set_global, win.downloads.set_game,
+                            win.downloads.clear_game, win.downloads.reset_global,
+                            win.downloads.scan, win.downloads.inspect))
+            checks["default_and_override_are_visible_separately"] = (
+                "Current game folder" in win.downloads.location.text()
+                and "Shared default" in win.downloads.location.text())
 
             # New page simulates reopening the application. Its view comes
             # from the isolated on-disk scan snapshot, not the old QWidget.
@@ -344,11 +353,12 @@ def main():
         if opts.verify:
             QTimer.singleShot(800, lambda: app.exit(0 if all(checks.values()) else 1))
         else:
-            # Open on Cyberpunk's fifteen-stage installation plan with the
-            # detailed library table expanded for column drag acceptance.
+            # Open on Cyberpunk's plan with the detailed library collapsed,
+            # keeping the folder buttons and short hover hints on screen.
+            # The independent spreadsheet acceptance has already passed.
             win.sidebar.game_list.setCurrentRow(target)
             win.game_details_tabs.setCurrentIndex(4)
-            win.library_toggle.setChecked(True)
+            win.library_toggle.setChecked(False)
             win.game_page_scroll.verticalScrollBar().setValue(0)
             app.processEvents()
             win.disable_mutations()
@@ -356,11 +366,12 @@ def main():
                   "Downloads / Install Plan tab is selected. Scan Cyberpunk, "
                   "switch to Valheim, then return to Cyberpunk to verify persistence. "
                   "Use Scan local archives, "
-                  "Choose default folder, Choose game folder and Auto-detect folder. "
+                  "Choose default folder, Choose game folder and Auto-detect default. "
                   "Pinned SHA-256 matches are green; filename-only matches need inspection. "
                   "All settings saved only in private test data; downloads, installation, "
-                  "game launches and rollback are disabled. Hover over folder buttons for help. Drag headers between "
-                  "Game/Game install and other column names, or double-click to autofit. "
+                  "game launches and rollback are disabled. Hover over folder buttons for short help. "
+                  "Both shared and per-game folders are shown; Auto-detect default only "
+                  "resets the shared choice. Drag column headers to resize, or double-click to autofit. "
                   "Column widths remember your choices within this test preview.", flush=True)
 
     polling = QTimer()

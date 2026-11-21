@@ -71,7 +71,7 @@ class DownloadsQtTests(unittest.TestCase):
             "Choose default folder",
             "Choose game folder",
             "Use default folder",
-            "Auto-detect folder",
+            "Auto-detect default",
             "Scan local archives",
         ])
         for button in (self.page.set_global, self.page.set_game,
@@ -80,15 +80,21 @@ class DownloadsQtTests(unittest.TestCase):
             with self.subTest(button=button.text()):
                 self.assertNotIn("...", button.text())
                 self.assertNotIn("…", button.text())
-                self.assertGreater(len(button.toolTip()), 75)
-        self.assertIn("folder picker", self.page.set_global.toolTip())
-        self.assertIn("folder picker", self.page.set_game.toolTip())
-        self.assertIn("other games", self.page.set_game.toolTip())
-        self.assertIn("scans are kept", self.page.clear_game.toolTip().lower())
-        self.assertIn("does NOT clear saved scan", self.page.reset_global.toolTip())
-        self.assertIn("effective folders change", self.page.reset_global.toolTip())
-        self.assertIn("does not download", self.page.scan.toolTip().lower())
-        self.assertIn("No mod is installed", self.page.inspect.toolTip())
+                lines = button.toolTip().splitlines()
+                self.assertGreaterEqual(len(lines), 2)
+                self.assertLessEqual(len(lines), 3)
+                self.assertTrue(all(len(line) <= 58 for line in lines))
+                self.assertLessEqual(
+                    max(button.fontMetrics().horizontalAdvance(line)
+                        for line in lines), 425)
+        self.assertIn("shared archive", self.page.set_global.toolTip())
+        self.assertIn("this game only", self.page.set_game.toolTip())
+        self.assertIn("Other games", self.page.set_game.toolTip())
+        self.assertIn("Unchanged-folder scans", self.page.clear_game.toolTip())
+        self.assertIn("SHARED folder", self.page.reset_global.toolTip())
+        self.assertIn("game-specific folder stays", self.page.reset_global.toolTip())
+        self.assertIn("No archives", self.page.scan.toolTip())
+        self.assertIn("nothing is installed", self.page.inspect.toolTip())
 
     def test_auto_detect_folder_keeps_saved_scan_if_effective_folder_unchanged(self):
         self.page.set_recipe(self.recipe)
@@ -105,6 +111,59 @@ class DownloadsQtTests(unittest.TestCase):
         self.assertIn("Saved scan:", self.page.scan_age.text())
         self.assertIn("1 possible matches", self.page.summary.text())
         self.assertEqual(archive.read_bytes(), b"sample")
+
+    def test_auto_detect_explains_why_game_specific_folder_does_not_change(self):
+        default = self.root / "shared-custom"
+        custom = self.root / "game-custom"
+        default.mkdir()
+        custom.mkdir()
+        planner.set_location("global", str(default))
+        planner.set_location("game", str(custom), self.recipe["id"])
+        self.page.set_recipe(self.recipe)
+        self.assertIn(f"Shared default (manually selected): {default}",
+                      self.page.location.text())
+        self.assertIn(f"Current game folder (Per-game override): {custom}",
+                      self.page.location.text())
+        self.page.reset_global.click()
+        self.app.processEvents()
+        self.assertIsNone(planner.load_preferences()["global"])
+        self.assertEqual(planner.folder_for(self.recipe)[0], custom)
+        self.assertIn("Shared default (auto-detected)", self.page.location.text())
+        self.assertIn("still uses its custom folder",
+                      self.page.folder_action_feedback.text())
+        self.assertIn("'Use default folder'",
+                      self.page.folder_action_feedback.text())
+        self.page.clear_game.click()
+        self.app.processEvents()
+        self.assertEqual(planner.folder_for(self.recipe)[0], self.library)
+        self.assertIn(f"Current game folder (Auto-discovered archive library): {self.library}",
+                      self.page.location.text())
+
+    def test_auto_detect_without_custom_shared_folder_explains_no_change(self):
+        self.page.set_recipe(self.recipe)
+        self.assertFalse((self.root / "settings.json").exists())
+        self.page.reset_global.click()
+        self.app.processEvents()
+        self.assertFalse((self.root / "settings.json").exists())
+        self.assertIn("already auto-detected",
+                      self.page.folder_action_feedback.text())
+
+    def test_choose_shared_folder_under_game_override_explains_priority(self):
+        chosen = self.root / "shared-custom"
+        custom = self.root / "game-custom"
+        chosen.mkdir()
+        custom.mkdir()
+        planner.set_location("game", str(custom), self.recipe["id"])
+        self.page.set_recipe(self.recipe)
+        with mock.patch("vrhub.downloads_gui.QFileDialog.getExistingDirectory",
+                        return_value=str(chosen)):
+            self.page.set_global.click()
+        self.app.processEvents()
+        self.assertEqual(planner.folder_for(self.recipe)[0], custom)
+        self.assertIn(f"Shared default (manually selected): {chosen}",
+                      self.page.location.text())
+        self.assertIn("still uses its custom folder",
+                      self.page.folder_action_feedback.text())
 
     def test_native_component_list_has_15_rows_without_scanning(self):
         self.page.set_recipe(self.recipe)

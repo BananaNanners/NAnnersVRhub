@@ -126,39 +126,42 @@ class GuidedDownloadsPage(QWidget):
         self.set_game.setObjectName("downloadsAction")
         self.clear_game = QPushButton("Use default folder")
         self.clear_game.setObjectName("downloadsAction")
-        self.reset_global = QPushButton("Auto-detect folder")
+        self.reset_global = QPushButton("Auto-detect default")
         self.reset_global.setObjectName("downloadsAction")
         self.scan = QPushButton("Scan local archives")
         self.scan.setObjectName("downloadsScan")
-        # Clear hover descriptions, not ambiguous trailing ellipses. Resetting
-        # a folder is not the same operation as clearing saved scan results.
+        # Brief, deliberately line-broken native tooltips. One action per
+        # button; no multi-paragraph mouse hover covering other controls.
         self.set_global.setToolTip(
-            "Choose the default folder used to look for downloaded mod archives "
-            "for games without a custom folder. Opens a folder picker. "
-            "Does not download, move, or delete archives.")
+            "Choose the shared archive folder.\n"
+            "Used by games without their own folder.\n"
+            "Archives are not moved or downloaded.")
         self.set_game.setToolTip(
-            "Choose a mod archive folder for this game only. Opens a folder "
-            "picker. If the folder changes, this game's old scan no longer "
-            "applies; other games' saved scans remain intact.")
+            "Choose a folder for this game only.\n"
+            "Changing it clears this game's old scan.\n"
+            "Other games keep their saved scans.")
         self.clear_game.setToolTip(
-            "Remove this game's custom folder choice and use the shared "
-            "default folder instead. Saved scans are kept if the effective "
-            "folder stays the same. No archives are deleted.")
+            "Remove this game's folder override.\n"
+            "Use the shared default folder instead.\n"
+            "Unchanged-folder scans stay saved.")
         self.reset_global.setToolTip(
-            "Clear the manually chosen DEFAULT folder and return to "
-            "automatic folder discovery. This does NOT clear saved scan "
-            "results or verification for unchanged folders. Results for "
-            "games whose effective folders change are invalidated. "
-            "No archives or mods are deleted.")
+            "Restore automatic SHARED folder discovery.\n"
+            "A game-specific folder stays selected.\n"
+            "Unchanged-folder scans stay saved.")
         self.scan.setToolTip(
-            "Read the selected local archive folder, check recipe-pinned "
-            "SHA-256 hashes, and save this game's new scan snapshot. "
-            "Does not download, install, move, or delete any archive.")
+            "Scan this game's selected archive folder.\n"
+            "Update its saved verification results.\n"
+            "No archives are installed or changed.")
         self.action_toolbar = ResponsiveDownloadActions((
             self.set_global, self.set_game, self.clear_game,
             self.reset_global, self.scan,
         ))
         outer.addWidget(self.action_toolbar)
+        self.folder_action_feedback = QLabel("")
+        self.folder_action_feedback.setObjectName("downloadsFolderFeedback")
+        self.folder_action_feedback.setWordWrap(True)
+        self.folder_action_feedback.hide()
+        outer.addWidget(self.folder_action_feedback)
         self.set_global.clicked.connect(lambda: self._choose_folder("global"))
         self.set_game.clicked.connect(lambda: self._choose_folder("game"))
         self.clear_game.clicked.connect(self._clear_game)
@@ -200,8 +203,8 @@ class GuidedDownloadsPage(QWidget):
         self.inspect = QPushButton("Inspect selected archive (read-only)")
         self.inspect.setObjectName("downloadsAction")
         self.inspect.setToolTip(
-            "Inspect the selected existing archive using the Hub's supported "
-            "read-only staging checker. No mod is installed or changed.")
+            "Inspect a supported local archive.\n"
+            "Read-only check; nothing is installed.")
         self.inspect.setEnabled(False)
         self.inspect.clicked.connect(self._inspect)
         footer.addWidget(self.inspect)
@@ -233,6 +236,10 @@ class GuidedDownloadsPage(QWidget):
             folder, source = self._folder()
         except (ValueError, RuntimeError, OSError) as exc:
             folder, source, error = None, "", str(exc)
+        if rid != self._last_id:
+            # Never carry an action result from another game into this one.
+            self.folder_action_feedback.clear()
+            self.folder_action_feedback.hide()
         if rid != self._last_id or folder != self._last_folder:
             self._last_id = rid
             self._last_folder = folder
@@ -250,10 +257,21 @@ class GuidedDownloadsPage(QWidget):
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan):
             btn.setEnabled(bool(recipe) and (not self.worker or not self.worker.isRunning()))
-        if recipe:
-            self.location.setText(
-                f"{source}: {folder}" if folder else
-                f"Download preferences unavailable: {error}")
+        if recipe and folder:
+            try:
+                prefs = planner.load_preferences()
+                shared = (Path(prefs["global"]) if prefs["global"]
+                          else planner.default_library())
+                shared_source = ("manually selected" if prefs["global"]
+                                 else "auto-detected")
+                self.location.setText(
+                    f"Current game folder ({source}): {folder}\n"
+                    f"Shared default ({shared_source}): {shared}")
+            except (ValueError, RuntimeError, OSError) as exc:
+                self.location.setText(f"{source}: {folder}\n"
+                                      f"Shared folder preference error: {exc}")
+        elif recipe:
+            self.location.setText(f"Download preferences unavailable: {error}")
         else:
             self.location.setText("Select a game to review its archive library.")
         self.location.setToolTip(str(folder or error or ""))
@@ -261,6 +279,10 @@ class GuidedDownloadsPage(QWidget):
             self._display_unsanned(recipe, error)
         else:
             self._show_plan(self._last_plan)
+
+    def _folder_feedback(self, message):
+        self.folder_action_feedback.setText(message)
+        self.folder_action_feedback.setVisible(bool(message))
 
     def _set_scan_age(self, record):
         scanned = datetime.fromisoformat(record["scanned_at"]).astimezone()
@@ -305,6 +327,15 @@ class GuidedDownloadsPage(QWidget):
                                  self.recipe["id"] if scope == "game" else None)
             self._invalidate_changed_locations()
             self.set_recipe(self.recipe)
+            if scope == "global" and planner.load_preferences()["games"].get(
+                    self.recipe["id"]):
+                self._folder_feedback(
+                    "Shared default changed. This game still uses its custom "
+                    "folder. Select 'Use default folder' to switch it.")
+            else:
+                self._folder_feedback(
+                    "Folder choice updated. Archives were not moved. "
+                    "Rescan if the selected folder changed.")
         except (RuntimeError, ValueError, OSError) as exc:
             self.summary.setText(f"Folder was NOT saved: {exc}")
 
@@ -315,6 +346,9 @@ class GuidedDownloadsPage(QWidget):
             planner.set_location("game", None, self.recipe["id"])
             self._invalidate_changed_locations()
             self.set_recipe(self.recipe)
+            self._folder_feedback(
+                "This game now uses the shared default. Saved results are "
+                "kept when its effective folder is unchanged.")
         except (RuntimeError, ValueError, OSError) as exc:
             self.summary.setText(f"Folder preference was NOT changed: {exc}")
 
@@ -322,9 +356,27 @@ class GuidedDownloadsPage(QWidget):
         if not self.recipe:
             return
         try:
-            planner.set_location("global", None)
-            self._invalidate_changed_locations()
+            prefs = planner.load_preferences()
+            had_shared_override = bool(prefs["global"])
+            has_game_override = bool(prefs["games"].get(self.recipe["id"]))
+            # Avoid a needless preference-file write when the shared default
+            # is already auto-detected.
+            if had_shared_override:
+                planner.set_location("global", None)
+                self._invalidate_changed_locations()
             self.set_recipe(self.recipe)
+            if has_game_override:
+                self._folder_feedback(
+                    "Shared default now auto-detected. This game still uses "
+                    "its custom folder. Select 'Use default folder' to switch.")
+            elif had_shared_override:
+                self._folder_feedback(
+                    "Shared default restored to automatic discovery. "
+                    "Rescan if the selected folder changed.")
+            else:
+                self._folder_feedback(
+                    "Shared default is already auto-detected. No setting "
+                    "or saved scan was changed.")
         except (RuntimeError, ValueError, OSError) as exc:
             self.summary.setText(f"Default folder preference was NOT changed: {exc}")
 

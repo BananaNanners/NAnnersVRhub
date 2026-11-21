@@ -84,3 +84,41 @@ are read-only, and all preview settings remain isolated from production.
 - [ ] Hover over every control and see a helpful description of its actual behavior.
 - [ ] **Auto-detect folder** clearly states that unchanged-folder scans persist.
 - [ ] Existing Cyberpunk, Valheim and Subnautica snapshots still reappear on game switch.
+
+## Compact hover descriptions and visible Auto-detect result
+
+User screenshots revealed that Qt's previous long, unbroken tooltips stretched
+almost the entire desktop width. Hover text is now limited to **two or three
+short lines** (under 59 characters each), preserving native KDE/Qt tooltip
+appearance without covering the window.
+
+**Auto-detect default** is now explicitly scoped to the SHARED default
+archive folder. The location display shows BOTH the current selected game
+folder and the shared default, with a marker for auto-detection, manual shared
+selection, or a per-game override. A dedicated inline result message explains
+when the shared default was restored but a per-game override still takes
+precedence, and directs the user to **Use default folder**. It also reports
+when the shared default was already auto-detected, without unnecessarily
+writing a settings file.
+
+Archive results are not cleared when the effective folder is unchanged.
+The selected game's existing override remains intact until the user chooses
+**Use default folder**; resetting the shared default cannot silently
+change another game's manually chosen folder. No destructive actions exist.
+
+### Additional desktop acceptance
+
+- [ ] Hover hints fit in compact multi-line boxes rather than spanning the screen.
+- [ ] Set a custom game folder and click **Auto-detect default**: both folder paths remain visible, and the message explains the custom override is still active.
+- [ ] Click **Use default folder**: the selected game returns to the shared default.
+- [ ] With an unchanged effective folder, saved scans remain present.
+
+### Verified follow-up checkpoint (2026-11-20)
+
+- Native tooltips shortened to 2–3 deliberate lines, each at most 58 characters; test additionally checks rendered font metrics remain within 425 pixels per line.
+- **Auto-detect default** resets only the shared default, not a game-specific override. The page explicitly shows the effective game folder and the shared default together, and a short feedback message explains what occurred and whether the game override still applies.
+- **Use default folder** removes the game override so its effective path follows the shared default. Clicking Auto-detect with no custom shared default reports that no change was necessary and avoids writing settings.
+- New desktop preview opens with the old detailed library table collapsed so all folder controls are visible.
+- Complete regression: **762 tests run, 761 passed, 1 skipped**.
+- Isolated real-library Qt verification: **75/75 checks passed**, including tooltip length and separate folder source displays.
+- **KDE user acceptance of this follow-up is pending.** No new downloads, installs or game-file writes were enabled.
