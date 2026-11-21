@@ -151,10 +151,11 @@ def main():
                 abs(win.width() - expected_open_size[0]) <= 2
                 and abs(win.height() - expected_open_size[1]) <= 2,
             "seven_game_nav_tabs": (
-                [win.game_details_tabs.tabText(i)
-                 for i in range(win.game_details_tabs.count())] ==
-                ["Overview", "Mod Updates", "Install / Update", "Rollback",
-                 "Compatibility", "Controller Bindings", "Setup Guide"]),
+                win.game_details_tabs.count() == 7
+                and win.game_details_tabs.tabText(1).split(" (", 1)[0] == "Mod Updates"
+                and [win.game_details_tabs.tabText(i) for i in (0, 2, 3, 4, 5, 6)]
+                    == ["Overview", "Install / Update", "Rollback",
+                        "Compatibility", "Controller Bindings", "Setup Guide"]),
             "all_seven_icons_visible": all(
                 not win.game_details_tabs.tabIcon(i).isNull()
                 for i in range(win.game_details_tabs.count())),
@@ -586,7 +587,7 @@ def main():
                 win.downloads.table.selectRow(0)
             app.processEvents()
             win.disable_mutations()
-            print(f"KDE DEV5D1A PROFILE SAFETY PREVIEW READY at {win.width()}x{win.height()}. "
+            print(f"KDE DEV5D1A GAME NAVIGATION PREVIEW READY at {win.width()}x{win.height()}. "
                   "Hogwarts Legacy is selected. Review the seven game tabs, "
                   "the Compatibility report, Controller Bindings, Setup Guide "
                   "and Rollback safety notices. Existing status cards and "
