@@ -49,7 +49,8 @@ class OverviewLaunchToolsTests(unittest.TestCase):
         self.assertLessEqual(panel.maximumWidth(), 760)
         self.assertIsInstance(self.window.launch_tools_label, QLabel)
         self.assertEqual(self.window.launch_tools_label.text(), "LAUNCH TOOLS")
-        self.assertIs(self.window.game_launch_btn.parent(), self.window.more_tools_panel)
+        self.assertIs(self.window.game_launch_btn.parent(), panel)
+        self.assertIs(self.window.doom_probe_btn.parent(), panel)
         self.assertEqual(self.window.quick_actions.buttons,
                          (self.window.game_play_btn, self.window.preflight_btn))
         self.assertTrue(panel.isVisible())
@@ -71,14 +72,28 @@ class OverviewLaunchToolsTests(unittest.TestCase):
                 self.select_game(recipe_id)
                 self.assertEqual(self.window.copy_btn.isVisible(), copy_supported)
                 self.assertEqual(self.window.inject_btn.isVisible(), injector_supported)
+                special_launcher = recipe_id in ("skyrim-vr-mgo", "doom-2016-gog")
                 self.assertEqual(self.window.launch_tools_panel.isVisible(),
-                                 copy_supported or injector_supported)
+                                 copy_supported or injector_supported or special_launcher)
+                self.assertEqual(self.window.game_launch_btn.isVisible(),
+                                 special_launcher)
+                self.assertEqual(self.window.doom_probe_btn.isVisible(),
+                                 recipe_id == "doom-2016-gog")
                 self.assertEqual(self.window.copy_btn.isEnabled(), copy_supported)
                 self.assertEqual(self.window.inject_btn.isEnabled(), injector_supported)
 
     def test_switching_from_no_actions_to_both_restores_buttons(self):
         self.select_game("doom-2016-gog")
-        self.assertTrue(self.window.launch_tools_panel.isHidden())
+        self.assertTrue(self.window.launch_tools_panel.isVisible())
+        self.assertEqual(self.window.game_launch_btn.text(), "Launch DOOM VR")
+        self.assertEqual(self.window.game_play_btn.text(), "Launch DOOM (flat)")
+        self.assertTrue(self.window.doom_probe_btn.isVisible())
+        self.select_game("skyrim-vr-mgo")
+        self.assertTrue(self.window.launch_tools_panel.isVisible())
+        self.assertEqual(self.window.game_launch_btn.text(), "Launch MO2")
+        self.assertEqual(self.window.game_play_btn.text(), "Launch Skyrim VR")
+        self.assertTrue(self.window.copy_btn.isVisible())
+        self.assertFalse(self.window.doom_probe_btn.isVisible())
         self.select_game("fatekeeper")
         self.assertTrue(self.window.launch_tools_panel.isVisible())
         self.assertTrue(self.window.copy_btn.isVisible())
@@ -121,6 +136,71 @@ class OverviewLaunchToolsTests(unittest.TestCase):
             fresh.inject_btn.click()
             injector.assert_called_once_with()
 
+    def test_bridge_logs_are_compatibility_diagnostics_with_distinct_labels(self):
+        from pathlib import Path
+        with mock.patch("vrhub.gui.hub.game_bridge_log",
+                        return_value=Path("/fake/bridge.log")):
+            self.select_game("skyrim-vr-mgo")
+            self.assertEqual(self.window.bridge_log_btn.text(), "Open MO2 bridge log")
+            self.assertIs(self.window.bridge_log_btn.parent(),
+                          self.window.more_tools_panel)
+            self.assertFalse(self.window.doom_logs_btn.isVisible())
+            self.select_game("doom-2016-gog")
+            self.assertEqual(self.window.bridge_log_btn.text(), "Open KHARVOX log")
+            self.assertIs(self.window.bridge_log_btn.parent(),
+                          self.window.more_tools_panel)
+            self.assertIs(self.window.doom_logs_btn.parent(),
+                          self.window.more_tools_panel)
+            self.window.game_details_tabs.setCurrentIndex(
+                self.window.game_details_tabs.indexOf(self.window.compat_page))
+            self.window.more_tools_toggle.setChecked(True)
+            self.app.processEvents()
+            self.assertTrue(self.window.bridge_log_btn.isVisible())
+
+    def test_original_mo2_and_doom_launcher_handlers_are_still_wired(self):
+        # Patch before constructing the window so the real Qt click signal
+        # connects to the mock rather than launching any Steam or DOOM process.
+        self.window.close()
+        self.window.deleteLater()
+        with mock.patch.object(HubWindow, "launch_game_tool") as launcher:
+            fresh = HubWindow()
+            self.addCleanup(fresh.close)
+            fresh.show()
+            for game_id, title in (
+                ("skyrim-vr-mgo", "Launch MO2"),
+                ("doom-2016-gog", "Launch DOOM VR"),
+            ):
+                row = next(i for i, r in enumerate(fresh.rows)
+                           if r["recipe"]["id"] == game_id)
+                fresh.table.selectRow(row)
+                fresh.game_details_tabs.setCurrentIndex(
+                    fresh.game_details_tabs.indexOf(fresh.overview_page))
+                self.app.processEvents()
+                self.assertEqual(fresh.game_launch_btn.text(), title)
+                self.assertTrue(fresh.game_launch_btn.isVisible())
+                fresh.game_launch_btn.click()
+            self.assertEqual(launcher.call_count, 2)
+            self.assertEqual([args for args, _ in launcher.call_args_list],
+                             [(), ()])
+
+    def test_doom_bridge_probe_keeps_its_guarded_handler(self):
+        self.window.close()
+        self.window.deleteLater()
+        with mock.patch.object(HubWindow, "run_kharvox_bridge") as probe:
+            fresh = HubWindow()
+            self.addCleanup(fresh.close)
+            fresh.show()
+            row = next(i for i, r in enumerate(fresh.rows)
+                       if r["recipe"]["id"] == "doom-2016-gog")
+            fresh.table.selectRow(row)
+            fresh.game_details_tabs.setCurrentIndex(
+                fresh.game_details_tabs.indexOf(fresh.overview_page))
+            self.app.processEvents()
+            self.assertTrue(fresh.doom_probe_btn.isVisible())
+            self.assertEqual(fresh.doom_probe_btn.text(), "Test VR bridge")
+            fresh.doom_probe_btn.click()
+            probe.assert_called_once_with("probe")
+
     def test_compatibility_diagnostics_still_accessible(self):
         self.select_game("fatekeeper")
         self.window.game_details_tabs.setCurrentIndex(
@@ -133,7 +213,9 @@ class OverviewLaunchToolsTests(unittest.TestCase):
         self.assertIs(self.window.support_report_btn.parent(),
                       self.window.more_tools_panel)
         self.assertIs(self.window.game_launch_btn.parent(),
-                      self.window.more_tools_panel)
+                      self.window.launch_tools_panel)
+        self.assertIs(self.window.doom_probe_btn.parent(),
+                      self.window.launch_tools_panel)
         self.assertNotIn(self.window.copy_btn,
                          self.window.more_tools_panel.findChildren(
                              __import__("PySide6.QtWidgets", fromlist=["QPushButton"]).QPushButton))

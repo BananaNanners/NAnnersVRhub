@@ -776,10 +776,11 @@ class HubWindow(QMainWindow):
         advanced_layout = QVBoxLayout(self.more_tools_panel)
         advanced_layout.setContentsMargins(4, 5, 4, 5)
         advanced_layout.setSpacing(7)
-        advanced_layout.addLayout(_row(self.game_launch_btn))
+        # Per-game launchers and the DOOM bridge pre-launch test live on
+        # Overview. Compatibility retains bridge logs and other diagnostics.
         advanced_layout.addLayout(_row(self.diag_btn, self.bridge_log_btn,
                                        self.log_diagnostics_btn, self.support_report_btn))
-        advanced_layout.addLayout(_row(self.doom_probe_btn, self.doom_logs_btn))
+        advanced_layout.addLayout(_row(self.doom_logs_btn))
         self.more_tools_panel.hide()
         self.more_tools_toggle.toggled.connect(self.more_tools_panel.setVisible)
         self.more_tools_toggle.toggled.connect(
@@ -839,9 +840,10 @@ class HubWindow(QMainWindow):
         self.quick_actions.setMaximumWidth(760)
         overview_layout.addWidget(self.quick_actions)
 
-        # Dev5D1-B refinement: secondary launch actions should live beside
-        # Launch Game/Preflight, not inside Compatibility diagnostics. Reuse
-        # the two original buttons and their original click handlers.
+        # Secondary launch/pre-launch actions live alongside Launch Game and
+        # Preflight. Reuse each original button and its existing click handler:
+        # Steam options, UEVR injector, handler-owned MO2/KHARVOX launcher,
+        # and the DOOM-specific synthetic VR bridge pre-launch probe.
         self.launch_tools_panel = QWidget()
         self.launch_tools_panel.setObjectName("overviewLaunchTools")
         self.launch_tools_panel.setMaximumWidth(760)
@@ -851,7 +853,9 @@ class HubWindow(QMainWindow):
         self.launch_tools_label = QLabel("LAUNCH TOOLS")
         self.launch_tools_label.setObjectName("launchToolsLabel")
         launch_tools_layout.addWidget(self.launch_tools_label)
-        launch_tools_layout.addLayout(_row(self.copy_btn, self.inject_btn))
+        launch_tools_layout.addLayout(_row(
+            self.copy_btn, self.inject_btn,
+            self.game_launch_btn, self.doom_probe_btn))
         overview_layout.addWidget(self.launch_tools_panel)
 
         overview_layout.addWidget(self.library_toggle)
@@ -1234,12 +1238,15 @@ class HubWindow(QMainWindow):
         self.inject_btn.setVisible(supports_injector)
         self.copy_btn.setEnabled(supports_steam_options)
         self.copy_btn.setVisible(supports_steam_options)
-        self.launch_tools_panel.setVisible(
-            supports_injector or supports_steam_options)
         label = hub.game_launcher_label(r) if r else None
         self.game_launch_btn.setText(label or "Launch game tool")
         self.game_launch_btn.setVisible(bool(label))
         self.game_launch_btn.setEnabled(bool(label))
+        # Some launchers are MO2/KHARVOX rather than generic Steam/UEVR
+        # launchers. DOOM's bridge probe is a prerequisite check, not a
+        # gameplay validation; it remains the existing guarded operation.
+        self.launch_tools_panel.setVisible(
+            supports_injector or supports_steam_options or bool(label) or kharvox)
         play_label = hub.game_play_label(r) if r else None
         self.game_play_btn.setText(play_label or "Launch game")
         self.game_play_btn.setVisible(bool(play_label))
@@ -1255,7 +1262,9 @@ class HubWindow(QMainWindow):
         self.unprofile_btn.setVisible(has_profile and not kharvox)
         self.bridge_log_btn.setVisible(bool(r and hub.game_bridge_log(r)))
         if r:
-            self.bridge_log_btn.setText(hub.game_bridge_log_label(r))
+            self.bridge_log_btn.setText(
+                "Open MO2 bridge log" if r.get("handler") == "skyrim-vr"
+                else hub.game_bridge_log_label(r))
         self.update_live_status()
 
     def refresh_rollback_summary(self, recipe):
