@@ -23,7 +23,7 @@ Fix the desktop-approved Dev5D3-F preview showing "Unavailable / Nexus key neede
 
 ## Tests
 - Targeted test suite: 39/39 passed. Fixture-only tests check private-file fallback, malformed/missing/oversized/insecure/symlink sources, override precedence, rejected writes/removals to read-only source, preview-only writes and a mocked Nexus update lookup.
-- Full regression: **1,034 run: 1,033 passed, 1 skipped**.
+- Final regression after startup-state protection: **1,035 run: 1,034 passed, 1 skipped**.
 - All nine-game isolated GUI harness checks: **191/191 passed** using a disposable copy of preview data and no real credentials.
 - Actual device read-only resolution: **PASS**, source metadata unchanged and no preview key copy. No actual live Nexus API response was verified at checkpoint time.
 - Existing preview state and scans checksum unchanged at checkpoint: state `ed2884a7ada0ec0364c32d86215fbae0f972fbb0530ea14a416c8e054089d16c`; scans `9df00d61e906c4588b4370ca2a95a2129a4e944a613ef9da9ad549d548756038`; preferences `05c377e3b3d1beabb9844ee55fbaef822fedbe0ac940e5ac236562e5e3ecefc0`.
@@ -36,3 +36,10 @@ Fix the desktop-approved Dev5D3-F preview showing "Unavailable / Nexus key neede
 
 ## Deferred
 Confirmed live Nexus API server acceptance / rate-limit status, future installed-version provenance, actual game updates and release publishing.
+
+## Post-launch correction — prevent preview state cache writes
+- On the first live preview launch, the usable key enabled the legacy UpdateWorker optional Nexus component-name refresh. That automatically changed only _names cache timestamps and one cached version in the **private preview state**. It did not alter installed game files, archive scans, folder preferences, or the original key.
+- The refreshed cache was not rolled back or overwritten: it is existing user-owned preview data.
+- Preview startup now suppresses hub.refresh_component_names before creating the GUI. Normal read-only Nexus/GitHub release lookups remain available. The regular application retains its original name-refresh behavior.
+- Added a regression for preview suppression; reran all tests: **1,035 total, 1,034 passed, 1 skipped**, and **191/191 isolated KDE GUI checks passed**.
+- Desktop acceptance still requires a real user Updates refresh; a successfully loaded credential does not guarantee Nexus uptime, account access, or rate-limit availability.

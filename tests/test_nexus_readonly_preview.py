@@ -94,6 +94,14 @@ class ReadonlyNexusPreviewTests(unittest.TestCase):
         self.source.unlink()
         self.assertEqual(updates.get_key(), "fixture-preview-override")
 
+    def test_preview_suppresses_state_writing_name_cache_refresh(self):
+        from vrhub import hub
+        from tests.manual_launcher_dev5d3f_preview import suppress_preview_name_cache_updates
+        with mock.patch.object(hub, "refresh_component_names") as name_cache:
+            suppress_preview_name_cache_updates()
+            self.assertEqual(hub.refresh_component_names({"id": "fixture"}), 0)
+            name_cache.assert_not_called()
+
     def test_updates_can_use_fallback_for_readonly_lookup(self):
         observed = []
 

@@ -14,6 +14,15 @@ from vrhub.app_update_gui import HubUpdateController
 from tests.manual_launcher_dev5d3e1_preview import CleanupPreview
 
 
+def suppress_preview_name_cache_updates():
+    """Keep authenticated Updates lookups, but don't rewrite preview state.
+
+    The standard UpdateWorker can refresh persisted Nexus name metadata as a
+    side effect. That persistence is unnecessary for a read-only preview.
+    """
+    hub.refresh_component_names = lambda *args, **kwargs: 0
+
+
 class ComparisonPreview(CleanupPreview):
     def disable_mutations(self):
         super().disable_mutations()
@@ -47,6 +56,7 @@ def main():
     if opts.verify and not state.parent.name.startswith("nanners-dev5d3f-gui."):
         raise SystemExit("GUI verification requires a disposable private fixture.")
 
+    suppress_preview_name_cache_updates()
     HubUpdateController.startup=lambda self: None
     gui.HubWindow.scan_setup=lambda self,*a,**kw: None
     if opts.verify:
