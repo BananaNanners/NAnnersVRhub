@@ -9,9 +9,9 @@ method = "uevr"
 
 setup = [
   "Install protontricks, then launch Fatekeeper once from Steam (Proton on) so its Proton prefix exists.",
-  "UEVR is the VR mod/injector; SLASHER-Win64-Shipping.zip is the Fatekeeper-specific profile. The previously tested UEVR_FK.zip bundle is available from the legacy matched release link. For the newer FK v1.0.4 profile, its author specifies UEVR Nightly 1133 plus the JoeyHodge backend fix; review the release instructions before changing versions. Latest nightly is not automatically a compatible replacement.",
+  "Download UEVR_FK.zip (VR mod / injector) and SLASHER-Win64-Shipping.zip (Fatekeeper VR profile) from their separate download links.",
   "Once only: install the .NET 6 Desktop Runtime into the game's prefix with: protontricks-launch --no-bwrap --appid 2186990 --no-background-wineserver <windowsdesktop-runtime-6.0.x-win-x64.exe>",
-  "For the previously tested bundle, use Install / Update > More installation tools to review UEVR_FK.zip. Follow the profile author's manual compatibility instructions for newer builds; do not run the Windows one-step launcher through the Hub.",
+  "In Install / Update > More installation tools, select UEVR_FK.zip with Install mod file.",
   "Review SLASHER-Win64-Shipping.zip using the Hub profile workflow. Existing profile records require recovery review; live profile replacement remains gated.",
   "In the game's graphics settings, turn DLSS Frame Generation off.",
 ]
@@ -29,20 +29,33 @@ good_to_know = [
 ]
 
 [[links]]
-label = "UEVR mod / injector (Praydog Nightly)"
-url = "https://github.com/praydog/UEVR-nightly/releases"
+label = "UEVR FK mod / injector (1.0.0)"
+url = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/UEVR_FK.zip"
 
 [[links]]
-label = "Fatekeeper VR profile (jbusfield)"
+label = "Fatekeeper VR profile (1.0.0)"
+url = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/SLASHER-Win64-Shipping.zip"
+
+[[links]]
+label = "Fatekeeper VR profile (v1.0.4)"
+url = "https://github.com/jbusfield/FK_UEVR/releases/download/v1.0.4/SLASHER-Win64-Shipping.zip"
+
+[[links]]
+label = "Fatekeeper profile releases"
 url = "https://github.com/jbusfield/FK_UEVR/releases"
 
-[[links]]
-label = "Legacy matched UEVR_FK bundle (1.0.0)"
-url = "https://github.com/jbusfield/FK_UEVR/releases/tag/1.0.0"
+# Presentation only: retain historical scan identity and archive source metadata.
+[archive_display.uevr]
+name = "UEVR FK — Mod / injector"
+url = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/UEVR_FK.zip"
 
-[[links]]
-label = "JoeyHodge backend fix (FK v1.0.4 requirement)"
-url = "https://github.com/joeyhodge/UEVR/releases/tag/100526UE58_6RefreshUpdate"
+[archive_display.profile]
+name = "Fatekeeper — VR profile"
+url = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/SLASHER-Win64-Shipping.zip"
+
+[archive_release_link]
+label = "Fatekeeper VR profile (v1.0.4)"
+url = "https://github.com/jbusfield/FK_UEVR/releases/download/v1.0.4/SLASHER-Win64-Shipping.zip"
 
 [profile]
 dir = "Roaming/UnrealVRMod/SLASHER-Win64-Shipping"   # under the prefix's AppData
@@ -54,13 +67,13 @@ args = ""
 env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
 
 [[updates]]
-name = "UEVR mod / injector (Praydog Nightly)"
-github = "praydog/UEVR-nightly"
+name = "UEVR FK — Mod / injector"
+manual = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/UEVR_FK.zip"
+available_version = "1.0.0"
 tracks = ["fatekeeper"]
-upstream_reference = true
 
 [[updates]]
-name = "Fatekeeper VR profile (jbusfield)"
+name = "Fatekeeper — VR profile"
 github = "jbusfield/FK_UEVR"
 tracks = ["fatekeeper:profile"]
 

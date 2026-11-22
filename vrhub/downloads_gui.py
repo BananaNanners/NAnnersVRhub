@@ -380,8 +380,15 @@ class GuidedDownloadsPage(QWidget):
                 'UEVR downloads (JoeyHodge)</a> — upstream reference; '
                 'the matched Hogwarts bundle remains the recommended archive source.')
         else:
-            self.upstream_link.clear()
-        self.upstream_link.setVisible(bool(upstream))
+            release = (recipe or {}).get("archive_release_link", {})
+            source = planner.source_url(release.get("url", ""))
+            if source:
+                self.upstream_link.setText(
+                    f'<a style="color:#23B7FF" href="{escape(source, quote=True)}">'
+                    f'{escape(release["label"])}</a>')
+            else:
+                self.upstream_link.clear()
+        self.upstream_link.setVisible(bool(self.upstream_link.text()))
         if self._saved_error:
             self.saved_scan_count.setText(
                 "Saved scan history needs review; original data was preserved.")
@@ -673,8 +680,11 @@ class GuidedDownloadsPage(QWidget):
         self.table.setRowCount(len(records))
         for i, record in enumerate(records):
             self.table.setRowHeight(i, 52)
+            # These explicit download links/labels are presentation only.
+            # Keep the saved scan's dependency identity, status and evidence.
+            display = (self.recipe or {}).get("archive_display", {}).get(record.get("id"), {})
             values = (
-                str(record["name"]),
+                str(display.get("name", record["name"])),
                 str(record["phase_label"]),
                 Path(record["file"]).name if record.get("file") else "—",
                 record["status"],
@@ -701,11 +711,11 @@ class GuidedDownloadsPage(QWidget):
                         if value == "Possible archive — inspect first" else ""))
                 cell.setData(Qt.UserRole, record.get("file", ""))
                 self.table.setItem(i, col, cell)
-            url = planner.source_url(record.get("url"))
+            url = planner.source_url(display.get("url", record.get("url")))
             if url:
                 btn = QPushButton("Open source")
                 btn.setObjectName("downloadsSourceButton")
-                btn.setToolTip(f"Open external source page (no download): {url}")
+                btn.setToolTip(f"Open external link in browser: {url}")
                 btn.clicked.connect(lambda checked=False, uri=url:
                                     QDesktopServices.openUrl(QUrl(uri)))
                 self.table.setCellWidget(i, 4, btn)

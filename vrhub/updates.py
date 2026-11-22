@@ -203,6 +203,19 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
         else:
             page = u.get("manual", "")
         item = {"name": u["name"], "page": page}
+        # A fixed packaged dependency is not the latest upstream project.
+        # Display its published bundle version, never infer installed identity
+        # from a legacy installation timestamp.
+        if "manual" in u and u.get("available_version") and "github" not in u:
+            version = str(u["available_version"])
+            recorded = any(k in state for k in u.get("tracks", [recipe["id"]]))
+            item.update(latest_version=version,
+                        status="unknown" if recorded else "not_installed",
+                        detail=f"Available bundle: {version}. " +
+                        ("Installed release not recorded." if recorded else
+                         "No Hub installation record."))
+            out.append(item)
+            continue
         if isinstance(u.get("nexus_mod"), int):
             item["mod_id"] = u["nexus_mod"]
         component_ids = {c["nexus_mod"] for c in recipe.get("components", [])}
