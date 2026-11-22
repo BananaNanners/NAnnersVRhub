@@ -1590,6 +1590,18 @@ class HubWindow(QMainWindow):
         if route == "guide":
             self.game_details_tabs.setCurrentWidget(self.details)
             return
+        if route == "kharvox-review":
+            from . import kharvox_archive_review
+            if r.get("handler") != "kharvox-gog" or len(files) != 1:
+                return
+            try:
+                plan = kharvox_archive_review.build_review(files[0], request.get("evidence"),
+                                                           request.get("latest", ""))
+            except (RuntimeError, OSError, ValueError, zipfile.BadZipFile) as exc:
+                QMessageBox.warning(self, "KHARVOX review blocked (nothing changed)", str(exc))
+                return
+            kharvox_archive_review.ReviewDialog(plan, self).exec()
+            return
         if route == "uevr-pair":
             from . import uevr_dependency_review
             from .uevr_dependency_review_gui import DependencyReviewDialog

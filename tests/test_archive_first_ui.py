@@ -164,7 +164,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.page.table.selectRow(1)
         events = []
         self.page.install_review_requested.connect(events.append)
-        for rid in ("skyrim-vr-mgo", "doom-2016-gog"):
+        for rid in ("skyrim-vr-mgo",):
             self.page.set_recipe(hub.load_recipes()[rid])
             self.assertEqual(self.page.install_review_button.text(), "Open Setup Guide")
             self.page.install_review_button.click()

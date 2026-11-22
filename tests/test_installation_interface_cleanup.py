@@ -146,7 +146,7 @@ class CleanupTests(unittest.TestCase):
         self.assertFalse(self.events)
 
     def test_guide_only_games_keep_setup_guide(self):
-        for rid in ("skyrim-vr-mgo", "doom-2016-gog"):
+        for rid in ("skyrim-vr-mgo",):
             self.page.set_recipe(self.recipe(rid))
             self.assertEqual(self.page.install_review_button.text(), "Open Setup Guide")
             self.assertTrue(self.page.manual_review_button.isHidden())

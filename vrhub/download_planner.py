@@ -272,6 +272,10 @@ def plan_components(recipe: dict):
              "sha256": None, "url": source_url(recipe.get("profile", {}).get("page")) or base,
              "hint": "slasher" if rid == "fatekeeper" else "hogwartslegacy"},
         ]
+    if method == "guide" and rid == "doom-2016-gog" and recipe.get("handler") == "kharvox-gog":
+        return [{"id": "kharvox", "name": "KHARVOX — VR Mod", "phase": 1,
+                 "sha256": None, "url": "https://github.com/CactusVRStudios/KHARVOX/releases",
+                 "hint": "kharvox"}]
     if method == "guide":
         return [{"id": "guide", "name": "Follow existing guided setup instructions",
                  "phase": 1, "sha256": None, "url": base, "hint": ""}]
@@ -292,6 +296,9 @@ def _candidate_filename_match(name: str, component: dict, rid: str) -> bool:
     if hint.isdecimal():
         # Nexus convention: suffix/between separators, no partial mod ID.
         return bool(re.search(r"(?<![a-z0-9])" + re.escape(hint) + r"(?![a-z0-9])", lower))
+    if hint == "kharvox" and rid == "doom-2016-gog":
+        from .archive_releases import kharvox_asset_name
+        return kharvox_asset_name(name, local=True)
     if hint == "loader":
         return "bepinex" in lower or "tobey" in lower
     if hint == "vhvr":

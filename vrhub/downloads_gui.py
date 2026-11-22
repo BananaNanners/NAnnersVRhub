@@ -728,12 +728,17 @@ class GuidedDownloadsPage(QWidget):
                     label = "Rescan required — incomplete candidates"
                 elif self._needs_rescan(record):
                     label = "Rescan required — older candidate evidence"
-                elif record.get("ambiguous"):
+                elif record.get("ambiguous") and (record.get("id") != "kharvox" or
+                        sum(bool(c.get("tags")) for c in record.get("candidates", [])) > 1):
                     label = "Choose archive"
+                elif record.get("id") == "kharvox" and not selected.get("tags"):
+                    label = "Official SHA-256 not matched"
                 elif selected.get("tags"):
                     version = record.get("release_expected") if selected.get("expected") else selected["tags"][0]
                     label = f"{version} — " + ("Bundle matched" if selected.get("expected") and record.get("release_fixed")
-                        else "Latest release matched" if selected.get("expected") else "Release matched")
+                        else "Latest release matched" if selected.get("expected") else
+                        "Older release matched" if record.get("id") == "kharvox" and record.get("release_expected")
+                        else "Release matched")
                 elif selected.get("copies", 0) > 1:
                     label = "Identical copies — review"
             values = (
@@ -841,6 +846,17 @@ class GuidedDownloadsPage(QWidget):
         route, label = self._review_action()
         if not recipe:
             return "idle", "Review installation"
+        if recipe.get("handler") == "kharvox-gog":
+            label = "Install verified dependencies"
+            if len(rows) != 1 or self._needs_rescan(rows[0]):
+                return "kharvox-wait", label
+            record = rows[0]
+            if record.get("status") != "Possible archive — inspect first":
+                return "kharvox-wait", label
+            official = [c for c in record.get("candidates", []) if c.get("tags") and c.get("sha256")]
+            if not official:
+                return "kharvox-wait", label
+            return "kharvox-review", label
         if method == "guide":
             return route, label
         if not rows:
@@ -943,7 +959,17 @@ class GuidedDownloadsPage(QWidget):
         row = self._selected_row_record()
         route, label = self._primary_action()
         plan = self._last_plan or {}
-        if route == "blocked":
+        if route in ("kharvox-review", "kharvox-wait"):
+            record = (plan.get("rows") or [{}])[0]
+            latest = record.get("release_expected")
+            message = ("Official release SHA-256 matched. Review compatibility with the tested 1.4 runner; no installation is authorized."
+                       if route == "kharvox-review" else
+                       "Scan or obtain an official KHARVOX ZIP with matching SHA-256 before review.")
+            if latest:
+                message += f" Latest upstream archive: {latest}."
+            if record.get("release_notice"):
+                message += " " + record["release_notice"]
+        elif route == "blocked":
             message = "Archive verification blocked. Obtain the correct package from its source and rescan."
         elif route == "scan":
             message = "Scan the archive folder. Missing or stale dependencies must be checked before review."
@@ -987,7 +1013,7 @@ class GuidedDownloadsPage(QWidget):
         # The existing top scan control is the primary action for scan states.
         # Do not display a second identical button.
         self.install_review_button.setVisible(route not in ("scan", "idle"))
-        self.install_review_button.setEnabled(not busy and route not in ("blocked", "select", "scan", "idle"))
+        self.install_review_button.setEnabled(not busy and route not in ("blocked", "select", "scan", "idle", "kharvox-wait"))
         self.install_review_button.setText(label)
         manual = self._manual_review_route()
         self.manual_review_button.setVisible(bool(manual))
@@ -997,6 +1023,8 @@ class GuidedDownloadsPage(QWidget):
         self.install_review_button.setToolTip(
             "Open this game's existing manual setup instructions."
             if route == "guide" and self.recipe else
+            "Open read-only KHARVOX release and compatibility review. No extraction or installation."
+            if route in ("kharvox-review", "kharvox-wait") else
             "Review the selected profile ZIP, exact destination and full-directory backup. Nothing changes without confirmation."
             if route == "profile" else
             "Review selected archives and backup policy. Nothing changes without confirmation."
@@ -1061,7 +1089,10 @@ class GuidedDownloadsPage(QWidget):
             return
         rid = self.recipe["id"]
         route, _ = self._primary_action()
-        if route in ("blocked", "scan", "idle", "select"):
+        if route in ("blocked", "scan", "idle", "select", "kharvox-wait"):
+            return
+        if route == "kharvox-review":
+            self._request_kharvox_review(rid)
             return
         if route in ("profile", "mod") and self.table.currentRow() < 0:
             rows = (self._last_plan or {}).get("rows", [])
@@ -1131,6 +1162,39 @@ class GuidedDownloadsPage(QWidget):
         if route == "profile":
             request["route"] = "profile"
         self.install_review_requested.emit(request)
+
+    def _request_kharvox_review(self, rid):
+        try:
+            rows = self._fresh_review_rows()
+            if (not rows or len(rows) != 1 or rows[0].get("id") != "kharvox"
+                    or self._needs_rescan(rows[0])):
+                raise ValueError("Archive evidence changed. Rescan before review.")
+            row = rows[0]
+            candidates = [c for c in row.get("candidates", [])
+                          if c.get("tags") and c.get("sha256")]
+            expected = [c for c in candidates if c.get("expected")]
+            if len(expected) == 1:
+                chosen = expected[0]
+            elif len(candidates) == 1:
+                chosen = candidates[0]
+            elif candidates:
+                chosen = self._choose_archive_candidate(dict(row, candidates=candidates))
+                if chosen is None:
+                    return
+            else:
+                raise ValueError("No official SHA-256 match. Rescan before review.")
+            if not self.recipe or self.recipe["id"] != rid:
+                return
+            if (chosen not in candidates or self._fresh_review_rows() != rows
+                    or planner.archive_identity(Path(chosen["file"])) != chosen["identity"]):
+                raise ValueError("Selected archive changed. Rescan before review.")
+        except (ValueError, RuntimeError, OSError) as exc:
+            self._folder_feedback(str(exc))
+            return
+        self.install_review_requested.emit({
+            "game_id": rid, "route": "kharvox-review", "archives": [chosen["file"]],
+            "evidence": chosen, "latest": row.get("release_expected", ""),
+            "origin": "downloads-page"})
 
     def _request_uevr_pair(self, rid, request):
         try:

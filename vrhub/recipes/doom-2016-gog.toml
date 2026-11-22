@@ -8,7 +8,8 @@ manual_download = true
 mod_page = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"
 setup = [
  "Launch the flat GOG game once through native Heroic. Keep its existing prefix. DOOMx64vk.exe is the supported Vulkan executable; DOOMx64.exe is OpenGL.",
- "Extract the complete KHARVOX 1.4 release outside DOOM, then use Choose KHARVOX folder…. The Hub checks the package and supported GOG executable before launching.",
+ "Scan the KHARVOX release ZIP in Install / Update. Install verified dependencies opens a read-only release and compatibility review; it does not extract or install anything.",
+ "Only the tested KHARVOX 1.4 package is currently accepted by the existing runner. If setting up that tested version manually, extract it outside DOOM and use Choose KHARVOX folder…. The Hub checks the package and supported GOG executable before launching.",
  "Close DOOM and KHARVOX, then click Install VR runner. This reuses the verified isolated runner or obtains the pinned Proton-CachyOS11.0-20260703-slr x86_64 release from upstream and applies the lab 0.1.6 bridge. The separate bridge component archive and all payload files are verified first; the base archive and seven baseline files are then checked. Heroic runner selection stays unchanged.",
  "Connect the headset through WiVRn and click Test VR bridge. A full matching lab 0.1.6 pass is required. Existing standalone lab state is reused from ~/.local/share/nanners-kharvox-lab/0.1.0.",
  "The Hub installs its separate pinned bridge component only when requested. Before its public release, use Import bridge package with the matching 0.2.0 source archive. This keeps ordinary Hub updates small.",
@@ -25,6 +26,17 @@ good_to_know = [
  "Launch DOOM (flat) remains a normal Heroic launch. Other games and local gameplay-test history are not rewritten by this profile.",
  "Windows Vulkan-layer activation stays in KHARVOX's child process. Do not add its Windows DLL to host Linux Vulkan layer paths.",
 ]
+[[updates]]
+name = "KHARVOX"
+github = "CactusVRStudios/KHARVOX"
+dependency_type = "Mod"
+tested_version = "v1.4.0"
+tested_release_published = "2026-10-19T16:34:38Z"
+
+[archive_releases.kharvox]
+repo = "CactusVRStudios/KHARVOX"
+asset_family = "kharvox-versioned-zip"
+
 [[links]]
 label = "KHARVOX 1.4 download"
 url = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"

@@ -57,8 +57,10 @@ def grouped_updates(recipe, items):
         record = {
             "name": str(raw.get("name") or "Unnamed dependency"),
             "type": str(raw.get("dependency_type") or "Mod"),
-            "installed": str(raw.get("installed_version") or "—"),
-            "latest": str(raw.get("latest_version") or "—"),
+            "installed": str(raw.get("installed_version") or (
+                "Unknown" if raw.get("tested_version") else "—")),
+            "latest": str(raw.get("latest_version") or "—") + (
+                chr(10) + f"Tested: {raw['tested_version']}" if raw.get("tested_version") else ""),
             "status": ("Install later" if group == "later" else
                        "Rate limited" if status == "error" and "rate limit" in
                        str(raw.get("detail", "")).lower() else

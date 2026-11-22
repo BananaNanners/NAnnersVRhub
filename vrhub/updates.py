@@ -289,6 +289,20 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
                                 f"reported Nexus version {tag}; verify manually.")
             out.append(item)
             continue
+        if u.get("tested_version") and u.get("tested_release_published"):
+            # The KHARVOX launch baseline is not an installed-version record.
+            baseline = str(u["tested_version"])
+            item.update(status="unknown", tested_version=baseline)
+            item["newer_release"] = (tag != baseline and
+                published_ts > _ts(u["tested_release_published"]))
+            item["detail"] = (
+                f"Tested baseline: {baseline}; latest upstream: {tag} ({day}). "
+                "Installed release not established. "
+                + ("Newer upstream release requires compatibility review."
+                   if item["newer_release"] else
+                   "No newer publication than the tested baseline established."))
+            out.append(item)
+            continue
         if u.get("upstream_reference") is True:
             # A community-bundled injector is not necessarily a tagged upstream
             # release. Installation timestamps cannot establish that identity.

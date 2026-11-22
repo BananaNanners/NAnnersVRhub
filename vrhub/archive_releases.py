@@ -52,14 +52,27 @@ def fetch_history(repo):
         return data
 
 
+KHARVOX_ASSET = re.compile(r"KHARVOX-v[0-9]+(?:\.[0-9]+){0,3}[a-z]?\.zip\Z", re.IGNORECASE)
+
+
+def kharvox_asset_name(name, *, local=False):
+    if not isinstance(name, str):
+        return False
+    if local:
+        name = re.sub(r" \([0-9]+\)(?=\.zip$)", "", name, flags=re.IGNORECASE)
+    return KHARVOX_ASSET.fullmatch(name) is not None
+
+
 def asset_catalog(source, releases):
-    """Exact asset name only. Stable, published releases, with bounded digests.
+    """Explicit exact asset or narrowly scoped KHARVOX family; bounded digests.
 
     The latest expected asset is chosen from the newest release containing
     the configured filename, or the configured fixed bundle tag. Missing
     digest for that release does not promote an older release to 'latest'.
     """
-    target = source["asset"]
+    family = (source.get("repo") == "CactusVRStudios/KHARVOX"
+              and source.get("asset_family") == "kharvox-versioned-zip")
+    target = None if family else source["asset"]
     fixed = source.get("fixed_tag")
     found = []
     for item in releases[:MAX_RELEASES]:
@@ -76,7 +89,8 @@ def asset_catalog(source, releases):
         assets = item.get("assets")
         if not isinstance(assets, list):
             continue
-        exact = [a for a in assets if isinstance(a, dict) and a.get("name") == target]
+        exact = [a for a in assets if isinstance(a, dict) and (
+            kharvox_asset_name(a.get("name")) if family else a.get("name") == target)]
         if len(exact) != 1:
             continue
         a = exact[0]
