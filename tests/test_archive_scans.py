@@ -114,8 +114,8 @@ class SavedScansTests(unittest.TestCase):
         planner.set_location("global", str(self.other))
         removed = scans.remove_changed_folders()
         self.assertEqual(removed, ["game-one"])
-        self.assertEqual(list(scans.load_saved()), ["game-two"])
-        self.assertEqual(scans.remove_changed_folders(), [])
+        self.assertEqual(set(scans.load_saved()), {"game-one", "game-two"})
+        self.assertEqual(scans.remove_changed_folders(), ["game-one"])
 
     def test_changing_one_game_folder_does_not_purge_other_game(self):
         first, _ = self.make_scan("game-one")
@@ -124,7 +124,7 @@ class SavedScansTests(unittest.TestCase):
         scans.persist(second)
         planner.set_location("game", str(self.other), "game-one")
         self.assertEqual(scans.remove_changed_folders(), ["game-one"])
-        self.assertEqual(list(scans.load_saved()), ["game-two"])
+        self.assertEqual(set(scans.load_saved()), {"game-one", "game-two"})
 
     def test_malformed_snapshot_is_never_replaced(self):
         plan, _ = self.make_scan("game-one")

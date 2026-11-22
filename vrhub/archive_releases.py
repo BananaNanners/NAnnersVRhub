@@ -72,7 +72,9 @@ def asset_catalog(source, releases):
     """
     family = (source.get("repo") == "CactusVRStudios/KHARVOX"
               and source.get("asset_family") == "kharvox-versioned-zip")
-    target = None if family else source["asset"]
+    submersed = (source.get("repo") == "Okabintaro/SubmersedVR"
+                 and source.get("asset_family") == "submersedvr-versioned-zip")
+    target = None if family or submersed else source["asset"]
     fixed = source.get("fixed_tag")
     found = []
     for item in releases[:MAX_RELEASES]:
@@ -90,7 +92,9 @@ def asset_catalog(source, releases):
         if not isinstance(assets, list):
             continue
         exact = [a for a in assets if isinstance(a, dict) and (
-            kharvox_asset_name(a.get("name")) if family else a.get("name") == target)]
+            kharvox_asset_name(a.get("name")) if family else
+            bool(re.fullmatch(r"SubmersedVR_[0-9]+(?:[.][0-9]+){1,3}[.]zip", str(a.get("name", ""))))
+            if submersed else a.get("name") == target)]
         if len(exact) != 1:
             continue
         a = exact[0]
@@ -102,8 +106,11 @@ def asset_catalog(source, releases):
                       "size": size if type(size) is int and size > 0 else 0})
     found.sort(key=lambda a: (a["when"], a["tag"]), reverse=True)
     expected = next((a for a in found if a["tag"] == fixed), None) if fixed else (found[0] if found else None)
+    pinned = next((a for a in found if a["tag"] == source.get("pinned_tag")), None)
+    newer = bool(pinned and expected and expected["when"] > pinned["when"]
+                 and expected["tag"] != pinned["tag"])
     return {"assets": found, "expected": expected["tag"] if expected else "",
-            "fixed": bool(fixed)}
+            "fixed": bool(fixed), "newer_than_pin": newer}
 
 
 def catalogs_for(recipe, *, fetch=None):

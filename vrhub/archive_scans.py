@@ -70,7 +70,7 @@ def _validate_record(rid, record):
         candidates = row.get("candidates", [])
         if not isinstance(candidates, list) or len(candidates) > planner.MAX_CANDIDATES:
             raise ValueError("Invalid archive candidates")
-        for flag in ("ambiguous", "candidate_incomplete", "release_fixed"):
+        for flag in ("ambiguous", "candidate_incomplete", "release_fixed", "release_review"):
             if flag in row and type(row[flag]) is not bool:
                 raise ValueError("Invalid archive candidate flag")
         for info in candidates:
@@ -181,34 +181,20 @@ def persist(plan) -> dict:
 
 
 def remove_changed_folders():
-    """Purge only entries whose selected folder no longer matches the recipe.
+    """Report inactive records; never delete saved scan history on folder changes.
 
-    Per-game overrides survive a global-folder change. This never touches any
-    archive, game or another unrelated saved scan.
+    The historical name is retained for compatibility. Display/review must
+    separately require the record's folder to equal the active folder.
     """
-    path = snapshot_file()
-    if not path.exists() and not path.is_symlink():
-        return []
-    fd = os.open(str(path) + ".lock",
-                 os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        records = load_saved()
-        invalid = []
-        for rid, rec in records.items():
-            try:
-                active, _ = planner.folder_for({"id": rid})
-            except (RuntimeError, ValueError, OSError):
-                continue  # do not discard valid records because settings cannot load
-            if str(active) != rec["folder"]:
-                invalid.append(rid)
-        if invalid:
-            for rid in invalid:
-                del records[rid]
-            self_install._atomic(
-                path, (json.dumps({"schema": 1, "games": records},
-                                  separators=(",", ":")) + "\n").encode())
-        return invalid
+    invalid = []
+    for rid, rec in load_saved().items():
+        try:
+            active, _ = planner.folder_for({"id": rid})
+        except (RuntimeError, ValueError, OSError):
+            continue
+        if str(active) != rec["folder"]:
+            invalid.append(rid)
+    return invalid
 
 
 def displayed_record(record) -> dict:

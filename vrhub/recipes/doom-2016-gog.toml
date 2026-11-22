@@ -8,7 +8,7 @@ manual_download = true
 mod_page = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"
 setup = [
  "Launch the flat GOG game once through native Heroic. Keep its existing prefix. DOOMx64vk.exe is the supported Vulkan executable; DOOMx64.exe is OpenGL.",
- "Scan the KHARVOX release ZIP in Install / Update. Install verified dependencies opens a read-only release and compatibility review; it does not extract or install anything.",
+ "Scan the KHARVOX release ZIP in Install / Update. Review installation opens a read-only release and compatibility review; it does not extract or install anything.",
  "Only the tested KHARVOX 1.4 package is currently accepted by the existing runner. If setting up that tested version manually, extract it outside DOOM and use Choose KHARVOX folder…. The Hub checks the package and supported GOG executable before launching.",
  "Close DOOM and KHARVOX, then click Install VR runner. This reuses the verified isolated runner or obtains the pinned Proton-CachyOS11.0-20260703-slr x86_64 release from upstream and applies the lab 0.1.6 bridge. The separate bridge component archive and all payload files are verified first; the base archive and seven baseline files are then checked. Heroic runner selection stays unchanged.",
  "Connect the headset through WiVRn and click Test VR bridge. A full matching lab 0.1.6 pass is required. Existing standalone lab state is reused from ~/.local/share/nanners-kharvox-lab/0.1.0.",

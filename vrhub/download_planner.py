@@ -105,8 +105,7 @@ def set_location(scope: str, path: str | None, rid: str | None = None):
 
 
 def default_library() -> Path:
-    organized = Path.home() / "Downloads/Organized/Archive-Library/VR-Mods"
-    return organized if organized.is_dir() else Path.home() / "Downloads"
+    return Path.home() / "Downloads"
 
 
 def folder_for(recipe: dict, prefs: dict | None = None) -> tuple[Path, str]:
@@ -117,7 +116,7 @@ def folder_for(recipe: dict, prefs: dict | None = None) -> tuple[Path, str]:
         return Path(selected), "Per-game override"
     if prefs["global"]:
         return Path(prefs["global"]), "Global preference"
-    return default_library(), "Auto-discovered archive library"
+    return default_library(), "Downloads default"
 
 
 def source_url(value):
@@ -358,7 +357,27 @@ def build_plan(recipe: dict, folder: Path, *, progress=None, release_catalogs=No
         else:
             status, selection = "Not found locally", None
         extra = {}
-        if plausible and not c.get("sha256"):
+        catalog = release_catalogs.get(c["id"], {})
+        # A newer official digest is review evidence only. Even when the
+        # old pinned ZIP is also present, don't silently choose it instead
+        # of the identified new release. Keep the pin-mismatch status.
+        if c.get("sha256") and catalog.get("newer_than_pin") and not warning:
+            expected = catalog.get("expected")
+            assets = [a for a in catalog.get("assets", []) if a["tag"] == expected
+                      and a.get("sha256") and a["sha256"] != c["sha256"]]
+            newer = [f for f in entries if f.path.suffix.casefold() == ".zip"
+                     and any(digest_map.get(str(f.path)) == a["sha256"] and f.size == a["size"] for a in assets)]
+            if newer:
+                options, ambiguous, incomplete = _recognize_candidates(newer, catalog, remaining)
+                if (not incomplete and not ambiguous and len(options) == 1 and options[0]["expected"]):
+                    selection = next(f for f in newer if str(f.path) == options[0]["file"])
+                    status = "Hash mismatch — do not install"
+                    extra = {"candidates": options, "release_expected": expected,
+                             "release_review": True, "ambiguous": False,
+                             "candidate_incomplete": False}
+        if extra:
+            pass
+        elif plausible and not c.get("sha256"):
             catalog = release_catalogs.get(c["id"], {})
             # Hash only multiple candidates or explicitly recognized assets.
             if len(plausible) > 1 or c["id"] in recipe.get("archive_releases", {}):
@@ -378,7 +397,7 @@ def build_plan(recipe: dict, folder: Path, *, progress=None, release_catalogs=No
                      "release_notice": release_errors.get(c["id"], "")}
         rows.append({**c, **extra, "status": status,
                      "file": str(selection.path) if selection else "",
-                     "matches": len(verified) + len(plausible),
+                     "matches": max(len(verified) + len(plausible), sum(x["copies"] for x in extra.get("candidates", []))),
                      "size": selection.size if selection else 0,
                      "phase_label": "Later: install after first flat launch" if c["phase"] > 1
                                     else "Stage 1: prerequisites"})

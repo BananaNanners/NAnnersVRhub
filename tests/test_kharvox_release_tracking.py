@@ -76,7 +76,7 @@ class KharvoxTrackingTests(unittest.TestCase):
         latest = release("v1.4a", 27, b"other", "KHARVOX-v1.4a.zip")
         row = self.scan([old, latest])
         self.assertIn("Older release matched", self.page.table.item(0,3).text())
-        self.assertEqual(self.page.install_review_button.text(), "Install verified dependencies")
+        self.assertEqual(self.page.install_review_button.text(), "Review installation")
         self.assertTrue(self.page.install_review_button.isEnabled())
         with mock.patch.object(self.page, "_choose_archive_candidate") as picker:
             self.page.install_review_button.click()
@@ -94,7 +94,7 @@ class KharvoxTrackingTests(unittest.TestCase):
 
     def test_unknown_missing_and_stale_are_not_install_authority(self):
         self.page.set_recipe(self.recipe)
-        self.assertEqual(self.page.install_review_button.text(), "Install verified dependencies")
+        self.assertEqual(self.page.install_review_button.text(), "Review installation")
         self.assertFalse(self.page.install_review_button.isEnabled())
         path, old = self.asset()
         self.scan([])

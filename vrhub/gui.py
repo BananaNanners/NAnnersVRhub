@@ -1590,6 +1590,15 @@ class HubWindow(QMainWindow):
         if route == "guide":
             self.game_details_tabs.setCurrentWidget(self.details)
             return
+        if route == "pinned-release-review":
+            from . import pinned_release_review
+            try:
+                plan = pinned_release_review.build_review(r, request.get("rows"))
+            except (RuntimeError, OSError, ValueError, zipfile.BadZipFile) as exc:
+                QMessageBox.warning(self, "Release review blocked (nothing changed)", str(exc))
+                return
+            pinned_release_review.ReviewDialog(plan, self).exec()
+            return
         if route == "kharvox-review":
             from . import kharvox_archive_review
             if r.get("handler") != "kharvox-gog" or len(files) != 1:

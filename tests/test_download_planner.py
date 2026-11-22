@@ -41,7 +41,7 @@ class DownloadPlannerTests(unittest.TestCase):
                                return_value=self.library):
             where, source = planner.folder_for(self.recipes["cyberpunk-2077"])
             self.assertEqual(where, self.library)
-            self.assertIn("Auto-discovered", source)
+            self.assertIn("Downloads default", source)
             planner.build_plan(self.recipes["cyberpunk-2077"], self.library)
         self.assertFalse(self.prefpath.exists())
 
@@ -192,7 +192,7 @@ class DownloadPlannerTests(unittest.TestCase):
 
     def test_real_library_pinned_hashes_checked_read_only(self):
         # A real-data test, skipped on other hosts where the archive library is absent.
-        library = planner.default_library()
+        library = Path.home() / "Downloads/Organized/Archive-Library/VR-Mods"
         if not library.is_dir() or "VR-Mods" not in str(library):
             self.skipTest("User's existing VR-Mods folder not mounted")
         for rid, expected in (("subnautica", 2), ("valheim", 2), ("elden-ring", 1)):

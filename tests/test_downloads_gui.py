@@ -68,10 +68,10 @@ class DownloadsQtTests(unittest.TestCase):
             self.page.scan.text(),
         ]
         self.assertEqual(texts, [
-            "Choose default folder",
+            "Choose shared default folder",
             "Choose game folder",
-            "Use default folder",
-            "Auto-detect default",
+            "Use shared default for this game",
+            "Reset shared default to Downloads",
             "Scan local archives",
         ])
         for button in (self.page.set_global, self.page.set_game,
@@ -128,15 +128,15 @@ class DownloadsQtTests(unittest.TestCase):
         self.app.processEvents()
         self.assertIsNone(planner.load_preferences()["global"])
         self.assertEqual(planner.folder_for(self.recipe)[0], custom)
-        self.assertIn("Shared default (auto-detected)", self.page.location.text())
+        self.assertIn("Shared default (Downloads)", self.page.location.text())
         self.assertIn("still uses its custom folder",
                       self.page.folder_action_feedback.text())
-        self.assertIn("'Use default folder'",
+        self.assertIn("'Use shared default for this game'",
                       self.page.folder_action_feedback.text())
         self.page.clear_game.click()
         self.app.processEvents()
         self.assertEqual(planner.folder_for(self.recipe)[0], self.library)
-        self.assertIn(f"Current game folder (Auto-discovered archive library): {self.library}",
+        self.assertIn(f"Current game folder (Downloads default): {self.library}",
                       self.page.location.text())
 
     def test_auto_detect_without_custom_shared_folder_explains_no_change(self):
@@ -145,7 +145,7 @@ class DownloadsQtTests(unittest.TestCase):
         self.page.reset_global.click()
         self.app.processEvents()
         self.assertFalse((self.root / "settings.json").exists())
-        self.assertIn("already auto-detected",
+        self.assertIn("already Downloads",
                       self.page.folder_action_feedback.text())
 
     def test_choose_shared_folder_under_game_override_explains_priority(self):
@@ -342,7 +342,7 @@ class DownloadsQtTests(unittest.TestCase):
                         return_value=str(other)):
             self.page.set_game.click()
         self.assertEqual(
-            set(archive_scans.load_saved()), {"valheim"})
+            set(archive_scans.load_saved()), {"cyberpunk-2077", "valheim"})
         self.assertEqual(self.page.table.item(0, 3).text(), "Not checked")
         self.page.set_recipe(valheim)
         self.assertIn("Saved scan:", self.page.scan_age.text())

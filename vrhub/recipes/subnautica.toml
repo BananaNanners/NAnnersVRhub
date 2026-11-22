@@ -64,6 +64,16 @@ name = "Tobey's BepInEx pack (pinned build; review before updating)"
 github = "toebeann/BepInEx.Subnautica"
 tracks = ["subnautica"]
 
+
+[archive_releases.loader]
+repo = "toebeann/BepInEx.Subnautica"
+asset = "Tobey.s.BepInEx.Pack.for.Subnautica.zip"
+pinned_tag = "v5.4.23-pack.3.1.1"
+[archive_releases.submersedvr]
+repo = "Okabintaro/SubmersedVR"
+asset_family = "submersedvr-versioned-zip"
+pinned_tag = "0.2.1"
+
 [requirements]
 openxr = "wivrn"
 proton_prefix = true

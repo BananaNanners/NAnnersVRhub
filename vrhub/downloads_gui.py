@@ -171,13 +171,13 @@ class GuidedDownloadsPage(QWidget):
         self.location.setTextInteractionFlags(Qt.TextSelectableByMouse)
         outer.addWidget(self.location)
 
-        self.set_global = QPushButton("Choose default folder")
+        self.set_global = QPushButton("Choose shared default folder")
         self.set_global.setObjectName("downloadsAction")
         self.set_game = QPushButton("Choose game folder")
         self.set_game.setObjectName("downloadsAction")
-        self.clear_game = QPushButton("Use default folder")
+        self.clear_game = QPushButton("Use shared default for this game")
         self.clear_game.setObjectName("downloadsAction")
-        self.reset_global = QPushButton("Auto-detect default")
+        self.reset_global = QPushButton("Reset shared default to Downloads")
         self.reset_global.setObjectName("downloadsAction")
         self.scan = QPushButton("Scan local archives")
         self.scan.setObjectName("downloadsScan")
@@ -189,14 +189,14 @@ class GuidedDownloadsPage(QWidget):
             "Archives are not moved or downloaded.")
         self.set_game.setToolTip(
             "Choose a folder for this game only.\n"
-            "Changing it clears this game's old scan.\n"
+            "Old-folder scans stay saved but inactive.\n"
             "Other games keep their saved scans.")
         self.clear_game.setToolTip(
             "Remove this game's folder override.\n"
             "Use the shared default folder instead.\n"
             "Unchanged-folder scans stay saved.")
         self.reset_global.setToolTip(
-            "Restore automatic SHARED folder discovery.\n"
+            "Restore the SHARED folder to Downloads.\n"
             "A game-specific folder stays selected.\n"
             "Unchanged-folder scans stay saved.")
         self.scan.setToolTip(
@@ -222,6 +222,9 @@ class GuidedDownloadsPage(QWidget):
                 lambda _checked=False, original=btn:
                     original.click() if original.isEnabled() else None)
             self.folder_menu_actions[btn] = action
+        self.saved_folder_action = self.folder_menu.addAction("Use folder from saved scan for this game")
+        self.saved_folder_action.triggered.connect(self._use_saved_folder)
+        self.saved_folder_action.setVisible(False)
         self.folder_menu.aboutToShow.connect(self._sync_folder_actions)
         self.folder_menu_button.setMenu(self.folder_menu)
         self.action_toolbar = ResponsiveDownloadActions((
@@ -369,6 +372,11 @@ class GuidedDownloadsPage(QWidget):
             action.setEnabled(button.isEnabled())
             action.setText(button.text())
             action.setToolTip(button.toolTip())
+        rid = (self.recipe or {}).get("id")
+        record = self._saved.get(rid)
+        old = record.get("folder") if record else None
+        self.saved_folder_action.setVisible(bool(old and old != str(self._last_folder)))
+        self.saved_folder_action.setEnabled(bool(old and Path(old).is_dir() and self.set_game.isEnabled()))
         self.folder_menu_button.setEnabled(
             any(button.isEnabled() for button in self.folder_menu_actions))
 
@@ -386,6 +394,14 @@ class GuidedDownloadsPage(QWidget):
 
     def set_recipe(self, recipe):
         self.recipe = recipe
+        # Read the stable shared store again on game switch/refresh. A second
+        # preview may have saved a newer scan since this window was opened.
+        try:
+            self._saved = archive_scans.load_saved()
+            self._saved_error = None
+        except (ValueError, OSError) as exc:
+            self._saved = {}
+            self._saved_error = str(exc)
         upstream = next((planner.source_url(item.get("reference_page"))
                          for item in (recipe or {}).get("updates", [])
                          if item.get("upstream_reference") is True
@@ -450,7 +466,9 @@ class GuidedDownloadsPage(QWidget):
                 self._saved_error or (
                     "Saved scan uses older dependency requirements. "
                     "Rescan required; historical record retained."
-                    if outdated_recipe else "No scan saved for this game yet. "
+                    if outdated_recipe else
+                    f"Saved scan retained for {saved['folder']}. Select its folder to reuse it, or scan the current folder."
+                    if saved and saved["folder"] != str(folder) else "No scan saved for this game yet. "
                     "Scan local archives to create a per-game snapshot."))
         active_download = bool(self.download_worker and
                                self.download_worker.isRunning())
@@ -468,7 +486,7 @@ class GuidedDownloadsPage(QWidget):
                 shared = (Path(prefs["global"]) if prefs["global"]
                           else planner.default_library())
                 shared_source = ("manually selected" if prefs["global"]
-                                 else "auto-detected")
+                                 else "Downloads")
                 self.location.setText(
                     f"Current game folder ({source}): {folder}\n"
                     f"Shared default ({shared_source}): {shared}")
@@ -525,15 +543,26 @@ class GuidedDownloadsPage(QWidget):
             "Historical snapshot; rescan after archive changes.")
 
     def _invalidate_changed_locations(self):
+        # Folder changes are not deletion requests. Keep the last scan for
+        # each game; set_recipe refuses to use it for a different folder.
         try:
-            invalid = archive_scans.remove_changed_folders()
+            self._saved = archive_scans.load_saved()
+            self._saved_error = None
         except (ValueError, OSError) as exc:
             self._saved_error = str(exc)
-            self.scan_age.setText(
-                f"Folder selection saved. Existing scan snapshots need review: {exc}")
+
+    def _use_saved_folder(self):
+        if not self.recipe or not self.set_game.isEnabled():
             return
-        for rid in invalid:
-            self._saved.pop(rid, None)
+        try:
+            record = archive_scans.load_saved().get(self.recipe["id"])
+            if not record:
+                raise ValueError("No saved scan for this game.")
+            planner.set_location("game", record["folder"], self.recipe["id"])
+            self.set_recipe(self.recipe)
+            self._folder_feedback("Saved scan folder selected for this game only. Other games are unchanged.")
+        except (RuntimeError, ValueError, OSError) as exc:
+            self._folder_feedback(f"Folder was NOT saved: {exc}")
 
     def _display_unsanned(self, recipe, error):
         self.summary.setToolTip("")
@@ -550,26 +579,31 @@ class GuidedDownloadsPage(QWidget):
     def _choose_folder(self, scope):
         if not self.recipe:
             return
-        existing, _ = self._folder()
+        try:
+            existing, _ = self._folder()
+        except (RuntimeError, ValueError, OSError) as exc:
+            self._folder_feedback(f"Folder preference needs review: {exc}")
+            return
+        rid = self.recipe["id"]
         selected = QFileDialog.getExistingDirectory(
             self, "Choose existing mod archive folder",
             str(existing if existing and existing.is_dir() else Path.home() / "Downloads"))
-        if not selected:
+        if not selected or not self.recipe or self.recipe["id"] != rid:
             return
         try:
-            planner.set_location(scope, selected,
-                                 self.recipe["id"] if scope == "game" else None)
+            planner.set_location(scope, selected, rid if scope == "game" else None)
             self._invalidate_changed_locations()
             self.set_recipe(self.recipe)
             if scope == "global" and planner.load_preferences()["games"].get(
                     self.recipe["id"]):
                 self._folder_feedback(
                     "Shared default changed. This game still uses its custom "
-                    "folder. Select 'Use default folder' to switch it.")
+                    "folder. Select 'Use shared default for this game' to switch it.")
             else:
                 self._folder_feedback(
-                    "Folder choice updated. Archives were not moved. "
-                    "Rescan if the selected folder changed.")
+                    ("Folder saved for this game only. " if scope == "game" else
+                     "Shared default folder saved. ") +
+                    "Saved scans remain retained; rescan if needed.")
         except (RuntimeError, ValueError, OSError) as exc:
             self.summary.setText(f"Folder was NOT saved: {exc}")
 
@@ -594,22 +628,22 @@ class GuidedDownloadsPage(QWidget):
             had_shared_override = bool(prefs["global"])
             has_game_override = bool(prefs["games"].get(self.recipe["id"]))
             # Avoid a needless preference-file write when the shared default
-            # is already auto-detected.
+            # is already Downloads.
             if had_shared_override:
                 planner.set_location("global", None)
                 self._invalidate_changed_locations()
             self.set_recipe(self.recipe)
             if has_game_override:
                 self._folder_feedback(
-                    "Shared default now auto-detected. This game still uses "
-                    "its custom folder. Select 'Use default folder' to switch.")
+                    "Shared default now Downloads. This game still uses "
+                    "its custom folder. Select 'Use shared default for this game' to switch.")
             elif had_shared_override:
                 self._folder_feedback(
-                    "Shared default restored to automatic discovery. "
+                    "Shared default restored to Downloads. "
                     "Rescan if the selected folder changed.")
             else:
                 self._folder_feedback(
-                    "Shared default is already auto-detected. No setting "
+                    "Shared default is already Downloads. No setting "
                     "or saved scan was changed.")
         except (RuntimeError, ValueError, OSError) as exc:
             self.summary.setText(f"Default folder preference was NOT changed: {exc}")
@@ -723,7 +757,9 @@ class GuidedDownloadsPage(QWidget):
             status = record["status"]
             selected = (record.get("candidates") or [{}])[0]
             label = status
-            if status == "Possible archive — inspect first":
+            if self._official_pin_review(record):
+                label = f"{record['release_expected']} — Release matched; pin not approved"
+            elif status == "Possible archive — inspect first":
                 if record.get("candidate_incomplete"):
                     label = "Rescan required — incomplete candidates"
                 elif self._needs_rescan(record):
@@ -837,6 +873,25 @@ class GuidedDownloadsPage(QWidget):
         return row.get("status") in (
             "Hash mismatch — do not install", "Hash not verified — do not install")
 
+    @staticmethod
+    def _official_pin_review(row):
+        candidates = row.get("candidates") or []
+        return (row.get("release_review") is True and row.get("sha256")
+                and row.get("status") == "Hash mismatch — do not install"
+                and not row.get("candidate_incomplete") and len(candidates) == 1
+                and candidates[0].get("expected") and candidates[0].get("sha256")
+                and candidates[0]["sha256"] != row["sha256"]
+                and row.get("release_expected") in candidates[0].get("tags", [])
+                and row.get("file") == candidates[0].get("file"))
+
+    @staticmethod
+    def _pin_review_set(rows):
+        return (bool(rows) and any(GuidedDownloadsPage._official_pin_review(r) for r in rows)
+                and all(r.get("file") and not GuidedDownloadsPage._needs_rescan(r) and
+                        (GuidedDownloadsPage._official_pin_review(r) or r.get("status") == "Pinned SHA-256 verified")
+                        for r in rows)
+                and len({r["file"] for r in rows}) == len(rows))
+
     def _primary_action(self):
         """Presentation only. The existing review dispatcher still revalidates."""
         recipe = self.recipe or {}
@@ -847,7 +902,7 @@ class GuidedDownloadsPage(QWidget):
         if not recipe:
             return "idle", "Review installation"
         if recipe.get("handler") == "kharvox-gog":
-            label = "Install verified dependencies"
+            label = "Review installation"
             if len(rows) != 1 or self._needs_rescan(rows[0]):
                 return "kharvox-wait", label
             record = rows[0]
@@ -865,6 +920,8 @@ class GuidedDownloadsPage(QWidget):
         # an invalid dependency must not be bypassed with a different selection.
         batch = method in ("bepinex", "ervr", "uevr")
         relevant = rows if batch or not row else [row]
+        if method in ("bepinex", "ervr") and self._pin_review_set(rows):
+            return "pinned-release-review", "Review installation"
         if any(self._verification_blocked(r) for r in relevant):
             return "blocked", "Installation blocked"
         if any(self._needs_rescan(r) for r in relevant):
@@ -959,7 +1016,9 @@ class GuidedDownloadsPage(QWidget):
         row = self._selected_row_record()
         route, label = self._primary_action()
         plan = self._last_plan or {}
-        if route in ("kharvox-review", "kharvox-wait"):
+        if route == "pinned-release-review":
+            message = "Newer official release matched, but the recipe pin is not approved. Review only; installation remains blocked."
+        elif route in ("kharvox-review", "kharvox-wait"):
             record = (plan.get("rows") or [{}])[0]
             latest = record.get("release_expected")
             message = ("Official release SHA-256 matched. Review compatibility with the tested 1.4 runner; no installation is authorized."
@@ -1036,7 +1095,7 @@ class GuidedDownloadsPage(QWidget):
         """Recheck the persisted scan identity before reusing a selection."""
         if not self._last_plan:
             return None
-        saved = self._saved.get(self.recipe["id"])
+        saved = archive_scans.load_saved().get(self.recipe["id"])
         folder, _ = self._folder()
         if not saved or not folder or saved["folder"] != str(folder):
             raise ValueError("Scan local archives again before reusing this selection.")
@@ -1093,6 +1152,17 @@ class GuidedDownloadsPage(QWidget):
             return
         if route == "kharvox-review":
             self._request_kharvox_review(rid)
+            return
+        if route == "pinned-release-review":
+            try:
+                rows = self._fresh_review_rows()
+                if not self._pin_review_set(rows) or rows != self._last_plan["rows"]:
+                    raise ValueError("Archive evidence changed. Rescan before review.")
+            except (ValueError, RuntimeError, OSError) as exc:
+                self._folder_feedback(str(exc))
+                return
+            self.install_review_requested.emit({"game_id": rid, "route": route,
+                "archives": [r["file"] for r in rows], "rows": rows, "origin": "downloads-page"})
             return
         if route in ("profile", "mod") and self.table.currentRow() < 0:
             rows = (self._last_plan or {}).get("rows", [])

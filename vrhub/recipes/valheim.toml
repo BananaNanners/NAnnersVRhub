@@ -62,6 +62,12 @@ name = "VHVR (pinned GitHub build; review newer releases)"
 github = "brandonmousseau/vhvr-mod"
 tracks = ["valheim"]
 
+
+[archive_releases.vhvr]
+repo = "brandonmousseau/vhvr-mod"
+asset = "vhvr.zip"
+pinned_tag = "v0.11.2"
+
 [requirements]
 openxr = "wivrn"
 proton_prefix = true
