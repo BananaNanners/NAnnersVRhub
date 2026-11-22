@@ -32,8 +32,9 @@ def _valid_widths(value, count):
     return list(value)
 
 
-def _read_preferences() -> dict:
-    path = preferences_file()
+def _read_preferences(path=None, counts=None) -> dict:
+    path = preferences_file() if path is None else path
+    counts = {k: 5 for k in _KEYS} if counts is None else counts
     if not path.exists() and not path.is_symlink():
         return {"schema": _SCHEMA, "tables": {}}
     if path.is_symlink() or not path.is_file() or path.stat().st_size > _MAX_SETTINGS_BYTES:
@@ -46,7 +47,7 @@ def _read_preferences() -> dict:
             data["schema"] != _SCHEMA or not isinstance(data["tables"], dict)):
         raise ValueError("Existing column preferences need review; they were preserved.")
     for key, value in data["tables"].items():
-        if key not in _KEYS or _valid_widths(value, 5) is None:
+        if key not in counts or _valid_widths(value, counts[key]) is None:
             raise ValueError("Existing column preferences contain invalid widths; they were preserved.")
     return data
 
@@ -55,6 +56,13 @@ def load_widths(key, count):
     if key not in _KEYS:
         raise ValueError("Unknown table layout")
     try:
+        if key == "mod-updates" and count == 6:
+            path = preferences_file().with_name("dependency-update-columns.json")
+            saved = _valid_widths(_read_preferences(path, {"mod-updates": 6})["tables"].get(key), 6)
+            if saved is not None:
+                return saved
+            old = _valid_widths(_read_preferences()["tables"].get(key), 5)
+            return old + [95] if old is not None else None
         return _valid_widths(_read_preferences()["tables"].get(key), count)
     except (ValueError, OSError):
         return None  # never crash a GUI because of bad display preferences
@@ -63,14 +71,16 @@ def load_widths(key, count):
 def save_widths(key, widths):
     if key not in _KEYS:
         raise ValueError("Unknown table layout")
-    if _valid_widths(widths, 5) is None:
+    expanded = key == "mod-updates" and len(widths) == 6
+    if _valid_widths(widths, 6 if expanded else 5) is None:
         raise ValueError("Invalid column widths")
-    path = preferences_file()
+    path = (preferences_file().with_name("dependency-update-columns.json")
+            if expanded else preferences_file())
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(str(path) + ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        data = _read_preferences()  # reject invalid file rather than silently replacing it
+        data = _read_preferences(path, {"mod-updates": 6} if expanded else None)  # preserve invalid data
         data["tables"][key] = list(widths)
         self_install._atomic(path, (json.dumps(data, indent=2) + "\n").encode("utf-8"))
 

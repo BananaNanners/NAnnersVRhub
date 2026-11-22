@@ -926,7 +926,7 @@ class HubWindow(QMainWindow):
         # KDE icon themes are preferred. Qt-native icons are a safe fallback.
         icon_data = (
             (self.overview_page, "Overview", "go-home-symbolic", QStyle.SP_DirHomeIcon),
-            (self.mod_updates, "Mod Updates", "download-symbolic", QStyle.SP_ArrowDown),
+            (self.mod_updates, "Updates", "download-symbolic", QStyle.SP_ArrowDown),
             (self.downloads, "Install / Update", "package-x-generic", QStyle.SP_DriveHDIcon),
             (self.rollback_page, "Rollback", "view-history", QStyle.SP_BrowserReload),
             (self.compat_page, "Compatibility", "video-display", QStyle.SP_ComputerIcon),
@@ -1244,10 +1244,10 @@ class HubWindow(QMainWindow):
         self.mod_updates.set_recipe(r, available)
         self.downloads.set_recipe(r)
         self.refresh_rollback_summary(r)
-        update_count = sum(item.get("status") == "update" for item in available or [])
+        update_count = updates.release_count(available)
         idx = self.game_details_tabs.indexOf(self.mod_updates)
         self.game_details_tabs.setTabText(
-            idx, f"Mod Updates ({update_count})" if update_count else "Mod Updates")
+            idx, f"Updates ({update_count})" if update_count else "Updates")
         self.details.setHtml(hub.details_html(
             r, available, verification, compact_updates=True) if r else "")
         can_install = bool(r and get_handler(r).install_supported(r))

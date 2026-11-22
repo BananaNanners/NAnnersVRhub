@@ -295,6 +295,7 @@ class GameBanner(QFrame):
         else:
             details.append("Guided VR setup")
         if update_items:
-            pending = sum(item.get("status") == "update" for item in update_items)
-            details.append(f"{pending} mod update(s) reported")
+            from .updates import release_count
+            pending = release_count(update_items)
+            details.append(f"{pending} update/release(s) reported")
         self.status.setText("   •   ".join(details))

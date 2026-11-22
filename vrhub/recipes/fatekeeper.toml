@@ -55,13 +55,15 @@ args = ""
 env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
 
 [[updates]]
-name = "UEVR FK — Mod / injector"
+name = "UEVR_FK.zip"
+dependency_type = "Mod"
 manual = "https://github.com/jbusfield/FK_UEVR/releases/tag/1.0.0"
 available_version = "1.0.0"
 tracks = ["fatekeeper"]
 
 [[updates]]
-name = "Fatekeeper — VR profile"
+name = "SLASHER-Win64-Shipping.zip"
+dependency_type = "Profile"
 github = "jbusfield/FK_UEVR"
 tracks = ["fatekeeper:profile"]
 

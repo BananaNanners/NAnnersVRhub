@@ -183,7 +183,8 @@ class HogwartsWorkflowTests(unittest.TestCase):
     def test_update_tracking_covers_matching_injector_and_profile(self):
         update = self.recipe["updates"][0]
         self.assertEqual(update["github"], "jbusfield/HL_UEVR")
-        self.assertEqual(set(update["tracks"]), {"hogwarts-legacy", "hogwarts-legacy:profile"})
+        self.assertEqual(update["tracks"], ["hogwarts-legacy:profile"])
+        self.assertEqual(self.recipe["updates"][1]["tracks"], ["hogwarts-legacy"])
         self.assertIn("/v2.0.6", self.recipe["mod_page"])
 
 

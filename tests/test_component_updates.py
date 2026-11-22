@@ -137,8 +137,8 @@ class CyberpunkComponentUpdates(unittest.TestCase):
             item("VR Port", "not_installed", "Not installed through the hub"),
         ]
         body = hub.details_html(self.recipe, rows)
-        self.assertIn("Mod update status", body)
-        self.assertIn("1 updates available</b> out of 4 tracked mods", body)
+        self.assertIn("Update status", body)
+        self.assertIn("1 updates available</b> out of 4 tracked dependencies", body)
         self.assertIn("1 up to date; 1", body)
         self.assertIn("Read-only check.", body)
         self.assertIn("It does not download, install, remove", body)
@@ -158,7 +158,7 @@ class CyberpunkComponentUpdates(unittest.TestCase):
             "detail": "Update available", "page": "https://example.com/mod",
         }])
         self.assertIn("<h3>Updates</h3>", body)
-        self.assertNotIn("Mod update status", body)
+        self.assertNotIn("Update status", body)
 
     def test_mark_current_does_not_hide_component_updates_or_write_state(self):
         state = Path(self.tmp.name) / "state.json"

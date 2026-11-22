@@ -397,7 +397,7 @@ class DownloadsHubWindowTests(unittest.TestCase):
         self.assertEqual(
             [self.window.game_details_tabs.tabText(i)
              for i in range(self.window.game_details_tabs.count())],
-            ["Overview", "Mod Updates", "Install / Update", "Rollback",
+            ["Overview", "Updates", "Install / Update", "Rollback",
              "Compatibility", "Controller Bindings", "Setup Guide"])
         self.assertIs(self.window.game_details_tabs.widget(2), self.window.downloads)
         self.assertEqual(self.window.sidebar.game_list.count(), 9)

@@ -107,9 +107,9 @@ class ModelTests(unittest.TestCase):
     def test_guide_has_short_summary_only_in_actual_gui_mode(self):
         before = hub.details_html(self.recipe, sample_updates())
         compact = hub.details_html(self.recipe, sample_updates(), compact_updates=True)
-        self.assertIn("Mod update status", before)
+        self.assertIn("Update status", before)
         self.assertIn("Cyber Engine Tweaks", before)
-        self.assertIn("See the <b>Mod updates</b> tab", compact)
+        self.assertIn("See the <b>Updates</b> tab", compact)
         self.assertNotIn("<li><b>Cyber Engine Tweaks", compact)
         self.assertIn("4 update(s) available", compact)
         self.assertIn("1 require manual review", compact)
@@ -280,7 +280,7 @@ class HubIntegrationTests(unittest.TestCase):
         self.assertEqual(
             [self.win.game_details_tabs.tabText(i)
              for i in range(self.win.game_details_tabs.count())],
-            ["Overview", "Mod Updates", "Install / Update", "Rollback",
+            ["Overview", "Updates", "Install / Update", "Rollback",
              "Compatibility", "Controller Bindings", "Setup Guide"])
         self.assertIs(self.win.game_details_tabs.widget(self.win.game_details_tabs.indexOf(self.win.mod_updates)), self.win.mod_updates)
 
@@ -288,13 +288,13 @@ class HubIntegrationTests(unittest.TestCase):
         self.select_cyberpunk()
         self.win.update_results["cyberpunk-2077"] = sample_updates()
         self.win.show_details()
-        self.assertEqual(self.win.game_details_tabs.tabText(self.win.game_details_tabs.indexOf(self.win.mod_updates)), "Mod Updates (4)")
+        self.assertEqual(self.win.game_details_tabs.tabText(self.win.game_details_tabs.indexOf(self.win.mod_updates)), "Updates (4)")
         self.assertEqual(self.win.mod_updates.sections["update"].table.rowCount(), 4)
         self.assertEqual(self.win.mod_updates.sections["current"].table.rowCount(), 9)
         self.assertNotIn("Cyber Engine Tweaks —", self.win.details.toPlainText())
         self.win.select_launcher_game(next(
             i for i, v in enumerate(self.win.rows) if v["recipe"]["id"] == "valheim"))
-        self.assertEqual(self.win.game_details_tabs.tabText(self.win.game_details_tabs.indexOf(self.win.mod_updates)), "Mod Updates")
+        self.assertEqual(self.win.game_details_tabs.tabText(self.win.game_details_tabs.indexOf(self.win.mod_updates)), "Updates")
         self.assertEqual(self.win.mod_updates.sections["update"].table.rowCount(), 0)
 
     def test_update_worker_controls_are_synchronized(self):

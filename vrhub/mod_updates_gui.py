@@ -36,7 +36,7 @@ STATUS_LABELS = {
     "no_key": "Nexus key needed",
     "not_installed": "Not installed",
 }
-COLUMN_TITLES = ("Mod", "Installed", "Latest", "Status", "Source")
+COLUMN_TITLES = ("Dependency", "Installed", "Latest", "Status", "Source", "Type")
 
 
 def grouped_updates(recipe, items):
@@ -55,13 +55,15 @@ def grouped_updates(recipe, items):
         else:
             group = "review"
         record = {
-            "name": str(raw.get("name") or "Unnamed mod"),
+            "name": str(raw.get("name") or "Unnamed dependency"),
+            "type": str(raw.get("dependency_type") or "Mod"),
             "installed": str(raw.get("installed_version") or "—"),
             "latest": str(raw.get("latest_version") or "—"),
             "status": ("Install later" if group == "later" else
                        "Rate limited" if status == "error" and "rate limit" in
                        str(raw.get("detail", "")).lower() else
-                       STATUS_LABELS.get(status, "Review")),
+                       "New release — review" if raw.get("newer_release") is True and status == "unknown"
+                       else STATUS_LABELS.get(status, "Review")),
             "tone": group,
             "detail": str(raw.get("detail") or "No version details provided."),
             "page": str(raw.get("page") or ""),
@@ -87,6 +89,7 @@ class UpdateTable(QTableWidget):
         super().__init__(0, len(COLUMN_TITLES), parent)
         self.setObjectName("modUpdatesTable")
         self.setHorizontalHeaderLabels(COLUMN_TITLES)
+        self.horizontalHeader().moveSection(5, 1)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -95,8 +98,8 @@ class UpdateTable(QTableWidget):
         self.setShowGrid(False)
         self.verticalHeader().hide()
         self.columns = enable_spreadsheet_columns(
-            self, "mod-updates", (295, 120, 120, 185, 137),
-            expand_weights=(3, 1, 1, 2, 0), min_row_height=44,
+            self, "mod-updates", (270, 115, 115, 185, 137, 95),
+            expand_weights=(3, 1, 1, 2, 0, 0), min_row_height=44,
             fixed_table_height=True)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -134,6 +137,7 @@ class UpdateTable(QTableWidget):
                     face.setWeight(QFont.DemiBold)
                     cell.setFont(face)
                 self.setItem(idx, col, cell)
+            self.setItem(idx, 5, QTableWidgetItem(record.get("type", "Mod")))
             link = safe_source_url(record["page"])
             if link:
                 button = QPushButton("Open source")
@@ -200,14 +204,14 @@ class ModUpdatesPage(QWidget):
         root.setContentsMargins(9, 9, 9, 9)
         root.setSpacing(8)
 
-        self.heading = QLabel("MOD UPDATES")
+        self.heading = QLabel("UPDATES")
         self.heading.setObjectName("modUpdatesHeading")
         root.addWidget(self.heading)
 
         top = QHBoxLayout()
         self.explanation = QLabel(
             "Read-only version check. Refreshing does not download, install, "
-            "remove or automatically mark mods as updated. Recent GitHub "
+            "remove or automatically mark dependencies as updated. Recent GitHub "
             "results may be reused for 15 minutes to avoid rate limits.")
         self.explanation.setObjectName("modUpdatesExplanation")
         self.explanation.setWordWrap(True)
@@ -219,7 +223,7 @@ class ModUpdatesPage(QWidget):
         top.addWidget(self.refresh_button)
         root.addLayout(top)
 
-        self.summary = QLabel("Select a game to see tracked mod updates.")
+        self.summary = QLabel("Select a game to see tracked dependency updates.")
         self.summary.setObjectName("modUpdatesSummary")
         self.summary.setWordWrap(True)
         root.addWidget(self.summary)
@@ -273,7 +277,7 @@ class ModUpdatesPage(QWidget):
         total = sum(len(rows) for rows in grouping.values())
         self.empty.setVisible(not total)
         if not recipe:
-            self.summary.setText("Select a game to see tracked mod updates.")
+            self.summary.setText("Select a game to see tracked dependency updates.")
         elif not items:
             self.summary.setText(
                 f"{recipe['name']}: no update results yet. Use Refresh update status.")
@@ -284,7 +288,10 @@ class ModUpdatesPage(QWidget):
             later = len(grouping["later"])
             missing = len(grouping["not_installed"])
             self.summary.setText(
-                f"{pending} updates available  •  {current} up to date  •  "
+                f"{total} dependencies checked  •  {pending} updates available  •  "
+                + (f"{sum(r.get('newer_release') is True for r in items if r.get('status') == 'unknown')} newer releases to review  •  "
+                   if any(r.get("newer_release") is True and r.get("status") == "unknown" for r in items) else "")
+                + f"{current} up to date  •  "
                 f"{review} need review  •  {later} install later  •  "
                 f"{missing} not installed")
         github_limited = sum(

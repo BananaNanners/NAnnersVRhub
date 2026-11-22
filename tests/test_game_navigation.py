@@ -10,7 +10,7 @@ from vrhub.app_update_gui import HubUpdateController
 from vrhub.gui import HubWindow
 
 
-NAMES = ("Overview", "Mod Updates", "Install / Update", "Rollback",
+NAMES = ("Overview", "Updates", "Install / Update", "Rollback",
          "Compatibility", "Controller Bindings", "Setup Guide")
 
 
@@ -84,7 +84,7 @@ class GameNavigationTests(unittest.TestCase):
         self.win.table.selectRow(idx)
         self.win.show_details()
         self.assertEqual(self.win.game_details_tabs.tabText(
-            self.tab(self.win.mod_updates)), "Mod Updates (2)")
+            self.tab(self.win.mod_updates)), "Updates (2)")
         self.assertEqual(self.win.mod_updates.sections["update"].table.rowCount(), 2)
 
     def test_rollback_is_explicitly_not_a_new_restoration_engine(self):

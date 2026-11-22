@@ -313,7 +313,7 @@ class ArtworkWindowTests(unittest.TestCase):
         from vrhub.gui import preferred_launcher_size
         self.assertEqual(preferred_launcher_size(2327, 1309), (1630, 1060))
         self.assertEqual(self.window.game_details_tabs.tabText(0), "Overview")
-        self.assertEqual(self.window.game_details_tabs.tabText(1), "Mod Updates")
+        self.assertEqual(self.window.game_details_tabs.tabText(1), "Updates")
         self.assertIn("#FFD21A", self.window.styleSheet())
         self.assertIn("#23B7FF", self.window.styleSheet())
 

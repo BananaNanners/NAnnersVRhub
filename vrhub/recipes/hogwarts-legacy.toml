@@ -56,12 +56,16 @@ args = ""
 env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
 
 [[updates]]
-name = "HL_UEVR (matching UEVR build + Hogwarts profile)"
+name = "HogwartsLegacy.zip"
+dependency_type = "Profile"
 github = "jbusfield/HL_UEVR"
-tracks = ["hogwarts-legacy", "hogwarts-legacy:profile"]
+tracks = ["hogwarts-legacy:profile"]
 
 [[updates]]
-name = "UEVR (JoeyHodge upstream)"
+name = "UEVR.zip"
+dependency_type = "Mod"
+tracks = ["hogwarts-legacy"]
+report_newer_release = true
 github = "joeyhodge/UEVR"
 upstream_reference = true
 reference_page = "https://github.com/joeyhodge/UEVR/releases#release-100526UE58_6RefreshUpdate"

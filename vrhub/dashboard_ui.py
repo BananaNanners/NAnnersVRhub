@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Read-only factual game overview cards for the 0.5.5 Dev2 launcher."""
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout, QWidget
+from .updates import release_count
 
 STORE_NAMES = {"steam": "Steam", "heroic-epic": "Heroic / Epic", "heroic-gog": "Heroic / GOG"}
 UPDATES = ("update", "current", "unknown", "error", "no_key", "manual", "not_installed")
@@ -17,7 +18,7 @@ def snapshot(row, update_items=None, verification=None, preflight=None):
         return {
             "game": ("Game install", "Choose a game", "Select a game from the library.", "neutral"),
             "mods": ("Mod setup", "Not checked", "Select a game for installed component status.", "neutral"),
-            "updates": ("Mod updates", "Not checked", "Refresh available mod versions.", "neutral"),
+            "updates": ("Updates", "Not checked", "Refresh available dependency versions.", "neutral"),
             "vr": ("VR preflight", "Not run", "Use Preflight to test local prerequisites.", "neutral"),
         }
     recipe = row["recipe"]
@@ -53,14 +54,15 @@ def snapshot(row, update_items=None, verification=None, preflight=None):
                 "Use the setup guide to verify the required files.", "neutral")
 
     if update_items is None or not update_items:
-        updates = ("Mod updates", "Not checked",
+        updates = ("Updates", "Not checked",
                    "Refresh update status to query available versions.", "neutral")
     else:
         counts = {name: sum(i.get("status") == name for i in update_items) for name in UPDATES}
         uncertain = sum(counts[s] for s in ("unknown", "error", "no_key", "manual"))
-        pending = counts["update"]
+        pending = release_count(update_items)
         if pending:
-            title, tone = f"{pending} update" + ("" if pending == 1 else "s"), "warning"
+            label = "new release" if pending > counts["update"] else "update"
+            title, tone = f"{pending} {label}" + ("" if pending == 1 else "s"), "warning"
         elif uncertain:
             title, tone = "Needs review", "warning"
         elif counts["not_installed"]:
@@ -69,7 +71,7 @@ def snapshot(row, update_items=None, verification=None, preflight=None):
             title, tone = "No newer versions reported", "success"
         detail = (f"{counts['current']} current  •  {uncertain} need review"
                   f"  •  {counts['not_installed']} not installed")
-        updates = ("Mod updates", title, detail, tone)
+        updates = ("Updates", title, detail, tone)
 
     if preflight is None:
         vr = ("VR preflight", "Not run",

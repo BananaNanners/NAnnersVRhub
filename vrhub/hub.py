@@ -1095,11 +1095,14 @@ def details_html(recipe: dict, update_items: list[dict] | None = None,
             pending = sum(item.get("status") == "update" for item in update_items)
             uncertain = sum(item.get("status") in ("unknown", "error", "no_key", "manual")
                             for item in update_items)
-            out.append("<h3>Mod updates</h3>")
+            newer = updates.release_count(update_items) - pending
+            newer_text = (f"{newer} newer upstream release(s) to review. " if newer else "")
+            out.append("<h3>Updates</h3>")
             out.append(f"<p><b>{pending} update(s) available</b> among "
-                       f"{len(update_items)} checked mod(s); "
+                       f"{len(update_items)} checked dependencies; "
                        f"{uncertain} require manual review. "
-                       "See the <b>Mod updates</b> tab for installed/latest versions, "
+                       f"{newer_text}"
+                       "See the <b>Updates</b> tab for installed/latest versions, "
                        "individual status and download-source links. "
                        "Checking does not download or install mods.</p>")
         elif recipe.get("track_component_updates"):
@@ -1116,12 +1119,12 @@ def details_html(recipe: dict, update_items: list[dict] | None = None,
             )
             count = {key: sum(i.get("status") == key for i in update_items)
                      for key, _heading, _color in groups}
-            out.append("<h3>Mod update status</h3>")
+            out.append("<h3>Update status</h3>")
             out.append("<p><b>Read-only check.</b> Refresh update status only looks up "
                        "new versions. It does not download, install, remove, or "
                        "automatically mark any mod as updated.</p>")
             out.append(f"<p><b>{count['update']} updates available</b> out of "
-                       f"{len(update_items)} tracked mods; "
+                       f"{len(update_items)} tracked dependencies; "
                        f"{count['current']} up to date; "
                        f"{sum(count[k] for k in ('unknown', 'error', 'no_key', 'manual'))} "
                        f"need review; {count['not_installed']} not installed.</p>")

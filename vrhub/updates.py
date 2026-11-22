@@ -202,7 +202,8 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
             page = f"https://www.nexusmods.com/{u['nexus_game']}/mods/{u['nexus_mod']}"
         else:
             page = u.get("manual", "")
-        item = {"name": u["name"], "page": page}
+        item = {"name": u["name"], "page": page,
+                "dependency_type": u.get("dependency_type", "Mod")}
         # A fixed packaged dependency is not the latest upstream project.
         # Display its published bundle version, never infer installed identity
         # from a legacy installation timestamp.
@@ -295,6 +296,15 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
                 f"Latest upstream UEVR release: {tag} ({day}). "
                 "Installed upstream version not established; review compatibility "
                 "with the matched game profile before updating."))
+            if u.get("report_newer_release"):
+                # Report publication after the recorded install date, not
+                # proof of installed upstream version or compatibility.
+                tracked = [state[k] for k in u.get("tracks", []) if k in state]
+                stamps = [t.get("installed_at") for t in tracked]
+                if stamps and all(type(s) in (int, float) and s > 0 for s in stamps):
+                    if all(s < published_ts for s in stamps):
+                        item["newer_release"] = True
+                        item["detail"] += " Published after the recorded installation."
             out.append(item)
             continue
         tracked = [state[k] for k in u.get("tracks", [recipe["id"]]) if k in state]
@@ -316,6 +326,17 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
 
 def check_all(recipes: dict, state: dict, fetch=None, **kw) -> dict[str, list[dict]]:
     return {rid: check_recipe(r, state, fetch, **kw) for rid, r in recipes.items()}
+
+
+def release_count(items):
+    """Count available updates plus explicitly identified newer releases.
+
+    Generic review flags, fetch errors and missing dependencies never count.
+    A newer upstream release is not proof of the installed version.
+    """
+    return sum(i.get("status") == "update" or
+               (i.get("status") == "unknown" and i.get("newer_release") is True)
+               for i in items or [])
 
 
 def summarize(items: list[dict] | None) -> str:
