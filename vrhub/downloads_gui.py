@@ -10,15 +10,15 @@ from html import escape
 from datetime import datetime
 from threading import Event
 
-from PySide6.QtCore import Qt, QThread, Signal, QUrl
+from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView, QFileDialog, QGridLayout, QHBoxLayout, QHeaderView,
     QLabel, QInputDialog, QMessageBox, QMenu, QPlainTextEdit, QProgressBar,
-    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+    QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -136,6 +136,7 @@ class GuidedDownloadsPage(QWidget):
         self._rescan_after_download = False
         self._saved_error = None
         self._download_cancelling = False
+        self._comparison_online = None
         try:
             self._saved = archive_scans.load_saved()
         except (ValueError, OSError) as exc:
@@ -288,6 +289,51 @@ class GuidedDownloadsPage(QWidget):
             header.moveSection(header.visualIndex(logical), visual)
         outer.addWidget(self.table, 1)
 
+        # An optional, read-only evidence view. The main archive checklist
+        # remains unchanged and is never replaced with inferred versions.
+        self.comparison_toggle = QPushButton("Compare versions ▸")
+        self.comparison_toggle.setObjectName("downloadsAction")
+        self.comparison_toggle.setCheckable(True)
+        self.comparison_toggle.setToolTip(
+            "Compare Hub installation records, locally scanned ZIPs and the last "
+            "separately refreshed online release metadata. Does not install or authorize anything.")
+        self.comparison_panel = QWidget(self)
+        comparison_layout = QVBoxLayout(self.comparison_panel)
+        comparison_layout.setContentsMargins(0, 0, 0, 0)
+        comparison_layout.setSpacing(5)
+        self.comparison_note = QLabel(
+            "Installed versions require their own evidence. An official downloaded "
+            "release or a matching online label does not verify installed files.")
+        self.comparison_note.setWordWrap(True)
+        comparison_layout.addWidget(self.comparison_note)
+        self.comparison_summary = QLabel()
+        self.comparison_summary.setWordWrap(True)
+        comparison_layout.addWidget(self.comparison_summary)
+        self.comparison_table = QTableWidget(0, 5)
+        self.comparison_table.setObjectName("archiveVersionComparisonTable")
+        self.comparison_table.setHorizontalHeaderLabels(
+            ("Dependency", "Installed (Hub)", "Downloaded (scan)", "Latest online", "Comparison"))
+        self.comparison_table.setSelectionMode(QAbstractItemView.NoSelection)
+        self.comparison_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.comparison_table.setWordWrap(True)
+        self.comparison_table.setAlternatingRowColors(True)
+        self.comparison_table.setShowGrid(False)
+        self.comparison_table.verticalHeader().hide()
+        self.comparison_table.setMinimumHeight(150)
+        self.comparison_table.setMaximumHeight(280)
+        self.comparison_columns = enable_spreadsheet_columns(
+            self.comparison_table, "archive-version-comparison",
+            (200, 170, 225, 140, 275),
+            expand_weights=(2, 1, 2, 1, 3), min_row_height=55)
+        comparison_layout.addWidget(self.comparison_table)
+        self.comparison_panel.hide()
+        self._comparison_scroll_timer = QTimer(self)
+        self._comparison_scroll_timer.setSingleShot(True)
+        self._comparison_scroll_timer.timeout.connect(self._scroll_to_comparison)
+        self.comparison_toggle.toggled.connect(self._toggle_comparison)
+        outer.addWidget(self.comparison_toggle)
+        outer.addWidget(self.comparison_panel)
+
         self.review_actions = QWidget(self)
         self.review_footer = QHBoxLayout(self.review_actions)
         self.review_footer.setContentsMargins(0, 0, 0, 0)
@@ -401,6 +447,8 @@ class GuidedDownloadsPage(QWidget):
         return planner.scan_folders(self.recipe) if self.recipe else ()
 
     def set_recipe(self, recipe):
+        if (recipe or {}).get("id") != (self.recipe or {}).get("id"):
+            self._comparison_online = None
         self.recipe = recipe
         # Read the stable shared store again on game switch/refresh. A second
         # preview may have saved a newer scan since this window was opened.
@@ -593,6 +641,7 @@ class GuidedDownloadsPage(QWidget):
             f"Cannot read preferences: {error}" if error else
             "Scan local archives to find candidate packages. Nothing is installed."
             if recipe else "Select a game to review its archive library.")
+        self._refresh_comparison()
 
     def _choose_folder(self, scope):
         if not self.recipe:
@@ -762,6 +811,70 @@ class GuidedDownloadsPage(QWidget):
         self.summary.setText(" · ".join([heading, *current]))
         self.summary.setToolTip(" · ".join([heading, *details]))
         self._update_workflow_guidance()
+        self._refresh_comparison()
+
+    def _toggle_comparison(self, open_):
+        self.comparison_panel.setVisible(bool(open_))
+        self.comparison_toggle.setText("Compare versions ▾" if open_ else "Compare versions ▸")
+        if open_:
+            self._comparison_scroll_timer.start(0)
+        else:
+            self._comparison_scroll_timer.stop()
+
+    def _scroll_to_comparison(self):
+        """Bring expanded evidence into view without touching its content."""
+        widget = self.parentWidget()
+        while widget is not None and not isinstance(widget, QScrollArea):
+            widget = widget.parentWidget()
+        if widget is not None and self.comparison_panel.isVisible():
+            widget.ensureWidgetVisible(self.comparison_table, 0, 24)
+
+    def set_online_results(self, results):
+        """Update from the separate Updates tab refresh; never fetch here."""
+        self._comparison_online = results if isinstance(results, list) else None
+        self._refresh_comparison()
+
+    def _refresh_comparison(self):
+        recipe = self.recipe
+        if not recipe or (planner.plan_components(recipe) == [] or
+                          all(c["id"] == "guide" for c in planner.plan_components(recipe))):
+            self.comparison_toggle.hide()
+            self.comparison_toggle.setChecked(False)
+            self.comparison_table.setRowCount(0)
+            return
+        self.comparison_toggle.show()
+        try:
+            state = hub.state()
+            if not isinstance(state, dict):
+                raise ValueError("Hub installation state is not a mapping.")
+        except (OSError, ValueError, TypeError) as exc:
+            self.comparison_summary.setText(f"Cannot compare installed records: {exc}")
+            self.comparison_table.setRowCount(0)
+            return
+        records = archive_update_comparison.compare(
+            recipe, self._last_plan, state, self._comparison_online)
+        self.comparison_table.setRowCount(0)
+        self.comparison_table.setRowCount(len(records))
+        for i, record in enumerate(records):
+            self.comparison_table.setRowHeight(i, 58)
+            for j, key in enumerate(("name", "installed", "downloaded", "latest", "assessment")):
+                cell = QTableWidgetItem(record[key])
+                cell.setFlags(Qt.ItemIsEnabled)
+                cell.setToolTip(record["detail"])
+                if j == 4 or (j == 2 and record["tone"] != "success"):
+                    cell.setForeground(QColor({
+                        "danger": "#FF5B50", "warning": "#FFD21A",
+                        "success": "#4FE39A", "unknown": "#A7ADB7",
+                    }.get(record["tone"], "#A7ADB7")))
+                self.comparison_table.setItem(i, j, cell)
+        identified = sum(row["matched_release"] for row in records)
+        checked = sum(row["latest"] not in ("Not checked", "Unavailable") for row in records)
+        self.comparison_summary.setText(
+            f"{identified} identified archive(s) · {checked} online version(s) shown from last refresh "
+            f"· installed release identity may be unknown")
+        self.comparison_summary.setToolTip(
+            "Comparison uses saved or newly scanned archive metadata and in-memory "
+            "online results only. Refresh online results separately in Updates.")
 
     def _set_rows(self, records):
         self.table.clearSelection()

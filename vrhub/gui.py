@@ -1256,6 +1256,7 @@ class HubWindow(QMainWindow):
             dashboard_snapshot(row, available, verification, checked))
         self.mod_updates.set_recipe(r, available)
         self.downloads.set_recipe(r)
+        self.downloads.set_online_results(available)
         self.refresh_rollback_summary(r)
         update_count = updates.release_count(available)
         idx = self.game_details_tabs.indexOf(self.mod_updates)

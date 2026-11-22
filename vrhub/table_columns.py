@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
 # SPDX-License-Identifier: GPL-3.0-only
-"""Spreadsheet-style Qt columns for the Hub's three game/mod tables.
+"""Spreadsheet-style Qt columns for the Hub's game/mod tables.
 
 Drag a header separator to resize; double-click to fit text; long labels wrap.
 Only explicitly resized widths are saved, in the Hub's *own* state folder.
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QAbstractItemView, QHeaderView
 from . import hub, self_install
 
 _SCHEMA = 1
-_KEYS = frozenset({"game-library", "guided-downloads", "mod-updates"})
+_KEYS = frozenset({"game-library", "guided-downloads", "mod-updates", "archive-version-comparison"})
 _MAX_SETTINGS_BYTES = 16 * 1024
 
 
