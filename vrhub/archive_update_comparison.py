@@ -51,6 +51,17 @@ def _download(recipe, comp, row, warning):
     source = recipe.get("archive_releases", {}).get(str(comp["id"]), {})
     if status == "Pinned SHA-256 verified":
         tag = source.get("pinned_tag")
+        if not tag and recipe.get("packages"):
+            packages = [
+                p for p in recipe["packages"]
+                if p.get("id") == comp["id"] and
+                row.get("sha256") == p.get("sha256")
+            ]
+            if len(packages) == 1:
+                # The pinned archive SHA already matched. Its exact
+                # tagged recipe source may supply a release label without
+                # needing a filename or a live upstream lookup.
+                tag = installed_provenance._source_tag(recipe, packages[0])
         value = "Pinned SHA-256" + (f" · {tag}" if tag else "")
         return value, str(tag) if tag else None, True, (
             "Downloaded bytes match this recipe's SHA-256; installed version is independent."), "success"
@@ -160,6 +171,14 @@ def compare(recipe, plan, state, online=None):
             "assessment": assessment, "tone": tone,
             "provenance_source": provenance["source"],
             "installed_attributed": provenance["identified"],
+            # Structured evidence for the read-only readiness planner;
+            # the existing comparison prose remains unchanged.
+            "installed_version": recorded_version,
+            "download_version": download_tag if verified else None,
+            "download_verified": bool(verified),
+            "online_version": latest if latest not in ("Not checked", "Unavailable") else None,
+            "online_status": update.get("status") if update else None,
+            "pin_blocked": bool(by_id.get(comp["id"], {}).get("release_review")),
             "detail": chr(10).join((
                 "Installed evidence: " + provenance["source"],
                 "Installed: " + installed_note,

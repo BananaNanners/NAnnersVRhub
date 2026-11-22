@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -363,18 +363,23 @@ class GuidedDownloadsPage(QWidget):
         comparison_layout.setContentsMargins(0, 0, 0, 0)
         comparison_layout.setSpacing(5)
         self.comparison_note = QLabel(
-            "Installed: source evidence from Hub records, not a live file check. "
-            "Downloaded: pinned or official archive evidence. "
-            "Latest: separate update lookup. Matching versions do not authorize updates.")
+            "Read-only planning: Installed uses Hub provenance; Downloaded uses local SHA evidence; "
+            "Latest uses the separate Updates check. Run Verify installed files when needed. "
+            "A readiness candidate is NOT permission to install or replace mods.")
         self.comparison_note.setWordWrap(True)
         comparison_layout.addWidget(self.comparison_note)
         self.comparison_summary = QLabel()
         self.comparison_summary.setWordWrap(True)
         comparison_layout.addWidget(self.comparison_summary)
+        self.readiness_summary = QLabel(
+            "Update readiness: no installation authorized. Compare versions and verify installed files first.")
+        self.readiness_summary.setObjectName("archiveReadinessSummary")
+        self.readiness_summary.setWordWrap(True)
+        comparison_layout.addWidget(self.readiness_summary)
         self.comparison_table = QTableWidget(0, 5)
         self.comparison_table.setObjectName("archiveVersionComparisonTable")
         self.comparison_table.setHorizontalHeaderLabels(
-            ("Dependency", "Installed (Hub)", "Downloaded (scan)", "Latest online", "Comparison"))
+            ("Dependency", "Installed (Hub)", "Downloaded (scan)", "Latest online", "Update readiness"))
         self.comparison_table.setSelectionMode(QAbstractItemView.NoSelection)
         self.comparison_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.comparison_table.setWordWrap(True)
@@ -949,6 +954,7 @@ class GuidedDownloadsPage(QWidget):
             self.comparison_toggle.hide()
             self.comparison_toggle.setChecked(False)
             self.comparison_table.setRowCount(0)
+            self.readiness_summary.setText("Update readiness: select a supported dependency.")
             return
         self.comparison_toggle.show()
         try:
@@ -958,23 +964,50 @@ class GuidedDownloadsPage(QWidget):
         except (OSError, ValueError, TypeError) as exc:
             self.comparison_summary.setText(f"Cannot compare installed records: {exc}")
             self.comparison_table.setRowCount(0)
+            self.readiness_summary.setText("Update readiness unavailable: installed records need review.")
             return
         records = archive_update_comparison.compare(
             recipe, self._last_plan, state, self._comparison_online)
+        decisions = update_readiness.assess(
+            recipe, self._last_plan, state, self._comparison_online,
+            self._integrity_result, records)
+        by_decision = {entry["id"]: entry for entry in decisions}
         self.comparison_table.setRowCount(0)
         self.comparison_table.setRowCount(len(records))
         for i, record in enumerate(records):
             self.comparison_table.setRowHeight(i, 58)
+            decision = by_decision.get(record["id"], {})
             for j, key in enumerate(("name", "installed", "downloaded", "latest", "assessment")):
-                cell = QTableWidgetItem(record[key])
+                value = decision.get("label", "Manual evidence review") if j == 4 else record[key]
+                cell = QTableWidgetItem(value)
                 cell.setFlags(Qt.ItemIsEnabled)
-                cell.setToolTip(record["detail"])
+                if j == 4:
+                    cell.setToolTip(
+                        record["detail"] + chr(10) +
+                        "Previous comparison: " + record["assessment"] + chr(10) +
+                        "Update readiness: " + decision.get("detail", "Not established.") + chr(10) +
+                        "Next safe step: " + decision.get("next", "Manual review.") + chr(10) +
+                        "No replacement, download, or installation is authorized.")
+                else:
+                    cell.setToolTip(record["detail"])
+                tone = decision.get("tone", "unknown") if j == 4 else record["tone"]
                 if j == 4 or (j == 2 and record["tone"] != "success"):
                     cell.setForeground(QColor({
                         "danger": "#FF5B50", "warning": "#FFD21A",
                         "success": "#4FE39A", "unknown": "#A7ADB7",
-                    }.get(record["tone"], "#A7ADB7")))
+                    }.get(tone, "#A7ADB7")))
                 self.comparison_table.setItem(i, j, cell)
+        candidates = sum(x["code"] == "candidate" for x in decisions)
+        blocked = sum(x["code"] in ("blocked", "pin", "integrity-review") for x in decisions)
+        further = len(decisions) - candidates - blocked
+        self.readiness_summary.setText(
+            f"Update readiness (planning only): {candidates} future candidate(s) · "
+            f"{blocked} blocked / integrity review · {further} need more evidence. "
+            "No update is authorized.")
+        self.readiness_summary.setToolTip(
+            "Uses your last on-demand installed-file check, selected-folder scan and "
+            "separately refreshed online metadata. Hover the readiness cell for the next safe step. "
+            "Backup, dependency compatibility and recovery preflight are NOT performed here.")
         identified = sum(row["matched_release"] for row in records)
         checked = sum(row["latest"] not in ("Not checked", "Unavailable") for row in records)
         self.comparison_summary.setText(
@@ -996,6 +1029,9 @@ class GuidedDownloadsPage(QWidget):
             return
         self.integrity_status.setText(
             "Reading recorded installation hashes (read-only). No game-file writes will occur…")
+        # Any prior verification is now superseded by this in-progress job.
+        self._integrity_result = None
+        self._refresh_comparison()
         self.integrity_details.clear()
         self.integrity_details.hide()
         worker = InstalledIntegrityWorker(self.recipe, self)
@@ -1053,6 +1089,7 @@ class GuidedDownloadsPage(QWidget):
                 lines.append("Required mod presence: unknown — no readiness evidence.")
         self.integrity_details.setPlainText(chr(10).join(lines))
         self.integrity_details.setVisible(bool(lines))
+        self._refresh_comparison()
 
     def _integrity_failed(self, error, worker):
         if worker is self.integrity_worker and self.recipe and (
@@ -1061,12 +1098,16 @@ class GuidedDownloadsPage(QWidget):
                 "Verification could not finish safely. No game-file writes performed.")
             self.integrity_details.setPlainText("Read-only verification failed: " + error)
             self.integrity_details.show()
+            self._integrity_result = None
+            self._refresh_comparison()
 
     def _integrity_cancelled(self, worker):
         if worker is self.integrity_worker and self.recipe and (
                 self.recipe.get("id") == worker.recipe.get("id")):
             self.integrity_status.setText("Verification cancelled. No game-file writes performed.")
             self.integrity_details.hide()
+            self._integrity_result = None
+            self._refresh_comparison()
 
     def _integrity_finished(self, worker):
         if worker is not self.integrity_worker:
