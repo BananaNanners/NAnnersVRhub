@@ -100,8 +100,6 @@ class VisualPolishTests(unittest.TestCase):
              self.window.overview_page),
             (self.window.update_tools_toggle, self.window.update_tools_panel,
              self.window.mod_updates),
-            (self.window.install_tools_toggle, self.window.install_tools_panel,
-             self.window.downloads),
             (self.window.more_tools_toggle, self.window.more_tools_panel,
              self.window.compat_page),
         ):
@@ -118,6 +116,10 @@ class VisualPolishTests(unittest.TestCase):
                 self.app.processEvents()
                 self.assertFalse(panel.isVisible())
                 self.assertFalse(button.isChecked())
+        self.assertTrue(self.window.install_tools_toggle.isHidden())
+        self.assertTrue(self.window.install_tools_panel.isHidden())
+        self.assertEqual(self.window.downloads.layout().indexOf(
+            self.window.install_tools_panel), -1)
         self.assertIn("QPushButton#launcherDisclosure:checked",
                       self.window.styleSheet())
         self.assertIn("font-size: 12px", self.window.styleSheet())

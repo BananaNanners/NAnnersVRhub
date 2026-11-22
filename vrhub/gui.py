@@ -802,6 +802,10 @@ class HubWindow(QMainWindow):
         advanced_layout.addLayout(_row(self.diag_btn, self.bridge_log_btn,
                                        self.log_diagnostics_btn, self.support_report_btn))
         advanced_layout.addLayout(_row(self.doom_logs_btn))
+        # DOOM/KHARVOX-only specialist actions remain reachable from
+        # Compatibility, not a second generic installation-tools drawer.
+        advanced_layout.addLayout(_row(self.kharvox_folder_btn,
+                                       self.doom_prepare_btn, self.doom_import_btn))
         self.more_tools_panel.hide()
         self.more_tools_toggle.toggled.connect(self.more_tools_panel.setVisible)
         self.more_tools_toggle.toggled.connect(
@@ -810,35 +814,29 @@ class HubWindow(QMainWindow):
         compat_layout.insertWidget(2, self.more_tools_toggle)
         compat_layout.insertWidget(3, self.more_tools_panel)
 
-        self.install_tools_toggle = QPushButton("More installation tools")
-        self.install_tools_toggle.setObjectName("launcherDisclosure")
-        self.install_tools_toggle.setCheckable(True)
-        self.install_tools_panel = QWidget()
-        self.install_tools_panel.setObjectName("installationAdvancedTools")
-        install_tools_layout = QVBoxLayout(self.install_tools_panel)
-        install_tools_layout.setContentsMargins(4, 5, 4, 5)
-        install_tools_layout.setSpacing(7)
-        # Retain the old handler objects for compatibility, but expose only
-        # a single context-dependent manual fallback through the page.
-        for button in (self.install_btn, self.profile_btn):
+        # Legacy install/verify handlers are kept for API and rollback
+        # compatibility, but the old installation-tools drawer is retired.
+        # The container is *not* in any layout, and has no visible toggle.
+        # The archive page already owns contextual manual review, selected
+        # ZIP inspection and verified download actions.
+        self.install_tools_panel = QWidget(self.downloads)
+        self.install_tools_panel.setObjectName("retiredInstallationHandlers")
+        self.install_tools_panel.hide()
+        self.install_tools_toggle = QPushButton("More installation tools", self.downloads)
+        self.install_tools_toggle.setObjectName("retiredInstallationDisclosure")
+        self.install_tools_toggle.hide()
+        for button in (self.install_btn, self.profile_btn, self.verify_btn,
+                       self.inspect_btn):
             button.setParent(self.install_tools_panel)
             button.hide()
-        install_tools_layout.addLayout(_row(self.downloads.manual_review_button,
-                                            self.downloads.download_button))
-        install_tools_layout.addLayout(_row(self.verify_btn, self.inspect_btn,
-                                            self.downloads.inspect))
-        install_tools_layout.addLayout(_row(self.kharvox_folder_btn,
-                                            self.doom_prepare_btn, self.doom_import_btn))
-        self.install_tools_panel.hide()
-        self.install_tools_toggle.toggled.connect(self.install_tools_panel.setVisible)
-        self.install_tools_toggle.toggled.connect(
-            lambda active: self.install_tools_toggle.setText(
-                "Hide installation tools" if active else "More installation tools"))
-        self.downloads.review_footer.insertWidget(0, self.install_tools_toggle)
-        after = self.downloads.layout().indexOf(self.downloads.review_actions) + 1
-        self.downloads.layout().insertWidget(after, self.install_tools_panel)
-        self._install_tools_game = None
-        self.downloads.advanced_availability_changed.connect(self._sync_install_tools)
+        # Preserve the standalone archive inspector without another main
+        # button. Accessible only on supported game recipes from the existing
+        # archive-folder menu, with the original read-only inspection handler.
+        self.manual_archive_inspect_action = self.downloads.folder_menu.addAction(
+            "Inspect another archive…")
+        self.manual_archive_inspect_action.triggered.connect(self.inspect_archive)
+        self.downloads.folder_menu.aboutToShow.connect(self._sync_inspect_menu)
+        self._sync_inspect_menu()
 
         self.update_tools_toggle = QPushButton("More update tools")
         self.update_tools_toggle.setObjectName("launcherDisclosure")
@@ -1242,11 +1240,6 @@ class HubWindow(QMainWindow):
             button.setVisible(not kharvox)
         self.install_btn.hide()
         self.profile_btn.hide()
-        # Reset disclosure on game changes, not on unrelated refreshes.
-        rid = r.get("id") if r else None
-        if self._install_tools_game != rid:
-            self._install_tools_game = rid
-            self.install_tools_toggle.setChecked(False)
         self.controller_bindings.set_recipe(r)
         self.refresh_compatibility()
         verification = hub.verify(r) if r else None
@@ -1293,13 +1286,17 @@ class HubWindow(QMainWindow):
         self.game_play_btn.setText(play_label or "Launch game")
         self.game_play_btn.setVisible(bool(play_label))
         self.game_play_btn.setEnabled(bool(play_label))
+        # The one on-demand integrity action now reports required-mod
+        # presence separately from SHA-256 matching. Preserve old handler
+        # objects but never expose duplicate Verify mods / Inspect archive
+        # buttons in the normal interface.
         can_verify = bool(r and (r.get("components") or r.get("packages")))
         self.verify_btn.setEnabled(can_verify)
-        self.verify_btn.setVisible(can_verify and not kharvox)
+        self.verify_btn.hide()
         self.preflight_btn.setEnabled(bool(r))
         can_inspect = bool(r and r.get("method") in {"gameroot", "bepinex", "ervr"})
         self.inspect_btn.setEnabled(can_inspect)
-        self.inspect_btn.setVisible(can_inspect and not kharvox)
+        self.inspect_btn.hide()
         has_profile = bool(r and "profile" in r)
         self.profile_btn.setEnabled(has_profile)
         self.unprofile_btn.setEnabled(has_profile)
@@ -1311,22 +1308,19 @@ class HubWindow(QMainWindow):
             self.bridge_log_btn.setText(
                 "Open MO2 bridge log" if r.get("handler") == "skyrim-vr"
                 else hub.game_bridge_log_label(r))
-        self._sync_install_tools()
+        self._sync_inspect_menu()
         self.update_live_status()
 
-    def _sync_install_tools(self):
-        """Only meaningful actions are exposed; no empty disclosure."""
+    def _sync_inspect_menu(self):
+        """Preserve manual ZIP inspection in the existing archive menu."""
         r = self.downloads.recipe or {}
-        supports_inspect = r.get("method") in {"gameroot", "bepinex", "ervr"}
-        self.inspect_btn.setVisible(supports_inspect and self.downloads.inspect.isHidden())
-        controls = (self.downloads.manual_review_button, self.downloads.download_button,
-                    self.verify_btn, self.inspect_btn, self.downloads.inspect,
-                    self.kharvox_folder_btn, self.doom_prepare_btn, self.doom_import_btn)
-        available = any(not b.isHidden() for b in controls)
-        if not available:
-            self.install_tools_toggle.setChecked(False)
-        self.install_tools_toggle.setVisible(available)
-        self.install_tools_panel.setVisible(available and self.install_tools_toggle.isChecked())
+        supported = r.get("method") in {"gameroot", "bepinex", "ervr"}
+        # The same prerequisites that enabled the retired legacy handler.
+        self.manual_archive_inspect_action.setVisible(bool(supported))
+        self.manual_archive_inspect_action.setEnabled(bool(
+            supported and self.inspect_btn.isEnabled()
+            and self.downloads.worker is None
+            and self.downloads.download_worker is None))
 
     def _update_game_tab_icon_colors(self, selected: int) -> None:
         """Selected navigation icon is dark on banana-yellow; others stay muted."""

@@ -70,8 +70,11 @@ class ConsolidatedHubControlsTests(unittest.TestCase):
         self.assertIs(self.win.log_diagnostics_btn.parent(), self.win.more_tools_panel)
 
     def test_disclosures_are_initially_collapsed_and_open_only_in_own_tab(self):
+        self.assertTrue(self.win.install_tools_toggle.isHidden())
+        self.assertTrue(self.win.install_tools_panel.isHidden())
+        self.assertEqual(
+            self.win.downloads.layout().indexOf(self.win.install_tools_panel), -1)
         groups = (
-            (self.win.install_tools_toggle, self.win.install_tools_panel, self.win.downloads),
             (self.win.update_tools_toggle, self.win.update_tools_panel, self.win.mod_updates),
             (self.win.more_tools_toggle, self.win.more_tools_panel, self.win.compat_page),
         )
@@ -98,18 +101,21 @@ class ConsolidatedHubControlsTests(unittest.TestCase):
                           "rollbackNotice")[0].text())
 
     def test_installation_and_compatibility_keep_all_original_secondary_actions(self):
-        install = (
-            "install_btn", "profile_btn", "verify_btn", "inspect_btn",
-            "kharvox_folder_btn", "doom_prepare_btn", "doom_import_btn",
-        )
+        # Legacy handler objects remain parked but never offered as
+        # duplicate buttons. KHARVOX specialists live in Compatibility.
+        install = ("install_btn", "profile_btn", "verify_btn", "inspect_btn")
         compat = (
             "diag_btn", "bridge_log_btn", "log_diagnostics_btn",
             "support_report_btn", "doom_logs_btn",
+            "kharvox_folder_btn", "doom_prepare_btn", "doom_import_btn",
         )
         for name in install:
             self.assertIs(getattr(self.win, name).parent(), self.win.install_tools_panel)
         for name in compat:
             self.assertIs(getattr(self.win, name).parent(), self.win.more_tools_panel)
+        self.assertIs(self.win.downloads.manual_review_button.parent(), self.win.downloads.review_actions)
+        self.assertIs(self.win.downloads.inspect.parent(), self.win.downloads.review_actions)
+        self.assertIs(self.win.downloads.download_button.parent(), self.win.downloads)
         for name in ("copy_btn", "inject_btn", "game_launch_btn",
                      "doom_probe_btn"):
             self.assertIs(getattr(self.win, name).parent(),

@@ -76,6 +76,39 @@ class InstalledIntegrityWorker(QThread):
             # Untrusted historical manifests must never crash the QThread.
             self.failed.emit(str(exc))
         else:
+            # The former "Verify mods" checks required component presence,
+            # not bytes. Keep that distinct from current SHA-256 integrity.
+            if self.cancel_flag.is_set():
+                self.cancelled.emit()
+                return
+            try:
+                presence = hub.verify(self.recipe)
+            except (OSError, ValueError, RuntimeError, TypeError, KeyError) as exc:
+                result["presence"] = {"status": "Unknown",
+                                      "detail": "Required-mod presence check unavailable."}
+            else:
+                if isinstance(presence, dict):
+                    rows = presence.get("rows", [])
+                    result["presence"] = {
+                        "status": "Ready" if presence.get("ready") else "Needs review",
+                        "ok": presence.get("ok", 0),
+                        "total": presence.get("total", len(rows)),
+                        "required_bad": [
+                            {"name": str(row.get("name", "Dependency")),
+                             "status": str(row.get("status", "unknown"))}
+                            for row in presence.get("required_bad", [])[:24]
+                            if isinstance(row, dict)],
+                        "later_bad": [
+                            {"name": str(row.get("name", "Dependency")),
+                             "status": str(row.get("status", "unknown"))}
+                            for row in presence.get("later_bad", [])[:24]
+                            if isinstance(row, dict)],
+                    }
+                else:
+                    result["presence"] = None
+            if self.cancel_flag.is_set():
+                self.cancelled.emit()
+                return
             self.done.emit(result)
 
 
@@ -368,9 +401,10 @@ class GuidedDownloadsPage(QWidget):
         self.integrity_button = QPushButton("Verify installed files")
         self.integrity_button.setObjectName("downloadsAction")
         self.integrity_button.setToolTip(
-            "Read-only, on-demand SHA-256 check of Hub-tracked installed files. "
-            "Unknown/manual mods are not automatically adopted. "
-            "No repair, replacement, or install is performed.")
+            "Read-only SHA-256 check of Hub-tracked installed files and a separate "
+            "required-mod presence check where supported. "
+            "Missing, manual, and untracked mods are never automatically adopted. "
+            "Nothing is installed, repaired, or replaced.")
         self.integrity_button.clicked.connect(self._start_integrity_check)
         integrity_line.addWidget(self.integrity_button)
         integrity_line.addStretch()
@@ -986,10 +1020,20 @@ class GuidedDownloadsPage(QWidget):
         verified = sum(row["status"] == "Verified" for row in result["rows"])
         review = sum(row["status"] == "Review" for row in result["rows"])
         unknown = sum(row["status"] == "Unknown" for row in result["rows"])
-        self.integrity_status.setText(
+        message = (
             f"Installed integrity: {result['checked']} tracked file(s) matched · "
             f"{verified} verified dependency(ies) · {review} need review · "
-            f"{unknown} unknown. No game-file writes performed.")
+            f"{unknown} unknown.")
+        presence = result.get("presence")
+        if isinstance(presence, dict):
+            if presence.get("status") == "Unknown":
+                message += " Required mod presence: unknown."
+            else:
+                message += (
+                    f" Required mod presence: {presence.get('ok', 0)}/"
+                    f"{presence.get('total', 0)} recorded present "
+                    "(presence only; not hash verification).")
+        self.integrity_status.setText(message + " No game-file writes performed.")
         lines = []
         for row in result["rows"]:
             if row["status"] == "Verified":
@@ -999,6 +1043,14 @@ class GuidedDownloadsPage(QWidget):
                 lines.append(f"  {item['status']}: {item['file']} — {item['detail']}")
             if len(row["issues"]) >= installed_integrity.MAX_ISSUES_PER_COMPONENT:
                 lines.append("  Additional differences may exist; output is bounded.")
+        if isinstance(presence, dict):
+            for key in ("required_bad", "later_bad"):
+                for row in presence.get(key, []):
+                    lines.append(
+                        f"Required mod presence ({'required' if key == 'required_bad' else 'optional'}): "
+                        f"{row['name']} — {row['status']} (presence check, not SHA-256).")
+            if presence.get("status") == "Unknown":
+                lines.append("Required mod presence: unknown — no readiness evidence.")
         self.integrity_details.setPlainText(chr(10).join(lines))
         self.integrity_details.setVisible(bool(lines))
 
