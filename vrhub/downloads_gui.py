@@ -14,11 +14,11 @@ from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView, QFileDialog, QGridLayout, QHBoxLayout, QHeaderView,
-    QLabel, QInputDialog, QMessageBox, QMenu, QPlainTextEdit, QProgressBar,
+    QApplication, QLabel, QInputDialog, QMessageBox, QMenu, QPlainTextEdit, QProgressBar,
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -48,6 +48,32 @@ class LocalInventoryWorker(QThread):
             result = planner.build_plan(self.recipe, self.folders,
                                         release_catalogs=catalogs, release_errors=errors)
         except (OSError, RuntimeError, ValueError) as exc:
+            self.failed.emit(str(exc))
+        else:
+            self.done.emit(result)
+
+
+class InstalledIntegrityWorker(QThread):
+    """Explicit one-game, read-only file hash job; never installs."""
+    done = Signal(object)
+    failed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(self, recipe, parent=None):
+        super().__init__(parent)
+        self.recipe = dict(recipe)
+        self.cancel_flag = Event()
+
+    def cancel(self):
+        self.cancel_flag.set()
+
+    def run(self):
+        try:
+            result = installed_integrity.verify(self.recipe, cancel=self.cancel_flag)
+        except installed_integrity.Cancelled:
+            self.cancelled.emit()
+        except Exception as exc:
+            # Untrusted historical manifests must never crash the QThread.
             self.failed.emit(str(exc))
         else:
             self.done.emit(result)
@@ -131,6 +157,8 @@ class GuidedDownloadsPage(QWidget):
         self._last_plan = None
         self.worker = None
         self.download_worker = None
+        self.integrity_worker = None
+        self._integrity_result = None
         self.allow_transfers = True
         self._download_notice = None  # (game_id, result message, color)
         self._rescan_after_download = False
@@ -335,6 +363,30 @@ class GuidedDownloadsPage(QWidget):
         outer.addWidget(self.comparison_toggle)
         outer.addWidget(self.comparison_panel)
 
+        integrity_line = QHBoxLayout()
+        integrity_line.setSpacing(8)
+        self.integrity_button = QPushButton("Verify installed files")
+        self.integrity_button.setObjectName("downloadsAction")
+        self.integrity_button.setToolTip(
+            "Read-only, on-demand SHA-256 check of Hub-tracked installed files. "
+            "Unknown/manual mods are not automatically adopted. "
+            "No repair, replacement, or install is performed.")
+        self.integrity_button.clicked.connect(self._start_integrity_check)
+        integrity_line.addWidget(self.integrity_button)
+        integrity_line.addStretch()
+        outer.addLayout(integrity_line)
+        self.integrity_status = QLabel("Installed file integrity: not checked.")
+        self.integrity_status.setWordWrap(True)
+        self.integrity_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        outer.addWidget(self.integrity_status)
+        self.integrity_details = QPlainTextEdit()
+        self.integrity_details.setObjectName("integrityReviewDetails")
+        self.integrity_details.setReadOnly(True)
+        self.integrity_details.setMinimumHeight(80)
+        self.integrity_details.setMaximumHeight(150)
+        self.integrity_details.hide()
+        outer.addWidget(self.integrity_details)
+
         self.review_actions = QWidget(self)
         self.review_footer = QHBoxLayout(self.review_actions)
         self.review_footer.setContentsMargins(0, 0, 0, 0)
@@ -413,6 +465,9 @@ class GuidedDownloadsPage(QWidget):
         self.table.itemSelectionChanged.connect(self._update_inspect_button)
         self.table.itemSelectionChanged.connect(self._update_review_action)
         self.set_recipe(None)
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._stop_integrity_worker)
 
     def _sync_folder_actions(self):
         """Reflect current scan/download safety state in the folder menu."""
@@ -432,7 +487,13 @@ class GuidedDownloadsPage(QWidget):
         self.folder_menu_button.setEnabled(
             any(button.isEnabled() for button in self.folder_menu_actions))
 
+    def _stop_integrity_worker(self):
+        if self.integrity_worker and self.integrity_worker.isRunning():
+            self.integrity_worker.cancel()
+            self.integrity_worker.wait()
+
     def closeEvent(self, event):
+        self._stop_integrity_worker()
         if self.download_worker and self.download_worker.isRunning():
             self.download_worker.cancel()
             event.ignore()
@@ -450,7 +511,19 @@ class GuidedDownloadsPage(QWidget):
     def set_recipe(self, recipe):
         if (recipe or {}).get("id") != (self.recipe or {}).get("id"):
             self._comparison_online = None
+            if self.integrity_worker is not None:
+                self.integrity_worker.cancel()
         self.recipe = recipe
+        # A verification result is never reused across game switches,
+        # saved-scan refreshes, or later update checks.
+        self._integrity_result = None
+        self.integrity_status.setText("Installed file integrity: not checked.")
+        self.integrity_details.clear()
+        self.integrity_details.hide()
+        active_integrity = bool(self.integrity_worker and self.integrity_worker.isRunning())
+        self.integrity_button.setText(
+            "Cancel verification" if active_integrity else "Verify installed files")
+        self.integrity_button.setEnabled(bool(recipe))
         # Read the stable shared store again on game switch/refresh. A second
         # preview may have saved a newer scan since this window was opened.
         try:
@@ -877,6 +950,79 @@ class GuidedDownloadsPage(QWidget):
         self.comparison_summary.setToolTip(
             "Comparison uses saved or newly scanned archive metadata and in-memory "
             "online results only. Refresh online results separately in Updates.")
+
+    def _start_integrity_check(self):
+        worker = self.integrity_worker
+        if worker is not None:
+            if worker.isRunning():
+                worker.cancel()
+                self.integrity_status.setText("Canceling read-only verification…")
+            return
+        if not self.recipe:
+            return
+        self.integrity_status.setText(
+            "Reading recorded installation hashes (read-only). No game-file writes will occur…")
+        self.integrity_details.clear()
+        self.integrity_details.hide()
+        worker = InstalledIntegrityWorker(self.recipe, self)
+        self.integrity_worker = worker
+        self.integrity_button.setText("Cancel verification")
+        worker.done.connect(lambda result, token=worker:
+                            self._integrity_done(result, token))
+        worker.failed.connect(lambda error, token=worker:
+                              self._integrity_failed(error, token))
+        worker.cancelled.connect(lambda token=worker:
+                                 self._integrity_cancelled(token))
+        worker.finished.connect(lambda token=worker:
+                                self._integrity_finished(token))
+        worker.start()
+
+    def _integrity_done(self, result, worker):
+        if (worker is not self.integrity_worker or
+                not self.recipe or result.get("game_id") != self.recipe.get("id")
+                or worker.cancel_flag.is_set()):
+            return
+        self._integrity_result = result
+        verified = sum(row["status"] == "Verified" for row in result["rows"])
+        review = sum(row["status"] == "Review" for row in result["rows"])
+        unknown = sum(row["status"] == "Unknown" for row in result["rows"])
+        self.integrity_status.setText(
+            f"Installed integrity: {result['checked']} tracked file(s) matched · "
+            f"{verified} verified dependency(ies) · {review} need review · "
+            f"{unknown} unknown. No game-file writes performed.")
+        lines = []
+        for row in result["rows"]:
+            if row["status"] == "Verified":
+                continue
+            lines.append(f"{row['name']}: {row['status']} — {row['reason']}")
+            for item in row["issues"]:
+                lines.append(f"  {item['status']}: {item['file']} — {item['detail']}")
+            if len(row["issues"]) >= installed_integrity.MAX_ISSUES_PER_COMPONENT:
+                lines.append("  Additional differences may exist; output is bounded.")
+        self.integrity_details.setPlainText(chr(10).join(lines))
+        self.integrity_details.setVisible(bool(lines))
+
+    def _integrity_failed(self, error, worker):
+        if worker is self.integrity_worker and self.recipe and (
+                self.recipe.get("id") == worker.recipe.get("id")):
+            self.integrity_status.setText(
+                "Verification could not finish safely. No game-file writes performed.")
+            self.integrity_details.setPlainText("Read-only verification failed: " + error)
+            self.integrity_details.show()
+
+    def _integrity_cancelled(self, worker):
+        if worker is self.integrity_worker and self.recipe and (
+                self.recipe.get("id") == worker.recipe.get("id")):
+            self.integrity_status.setText("Verification cancelled. No game-file writes performed.")
+            self.integrity_details.hide()
+
+    def _integrity_finished(self, worker):
+        if worker is not self.integrity_worker:
+            return
+        self.integrity_worker = None
+        self.integrity_button.setText("Verify installed files")
+        self.integrity_button.setEnabled(bool(self.recipe))
+        worker.deleteLater()
 
     def _set_rows(self, records):
         self.table.clearSelection()
