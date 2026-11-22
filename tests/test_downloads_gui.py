@@ -68,10 +68,10 @@ class DownloadsQtTests(unittest.TestCase):
             self.page.scan.text(),
         ]
         self.assertEqual(texts, [
-            "Choose shared default folder",
-            "Choose game folder",
-            "Use shared default for this game",
-            "Reset shared default to Downloads",
+            "Choose shared extra folder",
+            "Add game archive folder",
+            "Use shared extra for this game",
+            "Remove shared extra folder",
             "Scan local archives",
         ])
         for button in (self.page.set_global, self.page.set_game,
@@ -87,12 +87,12 @@ class DownloadsQtTests(unittest.TestCase):
                 self.assertLessEqual(
                     max(button.fontMetrics().horizontalAdvance(line)
                         for line in lines), 425)
-        self.assertIn("shared archive", self.page.set_global.toolTip())
+        self.assertIn("shared scan folder", self.page.set_global.toolTip())
         self.assertIn("this game only", self.page.set_game.toolTip())
         self.assertIn("Other games", self.page.set_game.toolTip())
         self.assertIn("Unchanged-folder scans", self.page.clear_game.toolTip())
-        self.assertIn("SHARED folder", self.page.reset_global.toolTip())
-        self.assertIn("game-specific folder stays", self.page.reset_global.toolTip())
+        self.assertIn("shared archive folder", self.page.reset_global.toolTip())
+        self.assertIn("Custom game folders stay", self.page.reset_global.toolTip())
         self.assertIn("No archives", self.page.scan.toolTip())
         self.assertIn("nothing is installed", self.page.inspect.toolTip())
 
@@ -120,23 +120,23 @@ class DownloadsQtTests(unittest.TestCase):
         planner.set_location("global", str(default))
         planner.set_location("game", str(custom), self.recipe["id"])
         self.page.set_recipe(self.recipe)
-        self.assertIn(f"Shared default (manually selected): {default}",
-                      self.page.location.text())
-        self.assertIn(f"Current game folder (Per-game override): {custom}",
+        self.assertEqual(planner.load_preferences()["global"], str(default))
+        self.assertNotIn(str(default), self.page.location.text())
+        self.assertIn(f"Additional folder (Per-game override): {custom}",
                       self.page.location.text())
         self.page.reset_global.click()
         self.app.processEvents()
         self.assertIsNone(planner.load_preferences()["global"])
         self.assertEqual(planner.folder_for(self.recipe)[0], custom)
-        self.assertIn("Shared default (Downloads)", self.page.location.text())
+        self.assertIn(f"Additional folder (Per-game override): {custom}", self.page.location.text())
         self.assertIn("still uses its custom folder",
                       self.page.folder_action_feedback.text())
-        self.assertIn("'Use shared default for this game'",
+        self.assertIn("'Use shared extra for this game'",
                       self.page.folder_action_feedback.text())
         self.page.clear_game.click()
         self.app.processEvents()
         self.assertEqual(planner.folder_for(self.recipe)[0], self.library)
-        self.assertIn(f"Current game folder (Downloads default): {self.library}",
+        self.assertIn(f"Always scanned: {self.library}",
                       self.page.location.text())
 
     def test_auto_detect_without_custom_shared_folder_explains_no_change(self):
@@ -145,7 +145,7 @@ class DownloadsQtTests(unittest.TestCase):
         self.page.reset_global.click()
         self.app.processEvents()
         self.assertFalse((self.root / "settings.json").exists())
-        self.assertIn("already Downloads",
+        self.assertIn("No shared extra folder configured",
                       self.page.folder_action_feedback.text())
 
     def test_choose_shared_folder_under_game_override_explains_priority(self):
@@ -160,9 +160,9 @@ class DownloadsQtTests(unittest.TestCase):
             self.page.set_global.click()
         self.app.processEvents()
         self.assertEqual(planner.folder_for(self.recipe)[0], custom)
-        self.assertIn(f"Shared default (manually selected): {chosen}",
-                      self.page.location.text())
-        self.assertIn("still uses its custom folder",
+        self.assertEqual(planner.load_preferences()["global"], str(chosen))
+        self.assertNotIn(str(chosen), self.page.location.text())
+        self.assertIn("still has its own",
                       self.page.folder_action_feedback.text())
 
     def test_native_component_list_has_15_rows_without_scanning(self):
@@ -181,7 +181,7 @@ class DownloadsQtTests(unittest.TestCase):
         self.page.set_recipe(self.recipe)
         self.page.scan.click()
         self.wait_scanned()
-        self.assertIn("1 archives found", self.page.summary.text())
+        self.assertIn("1 archives ·", self.page.summary.text())
         self.assertIn("1 possible matches", self.page.summary.text())
         self.assertIn("Possible archive", self.page.table.item(0, 3).text())
         self.assertEqual(self.page.table.item(0, 2).text(), archive.name)
@@ -268,7 +268,7 @@ class DownloadsQtTests(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(self.page.table.item(0, 3).text(),
                          "Possible archive — inspect first")
-        self.assertIn("1 archives found", self.page.summary.text())
+        self.assertIn("1 archives ·", self.page.summary.text())
         self.assertEqual(self.page.scan_age.text(), first_timestamp)
         self.assertEqual(set(archive_scans.load_saved()),
                          {"cyberpunk-2077", "valheim"})

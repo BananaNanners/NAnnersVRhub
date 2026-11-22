@@ -87,6 +87,8 @@ def set_location(scope: str, path: str | None, rid: str | None = None):
         raise ValueError("Unknown download location scope.")
     if scope == "game":
         rid = _rid(rid)
+    if path and _checked_directory(path, must_exist=True).is_symlink():
+        raise ValueError("A symlink cannot be used as an archive folder.")
     resolved = str(_checked_directory(path, must_exist=True).resolve()) if path else None
     dest = preferences_file()
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -118,6 +120,44 @@ def folder_for(recipe: dict, prefs: dict | None = None) -> tuple[Path, str]:
         return Path(prefs["global"]), "Global preference"
     return default_library(), "Downloads default"
 
+
+
+
+def scan_folders(recipe: dict, prefs: dict | None = None) -> tuple[Path, ...]:
+    """Downloads is always included; one optional game/shared folder is additive.
+
+    Resolve configured roots only to recognize repeated locations, never to
+    expand symlink roots or authorize a path to install. Archive roots are
+    explicitly bounded to two.
+    """
+    primary = default_library()
+    secondary, _ = folder_for(recipe, prefs)
+    result = [primary]
+    if secondary != primary and secondary.resolve(strict=False) != primary.resolve(strict=False):
+        result.append(secondary)
+    return tuple(result)
+
+
+def _inventory_many(folders, *, progress=None):
+    """Union bounded, non-symlink archives from up to two scan roots."""
+    if not 1 <= len(folders) <= 2:
+        raise ValueError("Scan expects Downloads and at most one additional folder.")
+    all_files = {}
+    warnings = []
+    for folder in folders:
+        folder = Path(folder)
+        if folder.is_symlink() or not folder.is_dir():
+            warnings.append(f"Archive folder unavailable or unsafe: {folder}")
+            continue
+        entries, warning = _inventory(folder, progress=progress)
+        for entry in entries:
+            # The same path can be reached in both scans for nested folders.
+            all_files.setdefault(str(entry.path), entry)
+        if warning:
+            warnings.append(f"{folder}: {warning}")
+    if len(all_files) > MAX_FILES:
+        warnings.append("Combined inventory limit reached; choose a more specific folder.")
+    return list(all_files.values())[:MAX_FILES], "; ".join(warnings) or None
 
 def source_url(value):
     if not isinstance(value, str):
@@ -317,10 +357,15 @@ def _candidate_filename_match(name: str, component: dict, rid: str) -> bool:
     return len(hint) >= 4 and hint in lower
 
 
-def build_plan(recipe: dict, folder: Path, *, progress=None, release_catalogs=None, release_errors=None) -> dict:
-    """Return a bounded read-only snapshot of locally available candidates."""
+def build_plan(recipe: dict, folder: Path | tuple[Path, ...], *, progress=None, release_catalogs=None, release_errors=None) -> dict:
+    """Return one bounded read-only inventory across explicit scan roots."""
     rid = _rid(recipe)
-    entries, warning = _inventory(folder, progress=progress)
+    combined = isinstance(folder, (tuple, list))
+    folders = tuple(Path(f) for f in folder) if combined else (Path(folder),)
+    if combined:
+        entries, warning = _inventory_many(folders, progress=progress)
+    else:
+        entries, warning = _inventory(folders[0], progress=progress)
     comps = plan_components(recipe)
     remaining = [MAX_HASH_BYTES]
     needs_hash = any(x.get("sha256") for x in comps)
@@ -401,8 +446,9 @@ def build_plan(recipe: dict, folder: Path, *, progress=None, release_catalogs=No
                      "size": selection.size if selection else 0,
                      "phase_label": "Later: install after first flat launch" if c["phase"] > 1
                                     else "Stage 1: prerequisites"})
-    return {"game_id": rid, "folder": str(folder), "rows": rows,
-            "scanned": len(entries), "warning": warning,
+    return {"game_id": rid, "folder": str(folders[0]),
+            **({"folders": [str(f) for f in folders]} if combined else {}),
+            "rows": rows, "scanned": len(entries), "warning": warning,
             "verified": sum(x["status"] == "Pinned SHA-256 verified" for x in rows),
             "possible": sum(x["status"] == "Possible archive — inspect first" for x in rows),
             "mismatch": sum(x["status"] == "Hash mismatch — do not install" for x in rows),

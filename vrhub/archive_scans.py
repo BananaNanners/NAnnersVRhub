@@ -20,7 +20,8 @@ from pathlib import Path
 
 from . import download_planner as planner, hub, self_install
 
-MAX_SNAPSHOT_BYTES = 512 * 1024
+MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024
+MAX_SCANS_PER_GAME = 8
 MAX_GAMES = 48
 MAX_ROWS = 96
 MAX_PATH = 4096
@@ -39,6 +40,28 @@ def _empty():
     return {"schema": 1, "games": {}}
 
 
+
+
+def plan_folders(plan):
+    """Scan roots in recorded order; legacy records use one root."""
+    main = planner._checked_directory(plan["folder"])
+    raw = plan.get("folders", [str(main)])
+    if (not isinstance(raw, list) or not 1 <= len(raw) <= 2
+            or any(not isinstance(x, str) for x in raw)):
+        raise ValueError("Invalid scan folder list")
+    roots = tuple(planner._checked_directory(x) for x in raw)
+    if roots[0] != main or len(set(roots)) != len(roots):
+        raise ValueError("Invalid or repeated scan folder roots")
+    return roots
+
+
+def _inside_roots(path, roots):
+    return any(path.is_relative_to(root) for root in roots)
+
+
+def _signature(record):
+    return tuple(str(p) for p in plan_folders(record["plan"]))
+
 def _validate_record(rid, record):
     planner._rid(rid)
     if not isinstance(record, dict) or set(record) != {
@@ -54,7 +77,12 @@ def _validate_record(rid, record):
     except ValueError as exc:
         raise ValueError("Invalid scan date") from exc
     plan = record["plan"]
-    if (not isinstance(plan, dict) or plan.get("game_id") != rid or
+    if not isinstance(plan, dict):
+        raise ValueError("Invalid scan plan")
+    roots = plan_folders(plan)
+    if plan.get("warning") is not None and not isinstance(plan["warning"], str):
+        raise ValueError("Invalid scan warning")
+    if (plan.get("game_id") != rid or
             plan.get("folder") != str(folder) or not isinstance(plan.get("rows"), list)
             or len(plan["rows"]) > MAX_ROWS or
             type(plan.get("scanned")) is not int or plan["scanned"] < 0):
@@ -65,7 +93,7 @@ def _validate_record(rid, record):
         filename = row.get("file", "")
         if (not isinstance(filename, str) or len(filename) > MAX_PATH
                 or (filename and (not Path(filename).is_absolute()
-                                  or not Path(filename).is_relative_to(folder)))):
+                                  or not _inside_roots(Path(filename), roots)))):
             raise ValueError("Invalid scanned archive path")
         candidates = row.get("candidates", [])
         if not isinstance(candidates, list) or len(candidates) > planner.MAX_CANDIDATES:
@@ -80,7 +108,7 @@ def _validate_record(rid, record):
             path = info["file"]
             ident = info["identity"]
             if (not isinstance(path, str) or len(path) > MAX_PATH
-                    or not Path(path).is_absolute() or not Path(path).is_relative_to(folder)
+                    or not Path(path).is_absolute() or not _inside_roots(Path(path), roots)
                     or not isinstance(ident, dict)
                     or set(ident) != {"size", "mtime_ns", "ctime_ns", "ino", "dev"}
                     or any(type(v) is not int or v < 0 for v in ident.values())
@@ -101,14 +129,21 @@ def _validate_record(rid, record):
         raise ValueError("Invalid file identity map")
     for name, info in record["files"].items():
         if (not isinstance(name, str) or len(name) > MAX_PATH or
-                not Path(name).is_absolute() or not Path(name).is_relative_to(folder) or
+                not Path(name).is_absolute() or not _inside_roots(Path(name), roots) or
                 not isinstance(info, dict) or set(info) != {"size", "mtime_ns", "ino", "dev"} or
                 any(type(v) is not int or v < 0 for v in info.values())):
             raise ValueError("Invalid archive identity metadata")
     return record
 
 
-def load_saved() -> dict:
+
+
+def load_histories() -> dict:
+    """Read legacy single-scan records or bounded version-2 histories.
+
+    A format upgrade happens only after a new explicit scan. Historical data
+    is never auto-imported, restored, rotated or deleted.
+    """
     path = snapshot_file()
     if not path.exists() and not path.is_symlink():
         return {}
@@ -117,14 +152,36 @@ def load_saved() -> dict:
     try:
         obj = json.loads(path.read_text(encoding="utf-8"))
         if (not isinstance(obj, dict) or set(obj) != {"schema", "games"}
-                or obj["schema"] != 1 or not isinstance(obj["games"], dict)
-                or len(obj["games"]) > MAX_GAMES):
+                or type(obj["games"]) is not dict or len(obj["games"]) > MAX_GAMES):
             raise ValueError("Invalid saved scan file")
-        return {rid: _validate_record(rid, rec)
-                for rid, rec in obj["games"].items()}
+        histories = {}
+        for rid, entry in obj["games"].items():
+            if obj["schema"] == 1:
+                records = [entry]
+            elif obj["schema"] == 2:
+                records = entry
+            else:
+                raise ValueError("Unsupported saved scan format")
+            if not isinstance(records, list) or not 1 <= len(records) <= MAX_SCANS_PER_GAME:
+                raise ValueError("Invalid saved scan history")
+            histories[rid] = [_validate_record(rid, rec) for rec in records]
+            signatures = [_signature(rec) for rec in histories[rid]]
+            if len(signatures) != len(set(signatures)):
+                raise ValueError("Repeated scan history signature")
+        return histories
     except (OSError, UnicodeError, TypeError, json.JSONDecodeError) as exc:
         raise ValueError("Saved scan file needs manual review; it has not been overwritten.") from exc
 
+
+def load_saved() -> dict:
+    """Most recent record per game (compatibility for existing callers)."""
+    return {rid: records[0] for rid, records in load_histories().items()}
+
+
+def matching_record(rid, folders):
+    desired = tuple(str(p) for p in folders)
+    return next((rec for rec in load_histories().get(planner._rid(rid), [])
+                 if _signature(rec) == desired), None)
 
 def _identity(path: Path):
     """Do not follow symlink files, including ones swapped since a scan."""
@@ -140,13 +197,14 @@ def _identity(path: Path):
 
 def _record(plan):
     rid = planner._rid(plan["game_id"])
-    folder = str(planner._checked_directory(plan["folder"]))
+    roots = plan_folders(plan)
+    folder = str(roots[0])
     files = {}
     for row in plan["rows"]:
         filename = row.get("file")
         if filename:
             path = Path(filename)
-            if not path.is_relative_to(Path(folder)):
+            if not _inside_roots(path, roots):
                 raise ValueError("Refusing archive path outside selected folder")
             identity = _identity(path)
             if identity is not None:
@@ -161,24 +219,58 @@ def _record(plan):
     return rid, record
 
 
+
+
+
+
+def _protect_legacy_before_upgrade(path):
+    """Safeguard the original schema-1 file before its first explicit upgrade."""
+    if not path.exists():
+        return
+    if path.is_symlink():
+        raise ValueError("Symlinked scan history cannot be upgraded.")
+    raw = path.read_bytes()
+    if json.loads(raw)["schema"] != 1:
+        return
+    backup = path.with_name("archive-scan-snapshots.pre-multifolder-v1.json")
+    if backup.exists() or backup.is_symlink():
+        if backup.is_symlink() or not backup.is_file() or backup.read_bytes() != raw:
+            raise ValueError("Legacy scan backup needs review; saved scans preserved.")
+        return
+    fd = os.open(backup, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(raw)
+            out.flush()
+            os.fsync(out.fileno())
+        if backup.read_bytes() != raw:
+            raise ValueError("Legacy scan backup verification failed.")
+    except Exception:
+        backup.unlink(missing_ok=True)
+        raise
+
 def persist(plan) -> dict:
-    """Upsert only this game's scan using locking and atomic, private writes."""
+    """Save a new game+folder-set scan, retaining other folder-set histories."""
     rid, rec = _record(plan)
     path = snapshot_file()
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(str(path) + ".lock",
-                 os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    fd = os.open(str(path) + ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        records = load_saved()  # reject corrupt existing data, do not clobber
-        records[rid] = rec
-        encoded = (json.dumps({"schema": 1, "games": records},
-                              separators=(",", ":")) + "\n").encode()
-        if len(records) > MAX_GAMES or len(encoded) > MAX_SNAPSHOT_BYTES:
+        histories = load_histories()  # refuse corruption; do not overwrite
+        old = histories.get(rid, [])
+        same = _signature(rec)
+        other = [item for item in old if _signature(item) != same]
+        if len(other) >= MAX_SCANS_PER_GAME:
+            raise ValueError("Saved scan history full; original scans preserved. Review before clearing history.")
+        histories[rid] = [rec, *other]
+        encoded = (json.dumps({"schema": 2, "games": histories},
+                              separators=(",", ":")) + chr(10)).encode()
+        if len(histories) > MAX_GAMES or len(encoded) > MAX_SNAPSHOT_BYTES:
             raise ValueError("Scan snapshot limit reached; existing data preserved.")
+        _protect_legacy_before_upgrade(path)
         self_install._atomic(path, encoded)
     return rec
-
 
 def remove_changed_folders():
     """Report inactive records; never delete saved scan history on folder changes.
@@ -189,10 +281,15 @@ def remove_changed_folders():
     invalid = []
     for rid, rec in load_saved().items():
         try:
-            active, _ = planner.folder_for({"id": rid})
+            if "folders" in rec["plan"]:
+                active = tuple(str(p) for p in planner.scan_folders({"id": rid}))
+                outdated = active != _signature(rec)
+            else:
+                selected, _ = planner.folder_for({"id": rid})
+                outdated = str(selected) != rec["folder"]
         except (RuntimeError, ValueError, OSError):
             continue
-        if str(active) != rec["folder"]:
+        if outdated:
             invalid.append(rid)
     return invalid
 
@@ -204,7 +301,7 @@ def displayed_record(record) -> dict:
     status (including previous SHA verification) until a manual rescan.
     """
     rec = copy.deepcopy(record)
-    folder = Path(rec["folder"])
+    roots = plan_folders(rec["plan"])
     for row in rec["plan"]["rows"]:
         filename = row.get("file")
         if not filename:
@@ -220,7 +317,7 @@ def displayed_record(record) -> dict:
             continue
         prior = rec["files"].get(filename)
         path = Path(filename)
-        if (not path.is_relative_to(folder) or prior is None
+        if (not _inside_roots(path, roots) or prior is None
                 or prior != _identity(path)):
             row["status"] = "Archive changed — rescan required"
             row["file"] = ""  # cannot inspect a path whose identity changed

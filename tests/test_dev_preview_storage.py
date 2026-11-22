@@ -161,6 +161,18 @@ class SharedPreviewPersistenceTests(unittest.TestCase):
         self.assertEqual(data["tables"]["game-library"],
                          [310, 130, 170, 90, 140])
 
+    def test_existing_multifolder_history_is_read_without_restore(self):
+        self.prepare()
+        target=store.shared_directory(self.home)/"archive-scan-snapshots.json"
+        old=json.loads(target.read_text())
+        upgraded={"schema":2, "games":{rid:[rec] for rid,rec in old["games"].items()}}
+        target.write_text(json.dumps(upgraded))
+        before=target.read_bytes()
+        result=self.prepare()
+        self.assertEqual(result["count"], 9)
+        self.assertEqual(target.read_bytes(),before)
+        self.assertFalse(result["imported"])
+
     def test_repeat_boot_does_not_replace_saved_scans_or_timestamps(self):
         first = self.prepare()
         file = first["root"] / "archive-scan-snapshots.json"

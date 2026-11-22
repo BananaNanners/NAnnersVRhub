@@ -87,12 +87,22 @@ def _read_scans(path: Path) -> dict:
     try:
         parsed = json.loads(raw.decode("utf-8"))
         if (not isinstance(parsed, dict)
-                or set(parsed) != {"schema", "games"} or parsed["schema"] != 1
+                or set(parsed) != {"schema", "games"}
+                or parsed["schema"] not in (1, 2)
                 or not isinstance(parsed["games"], dict)
                 or len(parsed["games"]) > archive_scans.MAX_GAMES):
             raise ValueError("Invalid scan file schema")
-        return {rid: archive_scans._validate_record(rid, rec)
-                for rid, rec in parsed["games"].items()}
+        records = {}
+        for rid, entry in parsed["games"].items():
+            if parsed["schema"] == 2:
+                if not isinstance(entry, list) or not 1 <= len(entry) <= archive_scans.MAX_SCANS_PER_GAME:
+                    raise ValueError("Invalid scan history")
+                for rec in entry:
+                    archive_scans._validate_record(rid, rec)
+                records[rid] = entry[0]
+            else:
+                records[rid] = archive_scans._validate_record(rid, entry)
+        return records
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         raise PreviewStorageError(f"Cannot migrate invalid scan file {path}: {exc}") from exc
 
