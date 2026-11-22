@@ -29,33 +29,21 @@ good_to_know = [
 ]
 
 [[links]]
-label = "UEVR FK mod / injector (1.0.0)"
-url = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/UEVR_FK.zip"
+label = "UEVR FK Mod"
+url = "https://github.com/jbusfield/FK_UEVR/releases/tag/1.0.0"
 
 [[links]]
-label = "Fatekeeper VR profile (1.0.0)"
-url = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/SLASHER-Win64-Shipping.zip"
-
-[[links]]
-label = "Fatekeeper VR profile (v1.0.4)"
-url = "https://github.com/jbusfield/FK_UEVR/releases/download/v1.0.4/SLASHER-Win64-Shipping.zip"
-
-[[links]]
-label = "Fatekeeper profile releases"
-url = "https://github.com/jbusfield/FK_UEVR/releases"
+label = "Fatekeeper VR Profile"
+url = "https://github.com/jbusfield/FK_UEVR/releases/tag/v1.0.4"
 
 # Presentation only: retain historical scan identity and archive source metadata.
 [archive_display.uevr]
 name = "UEVR FK — Mod / injector"
-url = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/UEVR_FK.zip"
+url = "https://github.com/jbusfield/FK_UEVR/releases/tag/1.0.0"
 
 [archive_display.profile]
 name = "Fatekeeper — VR profile"
-url = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/SLASHER-Win64-Shipping.zip"
-
-[archive_release_link]
-label = "Fatekeeper VR profile (v1.0.4)"
-url = "https://github.com/jbusfield/FK_UEVR/releases/download/v1.0.4/SLASHER-Win64-Shipping.zip"
+url = "https://github.com/jbusfield/FK_UEVR/releases/tag/v1.0.4"
 
 [profile]
 dir = "Roaming/UnrealVRMod/SLASHER-Win64-Shipping"   # under the prefix's AppData
@@ -68,7 +56,7 @@ env = { PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES = "1" }
 
 [[updates]]
 name = "UEVR FK — Mod / injector"
-manual = "https://github.com/jbusfield/FK_UEVR/releases/download/1.0.0/UEVR_FK.zip"
+manual = "https://github.com/jbusfield/FK_UEVR/releases/tag/1.0.0"
 available_version = "1.0.0"
 tracks = ["fatekeeper"]
 

@@ -185,14 +185,13 @@ class ArchiveChecklistTests(unittest.TestCase):
                       self.page.upstream_link.text())
         self.assertIn("jbusfield/HL_UEVR",planner.plan_components(recipe)[0]["url"])
         self.page.set_recipe(hub.load_recipes()["fatekeeper"])
-        self.assertFalse(self.page.upstream_link.isHidden())
-        self.assertIn("/download/v1.0.4/SLASHER-Win64-Shipping.zip",
-                      self.page.upstream_link.text())
+        self.assertTrue(self.page.upstream_link.isHidden())
+        self.assertEqual(self.page.upstream_link.text(),"")
         self.assertEqual(self.page.table.item(0,0).text(), "UEVR FK — Mod / injector")
-        self.assertIn("/download/1.0.0/UEVR_FK.zip",
+        self.assertIn("/tag/1.0.0",
                       self.page.table.cellWidget(0,4).toolTip())
         self.assertEqual(self.page.table.item(1,0).text(), "Fatekeeper — VR profile")
-        self.assertIn("/download/1.0.0/SLASHER-Win64-Shipping.zip",
+        self.assertIn("/tag/v1.0.4",
                       self.page.table.cellWidget(1,4).toolTip())
         self.page.set_recipe(hub.load_recipes()["cyberpunk-2077"])
         self.assertTrue(self.page.upstream_link.isHidden())

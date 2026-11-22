@@ -3,9 +3,8 @@ import unittest
 from vrhub import hub, updates, download_planner
 
 BASE = "https://github.com/jbusfield/FK_UEVR/releases"
-MOD = BASE + "/download/1.0.0/UEVR_FK.zip"
-PROFILE = BASE + "/download/1.0.0/SLASHER-Win64-Shipping.zip"
-NEW_PROFILE = BASE + "/download/v1.0.4/SLASHER-Win64-Shipping.zip"
+MOD = BASE + "/tag/1.0.0"
+PROFILE = BASE + "/tag/v1.0.4"
 
 
 class FatekeeperSourceTests(unittest.TestCase):
@@ -39,13 +38,18 @@ class FatekeeperSourceTests(unittest.TestCase):
         rows = updates.check_recipe(self.recipe, {"fatekeeper:profile":{"installed_at":1}}, fetch=fetch)
         self.assertEqual(rows[0]["status"], "not_installed")
 
-    def test_guide_labels_original_archives_and_new_profile(self):
+    def test_guide_has_exactly_two_named_release_pages(self):
+        self.assertEqual(self.recipe["links"], [
+            {"label": "UEVR FK Mod", "url": MOD},
+            {"label": "Fatekeeper VR Profile", "url": PROFILE},
+        ])
         for guide in (hub.details_text(self.recipe), hub.details_html(self.recipe)):
-            for url in (MOD, PROFILE, NEW_PROFILE):
+            for url in (MOD, PROFILE):
                 self.assertIn(url, guide)
             self.assertNotIn("praydog/UEVR-nightly", guide)
             self.assertNotIn("joeyhodge/UEVR/releases", guide)
             self.assertNotIn("OneStepLauncher", guide)
+            self.assertNotIn("/releases/download/", guide)
 
     def test_historical_archive_sources_and_hints_unchanged(self):
         rows = download_planner.plan_components(self.recipe)
@@ -54,4 +58,4 @@ class FatekeeperSourceTests(unittest.TestCase):
         self.assertTrue(all(r["url"] == BASE+"/tag/1.0.0" for r in rows))
         self.assertEqual(self.recipe["archive_display"]["uevr"]["url"], MOD)
         self.assertEqual(self.recipe["archive_display"]["profile"]["url"], PROFILE)
-        self.assertEqual(self.recipe["archive_release_link"]["url"], NEW_PROFILE)
+        self.assertNotIn("archive_release_link", self.recipe)
