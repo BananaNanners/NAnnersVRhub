@@ -6,6 +6,7 @@ Changing a folder only updates Hub-specific preferences. Archive scans hash
 local files and validate pinned checksums, but never download or install.
 """
 from pathlib import Path
+import copy
 from html import escape
 from datetime import datetime
 from threading import Event
@@ -14,11 +15,11 @@ from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView, QFileDialog, QGridLayout, QHBoxLayout, QHeaderView,
-    QApplication, QLabel, QInputDialog, QMessageBox, QMenu, QPlainTextEdit, QProgressBar,
+    QApplication, QLabel, QInputDialog, QMessageBox, QLayout, QMenu, QPlainTextEdit, QProgressBar,
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -109,6 +110,40 @@ class InstalledIntegrityWorker(QThread):
             if self.cancel_flag.is_set():
                 self.cancelled.emit()
                 return
+            self.done.emit(result)
+
+
+class PreUpdateSafetyWorker(QThread):
+    """User-requested, read-only snapshot/ZIP/backup review; never installs."""
+    done = Signal(object)
+    failed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(self, recipe, scan, state, decisions, integrity, parent=None):
+        super().__init__(parent)
+        self.recipe = copy.deepcopy(recipe)
+        self.scan = copy.deepcopy(scan)
+        self.state = copy.deepcopy(state)
+        self.decisions = copy.deepcopy(decisions)
+        self.integrity = copy.deepcopy(integrity)
+        self.cancel_flag = Event()
+
+    def cancel(self):
+        self.cancel_flag.set()
+
+    def run(self):
+        try:
+            result = preupdate_safety.review(
+                self.recipe, self.scan, self.state, self.decisions,
+                self.integrity, cancel=self.cancel_flag)
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+        except installed_integrity.Cancelled:
+            self.cancelled.emit()
+        except Exception:
+            # Untrusted saved manifests must fail closed, without leaking paths.
+            self.failed.emit("Backup or archive evidence could not be inspected safely.")
+        else:
             self.done.emit(result)
 
 
@@ -205,6 +240,9 @@ class GuidedDownloadsPage(QWidget):
             self._saved, self._saved_error = {}, str(exc)
 
         outer = QVBoxLayout(self)
+        # Prevent expanding read-only review widgets from overlapping later
+        # actions inside the containing QTabWidget/QScrollArea.
+        outer.setSizeConstraint(QLayout.SetMinimumSize)
         outer.setContentsMargins(10, 10, 10, 10)
         outer.setSpacing(9)
 
@@ -393,6 +431,31 @@ class GuidedDownloadsPage(QWidget):
             (200, 170, 225, 140, 275),
             expand_weights=(2, 1, 2, 1, 3), min_row_height=55)
         comparison_layout.addWidget(self.comparison_table)
+        self.safety_button = QPushButton("Review replacement safety (read-only)")
+        self.safety_button.setObjectName("downloadsAction")
+        self.safety_button.setToolTip(
+            "On demand, inspect known managed file impact, retained-original backup "
+            "SHA-256 evidence, candidate ZIP mapping and possible conflicts. "
+            "This does NOT approve replacement or simulate rollback.")
+        self.safety_button.clicked.connect(self._start_safety_review)
+        comparison_layout.addWidget(self.safety_button)
+        self.safety_summary = QLabel("Replacement safety: not reviewed.")
+        self.safety_summary.setObjectName("preUpdateSafetySummary")
+        self.safety_summary.setWordWrap(True)
+        comparison_layout.addWidget(self.safety_summary)
+        self.safety_details = QPlainTextEdit()
+        self.safety_details.setObjectName("preUpdateSafetyDetails")
+        self.safety_details.setReadOnly(True)
+        self.safety_details.setMinimumHeight(140)
+        self.safety_details.setMaximumHeight(230)
+        self.safety_details.hide()
+        comparison_layout.addWidget(self.safety_details)
+        self.safety_worker = None
+        self._safety_result = None
+        # This page sits inside a scroll area. Explicitly reserve enough
+        # vertical space when disclosure children appear; otherwise Qt may
+        # compress the panel and overlap the evidence table and safety review.
+        self.comparison_panel.setMinimumHeight(300)
         self.comparison_panel.hide()
         self._comparison_scroll_timer = QTimer(self)
         self._comparison_scroll_timer.setSingleShot(True)
@@ -530,6 +593,9 @@ class GuidedDownloadsPage(QWidget):
         if self.integrity_worker and self.integrity_worker.isRunning():
             self.integrity_worker.cancel()
             self.integrity_worker.wait()
+        if self.safety_worker and self.safety_worker.isRunning():
+            self.safety_worker.cancel()
+            self.safety_worker.wait()
 
     def closeEvent(self, event):
         self._stop_integrity_worker()
@@ -552,7 +618,11 @@ class GuidedDownloadsPage(QWidget):
             self._comparison_online = None
             if self.integrity_worker is not None:
                 self.integrity_worker.cancel()
+            if self.safety_worker is not None:
+                self.safety_worker.cancel()
         self.recipe = recipe
+        self._invalidate_safety_review()
+        self.safety_button.setEnabled(bool(recipe))
         # A verification result is never reused across game switches,
         # saved-scan refreshes, or later update checks.
         self._integrity_result = None
@@ -898,6 +968,7 @@ class GuidedDownloadsPage(QWidget):
         self.scan_idle.emit()
 
     def _show_plan(self, plan):
+        self._invalidate_safety_review()
         self._set_rows(plan["rows"])
         changed = plan.get("changed", 0)
         official = sum(
@@ -944,6 +1015,7 @@ class GuidedDownloadsPage(QWidget):
 
     def set_online_results(self, results):
         """Update from the separate Updates tab refresh; never fetch here."""
+        self._invalidate_safety_review()
         self._comparison_online = results if isinstance(results, list) else None
         self._refresh_comparison()
 
@@ -1018,6 +1090,134 @@ class GuidedDownloadsPage(QWidget):
             "Comparison uses saved or newly scanned archive metadata and in-memory "
             "online results only. Refresh online results separately in Updates.")
 
+    def _invalidate_safety_review(self):
+        if self.safety_worker is not None and self.safety_worker.isRunning():
+            self.safety_worker.cancel()
+        self._safety_result = None
+        self.safety_summary.setText("Replacement safety: not reviewed.")
+        self.safety_details.clear()
+        self.safety_details.hide()
+        self.comparison_panel.setMinimumHeight(300)
+
+    def _scroll_to_safety(self):
+        parent = self.parentWidget()
+        while parent is not None and not isinstance(parent, QScrollArea):
+            parent = parent.parentWidget()
+        if parent is not None and self.safety_details.isVisible():
+            parent.ensureWidgetVisible(self.safety_details, 0, 20)
+
+    def _start_safety_review(self):
+        worker = self.safety_worker
+        if worker is not None:
+            if worker.isRunning():
+                worker.cancel()
+                self.safety_summary.setText("Canceling read-only replacement review…")
+            return
+        recipe = self.recipe
+        if not recipe:
+            return
+        self._invalidate_safety_review()
+        try:
+            state = hub.state()
+            if not isinstance(state, dict):
+                raise ValueError("Invalid state snapshot.")
+            records = archive_update_comparison.compare(
+                recipe, self._last_plan, state, self._comparison_online)
+            decisions = update_readiness.assess(
+                recipe, self._last_plan, state, self._comparison_online,
+                self._integrity_result, records)
+        except (OSError, ValueError, RuntimeError, TypeError):
+            self.safety_summary.setText("Replacement safety unavailable: saved evidence needs review.")
+            return
+        self.safety_summary.setText(
+            "Checking retained backup hashes and candidate ZIP metadata (read-only)…")
+        worker = PreUpdateSafetyWorker(
+            recipe, self._last_plan, state, decisions, self._integrity_result, self)
+        self.safety_worker = worker
+        self.safety_button.setText("Cancel replacement review")
+        worker.done.connect(lambda result, token=worker:
+                            self._safety_done(result, token))
+        worker.failed.connect(lambda error, token=worker:
+                              self._safety_failed(error, token))
+        worker.cancelled.connect(lambda token=worker:
+                                 self._safety_cancelled(token))
+        worker.finished.connect(lambda token=worker:
+                                self._safety_finished(token))
+        worker.start()
+
+    def _safety_done(self, result, worker):
+        if (worker is not self.safety_worker or worker.cancel_flag.is_set()
+                or not self.recipe or result.get("game_id") != self.recipe.get("id")):
+            return
+        self._safety_result = result
+        backup = result["existing_backup"]
+        known = sum(row["current_managed"] for row in result["rows"])
+        mapped = sum(row["future_destinations"] is not None for row in result["rows"])
+        self.safety_summary.setText(
+            f"Replacement blocked · {known} currently tracked file(s) · "
+            f"{mapped}/{len(result['rows'])} future target map(s) identified · "
+            f"retained-original backup: {backup['status']}. No changes made.")
+        lines = [
+            "PLANNING ONLY — NO UPDATE OR REPLACEMENT AUTHORIZED",
+            "Retained originals: " + backup["reason"],
+            "New backup needed: " + result["new_backup"],
+            "Compatibility: " + result["compatibility"],
+            "Recovery: " + result["recovery"],
+        ]
+        for row in result["rows"]:
+            lines.extend((
+                "",
+                f"{row['name']}: {row['readiness']}",
+                f"  Currently tracked: {row['current_managed']} file(s). "
+                f"Integrity: {row['integrity']}.",
+                f"  Proposed targets: "
+                f"{row['future_destinations'] if row['future_destinations'] is not None else 'Unknown'}. "
+                + row["mapping"],
+                "  " + row["file_issue"],
+            ))
+            if row["current_sample"]:
+                lines.append("  Existing examples: " + ", ".join(row["current_sample"]))
+            if row["future_sample"]:
+                lines.append("  Proposed examples: " + ", ".join(row["future_sample"]))
+            if row["ownership_conflicts"]:
+                lines.append("  Overlapping ownership: " + ", ".join(row["ownership_conflicts"]))
+            if row["untracked_collisions"]:
+                lines.append("  Untracked/unsafe targets: " + ", ".join(row["untracked_collisions"]))
+            lines.extend("  " + text for text in row["order"])
+        self.safety_details.setPlainText(chr(10).join(lines))
+        self.safety_details.show()
+        self.comparison_panel.setMinimumHeight(490)
+        self.comparison_panel.updateGeometry()
+        QTimer.singleShot(0, self._scroll_to_safety)
+
+    def _safety_failed(self, error, worker):
+        if worker is self.safety_worker and self.recipe and (
+                self.recipe.get("id") == worker.recipe.get("id")):
+            self._safety_result = None
+            self.safety_summary.setText(
+                "Replacement safety could not be checked. No installation authorized.")
+            self.safety_details.setPlainText(error)
+            self.safety_details.show()
+            self.comparison_panel.setMinimumHeight(490)
+            self.comparison_panel.updateGeometry()
+            QTimer.singleShot(0, self._scroll_to_safety)
+
+    def _safety_cancelled(self, worker):
+        if worker is self.safety_worker and self.recipe and (
+                self.recipe.get("id") == worker.recipe.get("id")):
+            self._safety_result = None
+            self.safety_summary.setText("Replacement safety review canceled; no changes made.")
+            self.safety_details.hide()
+            self.comparison_panel.setMinimumHeight(300)
+
+    def _safety_finished(self, worker):
+        if worker is not self.safety_worker:
+            return
+        self.safety_worker = None
+        self.safety_button.setText("Review replacement safety (read-only)")
+        self.safety_button.setEnabled(bool(self.recipe))
+        worker.deleteLater()
+
     def _start_integrity_check(self):
         worker = self.integrity_worker
         if worker is not None:
@@ -1031,6 +1231,7 @@ class GuidedDownloadsPage(QWidget):
             "Reading recorded installation hashes (read-only). No game-file writes will occur…")
         # Any prior verification is now superseded by this in-progress job.
         self._integrity_result = None
+        self._invalidate_safety_review()
         self._refresh_comparison()
         self.integrity_details.clear()
         self.integrity_details.hide()
@@ -1089,6 +1290,7 @@ class GuidedDownloadsPage(QWidget):
                 lines.append("Required mod presence: unknown — no readiness evidence.")
         self.integrity_details.setPlainText(chr(10).join(lines))
         self.integrity_details.setVisible(bool(lines))
+        self._invalidate_safety_review()
         self._refresh_comparison()
 
     def _integrity_failed(self, error, worker):
@@ -1099,6 +1301,7 @@ class GuidedDownloadsPage(QWidget):
             self.integrity_details.setPlainText("Read-only verification failed: " + error)
             self.integrity_details.show()
             self._integrity_result = None
+            self._invalidate_safety_review()
             self._refresh_comparison()
 
     def _integrity_cancelled(self, worker):
@@ -1107,6 +1310,7 @@ class GuidedDownloadsPage(QWidget):
             self.integrity_status.setText("Verification cancelled. No game-file writes performed.")
             self.integrity_details.hide()
             self._integrity_result = None
+            self._invalidate_safety_review()
             self._refresh_comparison()
 
     def _integrity_finished(self, worker):
