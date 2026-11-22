@@ -88,7 +88,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.page.set_recipe(recipe)
         return recipe, record
 
-    def test_uevr_profile_and_injector_route_without_extra_picker(self):
+    def test_uevr_complete_pair_routes_together_without_extra_picker(self):
         for rid, names in (
             ("fatekeeper", ("UEVR_FK.zip", "SLASHER-Win64-Shipping.zip")),
             ("hogwarts-legacy", ("UEVR.zip", "HogwartsLegacy.zip")),
@@ -98,23 +98,40 @@ class ArchiveChecklistTests(unittest.TestCase):
                 events = []
                 self.page.install_review_requested.connect(events.append)
                 try:
-                    self.page.table.selectRow(1)
-                    self.assertEqual(self.page.install_review_button.text(), "Review profile")
-                    self.page.install_review_button.click()
-                    self.assertEqual(events[-1], {
-                        "game_id": rid, "route": "profile",
-                        "archives": [record["plan"]["rows"][1]["file"]],
-                        "origin": "downloads-page"})
-                    self.assertTrue(events[-1]["archives"][0])
-                    self.page.table.selectRow(0)
-                    self.assertEqual(self.page.install_review_button.text(), "Open Setup Guide")
-                    self.page.install_review_button.click()
-                    self.assertEqual(events[-1]["route"], "guide")
-                    self.assertEqual(events[-1]["archives"], [])
+                    for row in (0, 1):
+                        self.page.table.selectRow(row)
+                        self.assertEqual(self.page.install_review_button.text(), "Review installation")
+                        with mock.patch.object(self.page, "_choose_archive_candidate") as chooser:
+                            self.page.install_review_button.click()
+                        chooser.assert_not_called()
+                        self.assertEqual(events[-1]["route"], "uevr-pair")
+                        self.assertEqual(events[-1]["archives"], [r["file"] for r in record["plan"]["rows"]])
                 finally:
                     self.page.install_review_requested.disconnect(events.append)
                 for name in names:
                     (self.folder / name).unlink()
+
+    def test_complete_pair_changed_after_scan_does_not_route(self):
+        _, record = self._scan_fixture("fatekeeper", ("UEVR_FK.zip", "SLASHER-Win64-Shipping.zip"))
+        Path(record["plan"]["rows"][0]["file"]).write_bytes(b"archive changed")
+        events = []
+        self.page.install_review_requested.connect(events.append)
+        self.page.install_review_button.click()
+        self.assertEqual(events, [])
+        self.assertIn("stale", self.page.folder_action_feedback.text())
+
+    def test_pair_ambiguous_candidate_cancel_never_routes(self):
+        _, record = self._scan_fixture("fatekeeper", ("UEVR_FK.zip", "SLASHER-Win64-Shipping.zip"))
+        (self.folder / "SLASHER-Win64-Shipping (1).zip").write_bytes(b"distinct")
+        recipe = self.page.recipe
+        self.page._saved[recipe["id"]] = archive_scans.persist(planner.build_plan(recipe, self.folder))
+        self.page.set_recipe(recipe)
+        events = []
+        self.page.install_review_requested.connect(events.append)
+        with mock.patch.object(self.page, "_choose_archive_candidate", return_value=None) as chooser:
+            self.page.install_review_button.click()
+        chooser.assert_called_once()
+        self.assertEqual(events, [])
 
     def test_changed_profile_does_not_emit_review_or_fallback(self):
         _, record = self._scan_fixture("fatekeeper", ("SLASHER-Win64-Shipping.zip",))

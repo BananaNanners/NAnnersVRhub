@@ -762,6 +762,8 @@ class GuidedDownloadsPage(QWidget):
         method = recipe.get("method", "file")
         component, _ = self._selected_component()
         if method == "uevr":
+            if self._has_uevr_pair():
+                return "uevr-pair", "Review installation"
             if recipe.get("profile") and component and component["id"] == "profile":
                 return "profile", "Review profile"
             return "guide", "Open Setup Guide"
@@ -780,6 +782,13 @@ class GuidedDownloadsPage(QWidget):
             return "mod", f"Review {len(rows)} verified archives"
         return "mod", "Review installation"
 
+    def _has_uevr_pair(self):
+        from .uevr_dependency_review import SUPPORTED
+        rows = (self._last_plan or {}).get("rows", [])
+        return ((self.recipe or {}).get("id") in SUPPORTED
+                and len(rows) == 2 and [r.get("id") for r in rows] == ["uevr", "profile"]
+                and all(r.get("file") for r in rows))
+
     def _selected_row_record(self):
         rows = (self._last_plan or {}).get("rows", [])
         i = self.table.currentRow()
@@ -791,7 +800,9 @@ class GuidedDownloadsPage(QWidget):
         row = self._selected_row_record()
         route, _ = self._review_action()
         plan = self._last_plan or {}
-        if route == "guide":
+        if route == "uevr-pair":
+            message = "Review both downloaded dependencies together. Existing injector/profile files and recovery needs are evaluated separately. No installation is authorized."
+        elif route == "guide":
             message = "Follow this game's existing Setup Guide. Archive detection alone is not installation readiness."
         elif row.get("status") == "Archive changed — rescan required" or row.get("candidate_incomplete"):
             message = "Archive selection is stale or incomplete. Scan local archives again before review."
@@ -820,7 +831,7 @@ class GuidedDownloadsPage(QWidget):
     def _update_review_action(self):
         route, label = self._review_action()
         row = self._selected_row_record()
-        if route != "guide" and not row.get("sha256") and (
+        if route not in ("guide", "uevr-pair") and not row.get("sha256") and (
                 row.get("ambiguous") or (row.get("matches", 0) > 1 and "candidates" not in row)):
             label = "Choose archive"
         self.install_review_button.setText(label if self.recipe else "Review installation")
@@ -890,6 +901,9 @@ class GuidedDownloadsPage(QWidget):
         if route == "guide":
             self.install_review_requested.emit(dict(request, route="guide"))
             return
+        if route == "uevr-pair":
+            self._request_uevr_pair(rid, request)
+            return
         try:
             rows = self._fresh_review_rows()
         except (ValueError, RuntimeError, OSError) as exc:
@@ -943,6 +957,38 @@ class GuidedDownloadsPage(QWidget):
         if route == "profile":
             request["route"] = "profile"
         self.install_review_requested.emit(request)
+
+    def _request_uevr_pair(self, rid, request):
+        try:
+            rows = self._fresh_review_rows()
+            if not rows or [r.get("id") for r in rows] != ["uevr", "profile"]:
+                raise ValueError("Scan both dependencies before review.")
+            files, evidence = [], []
+            for row in rows:
+                if (not row.get("file") or row.get("candidate_incomplete")
+                        or row.get("status") not in ("Possible archive — inspect first", "Pinned SHA-256 verified")):
+                    raise ValueError("A required archive is missing, stale or blocked. Rescan before review.")
+                if row.get("matches", 0) > 1 and "candidates" not in row:
+                    raise ValueError("Saved scan predates candidate detection. Rescan first.")
+                if row.get("ambiguous"):
+                    chosen = self._choose_archive_candidate(row)
+                    if chosen is None:
+                        return
+                else:
+                    chosen = next((c for c in row.get("candidates", []) if c["file"] == row["file"]), None)
+                if not self.recipe or self.recipe["id"] != rid:
+                    return
+                if chosen is not None and (chosen not in row.get("candidates", []) or
+                        planner.archive_identity(Path(chosen["file"])) != chosen["identity"]):
+                    raise ValueError("Selected archive changed. Rescan before review.")
+                files.append(chosen["file"] if chosen else row["file"])
+                evidence.append(chosen)
+            if len(set(files)) != 2 or self._fresh_review_rows() != rows:
+                raise ValueError("Dependencies changed or overlap. Rescan before review.")
+        except (ValueError, RuntimeError, OSError) as exc:
+            self._folder_feedback(str(exc))
+            return
+        self.install_review_requested.emit(dict(request, route="uevr-pair", archives=files, evidence=evidence))
 
     def _selected_component(self):
         """Resolve selection against the CURRENT recipe, not snapshot data."""

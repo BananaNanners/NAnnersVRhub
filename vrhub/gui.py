@@ -1558,6 +1558,18 @@ class HubWindow(QMainWindow):
         if route == "guide":
             self.game_details_tabs.setCurrentWidget(self.details)
             return
+        if route == "uevr-pair":
+            from . import uevr_dependency_review
+            from .uevr_dependency_review_gui import DependencyReviewDialog
+            if r.get("id") not in uevr_dependency_review.SUPPORTED or len(files) != 2:
+                return
+            try:
+                plan = uevr_dependency_review.build_plan(r, files, _roots(), evidence=request.get("evidence"))
+            except (RuntimeError, OSError, ValueError, zipfile.BadZipFile) as exc:
+                QMessageBox.warning(self, "UEVR installation review blocked (nothing changed)", str(exc))
+                return
+            DependencyReviewDialog(plan, self).exec()
+            return
         if route == "profile":
             if r.get("method") != "uevr" or not r.get("profile") or len(files) > 1:
                 return
