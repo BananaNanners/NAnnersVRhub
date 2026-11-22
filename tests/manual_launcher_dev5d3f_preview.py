@@ -28,6 +28,11 @@ def main():
     mode.add_argument("--verify",action="store_true")
     opts=args.parse_args()
     if opts.show:
+        # Opt in to reading the user's existing 0600 Nexus credential.
+        # The writable preview key path remains the isolated test-nexus-key.
+        # Missing/unsafe sources simply leave Nexus checks unavailable.
+        os.environ["VRHUB_NEXUS_READONLY_KEY_FILE"] = str(
+            Path.home() / ".config/vrhub/nexus_key")
         from vrhub.dev_preview_storage import shared_directory
         store=shared_directory()
         supplied=Path(os.environ.get("VRHUB_STATE","")).resolve()
@@ -48,11 +53,14 @@ def main():
         gui.HubWindow.check_updates=lambda self: None
     app=QApplication([sys.argv[0]])
     win=ComparisonPreview()
+    win.key_btn.setToolTip(
+        "Preview uses your existing Nexus key read-only when available. "
+        "Manage or remove the real key outside this preview.")
     win.allow_guided_installs=False
     win.downloads.allow_transfers=False
-    win.setWindowTitle("NAnnersVRhub 0.5.5-dev5D3f — VERSION COMPARISON (NO GAME WRITES)")
+    win.setWindowTitle("NAnnersVRhub 0.5.5-dev5D3f1 — READ-ONLY NEXUS PREVIEW (NO GAME WRITES)")
     brand=win.findChild(QLabel,"brandTitle")
-    if brand: brand.setText("NAnnersVRhub  0.5.5-dev5D3f · PREVIEW")
+    if brand: brand.setText("NAnnersVRhub  0.5.5-dev5D3f1 · PREVIEW")
     win.tabs.setCurrentIndex(1)
 
     def select(rid):
@@ -70,7 +78,7 @@ def main():
     app.processEvents()
     win.disable_mutations()
     if opts.show:
-        print("DEV5D3F DESKTOP READY — current preferences and scans preserved; no game writes.",flush=True)
+        print("DEV5D3F1 DESKTOP READY — Nexus credential read-only; scans preserved; no game writes.",flush=True)
         return app.exec()
 
     win.resize(1630,1060)

@@ -3,6 +3,7 @@
 """Update checking: GitHub releases (no login) and Nexus Mods (needs a free personal API key)."""
 import json
 import os
+import stat
 import re
 import time
 import urllib.error
@@ -96,11 +97,52 @@ def get_key() -> str | None:
     if env:
         return env
     p = key_path()
-    return p.read_text().strip() or None if p.is_file() else None
+    if p.is_file():
+        saved = p.read_text().strip()
+        if saved:
+            return saved
+    return _read_preview_nexus_key()
+
+
+def _read_preview_nexus_key() -> str | None:
+    """Explicit opt-in read-only fallback for isolated development previews.
+
+    Never copies credentials to a preview directory or prints their contents.
+    A missing, symlinked, non-private, or non-user-owned source fails closed.
+    """
+    source = os.environ.get("VRHUB_NEXUS_READONLY_KEY_FILE")
+    if not source:
+        return None
+    fd = None
+    try:
+        fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        meta = os.fstat(fd)
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.geteuid()
+                or meta.st_mode & 0o077 or not 0 < meta.st_size <= 4096):
+            return None
+        with os.fdopen(fd, "rb") as source_file:
+            fd = None
+            return source_file.read(4097).decode("utf-8").strip() or None
+    except (OSError, UnicodeError):
+        return None
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def _writable_key_path() -> Path:
+    """Never let preview credential controls alter the read-only source."""
+    path = key_path()
+    source = os.environ.get("VRHUB_NEXUS_READONLY_KEY_FILE")
+    if path.is_symlink() or (
+        source and path.resolve(strict=False) == Path(source).resolve(strict=False)
+    ):
+        raise ValueError("Refusing to modify the read-only Nexus credential source.")
+    return path
 
 
 def set_key(key: str) -> None:
-    p = key_path()
+    p = _writable_key_path()
     p.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # private to your user
     with os.fdopen(fd, "w") as f:
@@ -109,7 +151,7 @@ def set_key(key: str) -> None:
 
 
 def clear_key() -> None:
-    key_path().unlink(missing_ok=True)
+    _writable_key_path().unlink(missing_ok=True)
 
 
 def _nexus_get(path: str, key: str, timeout: int = 8) -> dict:
