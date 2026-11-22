@@ -6,7 +6,7 @@ Never turns release labels, Hub install timestamps or a downloaded file into
 installation authority. No network, filesystem writes, or installer actions.
 """
 from pathlib import Path
-from . import download_planner as planner, updates
+from . import download_planner as planner, updates, installed_provenance
 
 
 def _online_item(recipe, comp, online):
@@ -29,26 +29,6 @@ def _online_item(recipe, comp, online):
         return None
     hits = [x for x in online if x.get("name") == targets[0].get("name")]
     return hits[0] if len(hits) == 1 else None
-
-
-def _installed(recipe, comp, state, online_item):
-    """An installation record is not a verified running mod version."""
-    rid = str(comp["id"])
-    game = state.get(recipe["id"])
-    if not isinstance(game, dict):
-        return "Unknown", None, "No Hub installation record; manual installs may exist."
-    if recipe.get("components") and rid.isdecimal():
-        components = game.get("components")
-        record = components.get(rid) if isinstance(components, dict) else None
-        if not isinstance(record, dict):
-            return "Unknown", None, "No Hub component record; manual installs may exist."
-        version = updates._installed_archive_version(record.get("archive", ""), int(rid))
-        if version is not None and isinstance(record.get("files"), list) and record["files"]:
-            v = ".".join(map(str, version))
-            return "Recorded " + v, v, "Parsed from Hub archive name; installed bytes not verified here."
-        return "Hub record · version unknown", None, "A component record exists; archive release unverified."
-    return "Hub record · version unknown", None, (
-        "Game installation record exists, but does not identify this dependency's installed release.")
 
 
 def _download(recipe, comp, row, warning):
@@ -109,7 +89,11 @@ def compare(recipe, plan, state, online=None):
         if comp["id"] == "guide":
             continue
         update = _online_item(recipe, comp, online)
-        installed, recorded_version, installed_note = _installed(recipe, comp, state, update)
+        provenance = installed_provenance.evidence(
+            recipe, comp, state, by_id.get(comp["id"]), warning)
+        installed = provenance["label"]
+        recorded_version = provenance["version"]
+        installed_note = provenance["detail"]
         downloaded, download_tag, verified, download_note, tone = _download(
             recipe, comp, by_id.get(comp["id"]), warning)
         if update and update.get("latest_version"):
@@ -174,7 +158,10 @@ def compare(recipe, plan, state, online=None):
             "id": str(comp["id"]), "name": str(comp["name"]),
             "installed": installed, "downloaded": downloaded, "latest": latest,
             "assessment": assessment, "tone": tone,
+            "provenance_source": provenance["source"],
+            "installed_attributed": provenance["identified"],
             "detail": chr(10).join((
+                "Installed evidence: " + provenance["source"],
                 "Installed: " + installed_note,
                 "Downloaded: " + download_note,
                 "Latest online: " + latest_note,

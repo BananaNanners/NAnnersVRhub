@@ -302,8 +302,9 @@ class GuidedDownloadsPage(QWidget):
         comparison_layout.setContentsMargins(0, 0, 0, 0)
         comparison_layout.setSpacing(5)
         self.comparison_note = QLabel(
-            "Installed versions require their own evidence. An official downloaded "
-            "release or a matching online label does not verify installed files.")
+            "Installed: source evidence from Hub records, not a live file check. "
+            "Downloaded: pinned or official archive evidence. "
+            "Latest: separate update lookup. Matching versions do not authorize updates.")
         self.comparison_note.setWordWrap(True)
         comparison_layout.addWidget(self.comparison_note)
         self.comparison_summary = QLabel()
@@ -870,8 +871,9 @@ class GuidedDownloadsPage(QWidget):
         identified = sum(row["matched_release"] for row in records)
         checked = sum(row["latest"] not in ("Not checked", "Unavailable") for row in records)
         self.comparison_summary.setText(
-            f"{identified} identified archive(s) · {checked} online version(s) shown from last refresh "
-            f"· installed release identity may be unknown")
+            f"{identified} identified archive(s) · "
+            f"{sum(row['installed_attributed'] for row in records)} Hub-recorded release identity(ies) · "
+            f"{checked} online version(s) from last refresh")
         self.comparison_summary.setToolTip(
             "Comparison uses saved or newly scanned archive metadata and in-memory "
             "online results only. Refresh online results separately in Updates.")

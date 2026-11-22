@@ -97,11 +97,11 @@ class ComparisonModelTests(unittest.TestCase):
             {"mod_id":2380,"name":"RED4ext","status":"update",
              "installed_version":"1.30.0","latest_version":"1.31.1"}
         ]) if x["id"] == "2380")
-        self.assertEqual(result["installed"], "Recorded 1.30.0")
+        self.assertEqual(result["installed"], "Recorded filename 1.30.0")
         self.assertIn("Filename suggests", result["downloaded"])
         self.assertFalse(result["matched_release"])
         self.assertEqual(result["assessment"], "Filename suggests newer · verify ZIP")
-        self.assertIn("installed bytes not verified", result["detail"])
+        self.assertIn("No cryptographic release identity", result["detail"])
         self.assertNotIn("Downloaded newer", result["assessment"])
         plan["rows"] = [dict(c, status="Not found locally", file="")
                         for c in download_planner.plan_components(recipe)]
@@ -122,7 +122,9 @@ class ComparisonModelTests(unittest.TestCase):
                 "name":"KHARVOX","latest_version":"v1.4a",
                 "tested_version":"v1.4.0","status":"unknown"}])
             self.assertTrue(records)
-            self.assertTrue(all("version unknown" in x["installed"] for x in records))
+            self.assertTrue(all(
+                "version unknown" in x["installed"] or x["installed"] == "Unknown"
+                for x in records))
             self.assertTrue(all("v1.4.0" not in x["installed"] for x in records))
 
     def test_stale_and_incomplete_scans_fail_closed(self):
