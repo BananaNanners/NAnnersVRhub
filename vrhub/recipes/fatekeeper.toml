@@ -112,3 +112,13 @@ headset = "Meta Quest 3 (established project setup)"
 modlist = "UEVR_FK + SLASHER-Win64-Shipping profile; report found all 11 recorded UEVR files and 87 profile files."
 proton = "proton-cachyos-slr (recorded prefix path; exact build version not captured)"
 result = "User reported success after the requested live test covering VR rendering, head tracking, controller inputs and Fatekeeper profile loading. This is user-reported evidence, not automatic gameplay telemetry."
+
+# Recognition only: does not authorize installation or change existing pins.
+[archive_releases.uevr]
+repo = "jbusfield/FK_UEVR"
+asset = "UEVR_FK.zip"
+fixed_tag = "1.0.0"
+
+[archive_releases.profile]
+repo = "jbusfield/FK_UEVR"
+asset = "SLASHER-Win64-Shipping.zip"

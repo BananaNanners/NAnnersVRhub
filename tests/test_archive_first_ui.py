@@ -167,6 +167,75 @@ class ArchiveChecklistTests(unittest.TestCase):
             self.assertNotIn("route", request)
             self.page.install_review_requested.disconnect(events.append)
 
+    def _ambiguous_profile(self):
+        recipe = hub.load_recipes()["fatekeeper"]
+        first = self.folder / "SLASHER-Win64-Shipping.zip"
+        second = self.folder / "SLASHER-Win64-Shipping (1).zip"
+        first.write_bytes(b"one fixture")
+        second.write_bytes(b"different fixture")
+        record = archive_scans.persist(planner.build_plan(recipe, self.folder))
+        self.page._saved["fatekeeper"] = record
+        self.page.set_recipe(recipe)
+        self.page.table.selectRow(1)
+        self.assertEqual(self.page.install_review_button.text(), "Choose archive")
+        self.assertEqual(self.page.table.item(1,3).text(), "Choose archive")
+        return record
+
+    def test_ambiguous_profile_cancel_and_explicit_choice(self):
+        record = self._ambiguous_profile()
+        events = []
+        self.page.install_review_requested.connect(events.append)
+        before = (self.root / "scans.json").read_bytes()
+        with mock.patch("vrhub.downloads_gui.QInputDialog.getItem", return_value=("", False)):
+            self.page.install_review_button.click()
+        self.assertEqual(events, [])
+        with mock.patch("vrhub.downloads_gui.QInputDialog.getItem",
+                        side_effect=lambda *args: (args[3][2], True)):
+            self.page.install_review_button.click()
+        self.assertEqual(events[-1]["archives"],
+                         [record["plan"]["rows"][1]["candidates"][1]["file"]])
+        self.assertEqual(events[-1]["route"], "profile")
+        self.assertEqual((self.root / "scans.json").read_bytes(), before)
+
+    def test_candidate_changed_during_chooser_is_rejected(self):
+        record = self._ambiguous_profile()
+        events = []
+        self.page.install_review_requested.connect(events.append)
+        def mutate(*args):
+            Path(record["plan"]["rows"][1]["candidates"][1]["file"]).write_bytes(b"changed")
+            return args[3][2], True
+        with mock.patch("vrhub.downloads_gui.QInputDialog.getItem", side_effect=mutate):
+            self.page.install_review_button.click()
+        self.assertEqual(events, [])
+        self.assertIn("changed", self.page.folder_action_feedback.text().lower())
+
+    def test_release_match_keeps_review_color_and_no_picker(self):
+        from vrhub.archive_releases import asset_catalog
+        from tests.test_archive_releases import release
+        recipe = hub.load_recipes()["fatekeeper"]
+        (self.folder / "SLASHER-Win64-Shipping (1).zip").write_bytes(b"old")
+        expected = self.folder / "SLASHER-Win64-Shipping (2).zip"
+        expected.write_bytes(b"new")
+        catalog = asset_catalog(recipe["archive_releases"]["profile"],
+                                [release("1.0.0", 1, b"old"), release("v1.0.4", 4, b"new")])
+        record = archive_scans.persist(planner.build_plan(
+            recipe, self.folder, release_catalogs={"profile": catalog}))
+        self.page._saved["fatekeeper"] = record
+        self.page.set_recipe(recipe)
+        self.page.table.selectRow(1)
+        cell = self.page.table.item(1,3)
+        self.assertEqual(cell.text(), "v1.0.4 — Latest release matched")
+        self.assertEqual(cell.foreground().color().name().upper(), "#FFD21A")
+        self.assertIn("compatibility", cell.toolTip())
+        self.assertIn("1 official release matches", self.page.summary.text())
+        self.assertEqual(self.page.install_review_button.text(), "Review profile")
+        events = []
+        self.page.install_review_requested.connect(events.append)
+        with mock.patch("vrhub.downloads_gui.QInputDialog.getItem") as picker:
+            self.page.install_review_button.click()
+        picker.assert_not_called()
+        self.assertEqual(events[-1]["archives"], [str(expected)])
+
     def test_changed_recipe_pin_hides_historical_checks_without_rewriting_snapshot(self):
         recipe = self.pinned_recipe()
         record = archive_scans.persist(planner.build_plan(recipe,self.folder))

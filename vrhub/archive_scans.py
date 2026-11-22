@@ -13,6 +13,7 @@ import copy
 import fcntl
 import json
 import os
+import re
 import stat
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,6 +67,36 @@ def _validate_record(rid, record):
                 or (filename and (not Path(filename).is_absolute()
                                   or not Path(filename).is_relative_to(folder)))):
             raise ValueError("Invalid scanned archive path")
+        candidates = row.get("candidates", [])
+        if not isinstance(candidates, list) or len(candidates) > planner.MAX_CANDIDATES:
+            raise ValueError("Invalid archive candidates")
+        for flag in ("ambiguous", "candidate_incomplete", "release_fixed"):
+            if flag in row and type(row[flag]) is not bool:
+                raise ValueError("Invalid archive candidate flag")
+        for info in candidates:
+            if not isinstance(info, dict) or set(info) != {
+                    "file", "identity", "sha256", "tags", "expected", "copies"}:
+                raise ValueError("Invalid archive candidate")
+            path = info["file"]
+            ident = info["identity"]
+            if (not isinstance(path, str) or len(path) > MAX_PATH
+                    or not Path(path).is_absolute() or not Path(path).is_relative_to(folder)
+                    or not isinstance(ident, dict)
+                    or set(ident) != {"size", "mtime_ns", "ctime_ns", "ino", "dev"}
+                    or any(type(v) is not int or v < 0 for v in ident.values())
+                    or not isinstance(info["sha256"], str)
+                    or (info["sha256"] and not re.fullmatch("[0-9a-f]{64}", info["sha256"]))
+                    or not isinstance(info["tags"], list) or len(info["tags"]) > 30
+                    or any(not isinstance(t, str) or not t or len(t) > 100 for t in info["tags"])
+                    or type(info["expected"]) is not bool
+                    or type(info["copies"]) is not int or not 1 <= info["copies"] <= planner.MAX_CANDIDATES):
+                raise ValueError("Invalid archive candidate metadata")
+        if candidates and (filename != candidates[0]["file"]
+                           or len({c["file"] for c in candidates}) != len(candidates)):
+            raise ValueError("Invalid archive candidate selection")
+        for key, limit in (("release_expected", 100), ("release_notice", 250)):
+            if key in row and (not isinstance(row[key], str) or len(row[key]) > limit):
+                raise ValueError("Invalid release metadata")
     if not isinstance(record["files"], dict) or len(record["files"]) > MAX_ROWS:
         raise ValueError("Invalid file identity map")
     for name, info in record["files"].items():
@@ -191,6 +222,15 @@ def displayed_record(record) -> dict:
     for row in rec["plan"]["rows"]:
         filename = row.get("file")
         if not filename:
+            continue
+        # Candidate evidence was captured while hashing, not at persistence.
+        # Recheck every representative before displaying or opening a chooser.
+        if any(planner.archive_identity(Path(c["file"])) != c["identity"]
+               for c in row.get("candidates", [])):
+            row["status"] = "Archive changed — rescan required"
+            row["file"] = ""
+            row["matches"] = 0
+            row["candidates"] = []
             continue
         prior = rec["files"].get(filename)
         path = Path(filename)

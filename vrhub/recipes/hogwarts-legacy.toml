@@ -113,3 +113,13 @@ headset = "Meta Quest 3 (established project setup)"
 modlist = "HL_UEVR v2.0.6 packaged pair; report found 10 recorded UEVR files and 192 profile files."
 proton = "Proton-CachyOS-latest (saved Heroic runner selection; exact build version not captured)"
 result = "User reported the Hub Run UEVR injector button worked for one-click Run EXE on prefix; VR rendering, head tracking, controller input and stereo depth PASSED. A few minutes of gameplay also confirmed working controllers, spell drawing and wrist-flick activation. Voice, body tracking, other gestures and longer-session stability were not tested."
+
+# Recognize the existing matched package family, not upstream DLL releases.
+[archive_releases.uevr]
+repo = "jbusfield/HL_UEVR"
+asset = "UEVR.zip"
+fixed_tag = "v2.0.6"
+
+[archive_releases.profile]
+repo = "jbusfield/HL_UEVR"
+asset = "HogwartsLegacy.zip"

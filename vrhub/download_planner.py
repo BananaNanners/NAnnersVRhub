@@ -21,6 +21,7 @@ from . import hub, self_install
 
 MAX_DIRS = 300
 MAX_FILES = 1800
+MAX_CANDIDATES = 16
 MAX_HASH_BYTES = 3 * 1024 * 1024 * 1024
 GAME_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,79}\Z")
 EXTS = (".zip", ".rar", ".7z", ".pak", ".tar.gz")
@@ -160,21 +161,44 @@ def _inventory(folder: Path, *, progress=None) -> tuple[list[InventoryFile], str
     return files, None
 
 
-def _pinned_hash(file: InventoryFile, *, remaining: list[int]) -> str | None:
-    """Only hash within a bounded scan. Digest is not an authenticity proof
-    unless it equals a recipe's pinned digest.
-    """
-    if file.size > remaining[0]:
+def archive_identity(path: Path):
+    """Identity of a regular archive, refusing symlink replacement."""
+    try:
+        st = path.lstat()
+        if not stat.S_ISREG(st.st_mode) or path.resolve() != path:
+            return None
+        return {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
+                "ctime_ns": st.st_ctime_ns, "ino": st.st_ino, "dev": st.st_dev}
+    except (OSError, RuntimeError):
         return None
-    key = (str(file.path), file.size, file.path.stat().st_mtime_ns)
+
+
+def _pinned_hash(file: InventoryFile, *, remaining: list[int]) -> str | None:
+    """Bounded digest of a stable regular file; never trust name or mtime alone."""
+    identity = archive_identity(file.path)
+    if not identity or identity["size"] != file.size or file.size > remaining[0]:
+        return None
+    key = (str(file.path), tuple(identity.values()))
     if key in _HASH_MEMO:
         return _HASH_MEMO[key]
     remaining[0] -= file.size
     h = hashlib.sha256()
     try:
-        with file.path.open("rb") as stream:
+        fd = os.open(file.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as stream:
+            st = os.fstat(stream.fileno())
+            if not stat.S_ISREG(st.st_mode) or (
+                    st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_ino, st.st_dev
+                    ) != tuple(identity.values()):
+                return None
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 h.update(chunk)
+                if stream.tell() > file.size:
+                    return None
+            if stream.tell() != file.size:
+                return None
+        if archive_identity(file.path) != identity:
+            return None
     except OSError:
         return None
     digest = h.hexdigest()
@@ -182,6 +206,41 @@ def _pinned_hash(file: InventoryFile, *, remaining: list[int]) -> str | None:
         _HASH_MEMO.clear()
     _HASH_MEMO[key] = digest
     return digest
+
+
+def _recognize_candidates(files, catalog, remaining):
+    """Choose by official asset identity, then suggest by mtime; dedupe bytes."""
+    if len(files) > MAX_CANDIDATES:
+        return [], False, True
+    expected = catalog.get("expected", "")
+    options = []
+    for file in files:
+        ident = archive_identity(file.path)
+        if not ident:
+            continue
+        digest = _pinned_hash(file, remaining=remaining)
+        if archive_identity(file.path) != ident:
+            continue
+        tags = [a["tag"] for a in catalog.get("assets", [])
+                if digest and a["sha256"] == digest and a["size"] == file.size]
+        options.append({"file": str(file.path), "identity": ident,
+                        "sha256": digest or "", "tags": tags,
+                        "expected": bool(expected and expected in tags)})
+    rank = {a["tag"]: a["when"] for a in catalog.get("assets", [])}
+    options.sort(key=lambda c: (c["expected"], bool(c["tags"]),
+                              max((rank[t] for t in c["tags"]), default=0),
+                              c["identity"]["mtime_ns"], c["file"]), reverse=True)
+    groups = {}
+    for option in options:
+        key = option["sha256"] or option["file"]
+        groups.setdefault(key, []).append(option)
+    # Only byte-identical duplicates merge. The representative is newest
+    # modified, never inferred to be a newer release from its filename.
+    unique = [dict(items[0], copies=len(items)) for items in groups.values()]
+    # Only the displayed representative may be reused. Other copies remain
+    # untouched. When no unique expected digest exists, ask for consent.
+    ambiguous = len(unique) > 1 and sum(c["expected"] for c in unique) != 1
+    return unique, ambiguous, len(options) != len(files)
 
 
 def plan_components(recipe: dict):
@@ -252,7 +311,7 @@ def _candidate_filename_match(name: str, component: dict, rid: str) -> bool:
     return len(hint) >= 4 and hint in lower
 
 
-def build_plan(recipe: dict, folder: Path, *, progress=None) -> dict:
+def build_plan(recipe: dict, folder: Path, *, progress=None, release_catalogs=None, release_errors=None) -> dict:
     """Return a bounded read-only snapshot of locally available candidates."""
     rid = _rid(recipe)
     entries, warning = _inventory(folder, progress=progress)
@@ -269,6 +328,8 @@ def build_plan(recipe: dict, folder: Path, *, progress=None) -> dict:
             if progress and i % 10 == 0:
                 progress(min(i + 1, len(entries)), max(1, len(entries)))
     rows = []
+    release_catalogs = release_catalogs or {}
+    release_errors = release_errors or {}
     for c in comps:
         verified = ([f for f in entries
                      if digest_map.get(str(f.path)) == c["sha256"]]
@@ -289,7 +350,26 @@ def build_plan(recipe: dict, folder: Path, *, progress=None) -> dict:
             status, selection = "Possible archive — inspect first", plausible[0]
         else:
             status, selection = "Not found locally", None
-        rows.append({**c, "status": status,
+        extra = {}
+        if plausible and not c.get("sha256"):
+            catalog = release_catalogs.get(c["id"], {})
+            # Hash only multiple candidates or explicitly recognized assets.
+            if len(plausible) > 1 or c["id"] in recipe.get("archive_releases", {}):
+                options, ambiguous, incomplete = _recognize_candidates(plausible, catalog, remaining)
+                extra = {"candidates": options, "ambiguous": ambiguous,
+                         "candidate_incomplete": bool(incomplete or warning), "release_expected": catalog.get("expected", ""),
+                         "release_fixed": bool(catalog.get("fixed")),
+                         "release_notice": release_errors.get(c["id"], "")}
+                if options:
+                    selection = next(f for f in plausible if str(f.path) == options[0]["file"])
+                else:
+                    selection = None
+        elif c["id"] in recipe.get("archive_releases", {}):
+            catalog = release_catalogs.get(c["id"], {})
+            extra = {"release_expected": catalog.get("expected", ""),
+                     "release_fixed": bool(catalog.get("fixed")),
+                     "release_notice": release_errors.get(c["id"], "")}
+        rows.append({**c, **extra, "status": status,
                      "file": str(selection.path) if selection else "",
                      "matches": len(verified) + len(plausible),
                      "size": selection.size if selection else 0,

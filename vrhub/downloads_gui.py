@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, verified_download, hub
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -44,7 +44,9 @@ class LocalInventoryWorker(QThread):
 
     def run(self):
         try:
-            result = planner.build_plan(self.recipe, self.folder)
+            catalogs, errors = archive_releases.catalogs_for(self.recipe)
+            result = planner.build_plan(self.recipe, self.folder,
+                                        release_catalogs=catalogs, release_errors=errors)
         except (OSError, RuntimeError, ValueError) as exc:
             self.failed.emit(str(exc))
         else:
@@ -147,8 +149,8 @@ class GuidedDownloadsPage(QWidget):
 
         explanation = QLabel(
             "Scan downloaded archives for this game. A green check means a "
-            "recipe-pinned SHA-256 matched; yellow means a filename match still "
-            "needs review. Red means blocked. Scanning is read-only. "
+            "recipe-pinned SHA-256 matched; yellow means review required, "
+            "including official release matches. Red means blocked. Scanning is read-only. "
             "Drag column dividers to resize or double-click to fit text.")
         explanation.setObjectName("downloadsExplanation")
         explanation.setWordWrap(True)
@@ -664,17 +666,20 @@ class GuidedDownloadsPage(QWidget):
     def _show_plan(self, plan):
         self._set_rows(plan["rows"])
         changed = plan.get("changed", 0)
+        official = sum(
+            row.get("status") == "Possible archive — inspect first"
+            and not row.get("candidate_incomplete")
+            and bool((row.get("candidates") or [{}])[0].get("tags"))
+            for row in plan["rows"])
         self.summary.setText(
             f'{len(plan["rows"])} dependencies · {plan["scanned"]} archives found in folder · {plan["verified"]} pinned hashes verified '
-            f'· {plan["possible"]} possible matches needing inspection '
+            + (f'· {official} official release matches — review required ' if official else "")
+            + f'· {plan["possible"] - official} possible matches needing review '
             f'· {plan["mismatch"]} mismatched (BLOCKED) '
             f'· {plan["unverified"]} unchecked (BLOCKED) · {plan["missing"]} missing'
             + (f' · {changed} changed — rescan required' if changed else "")
             + (f' — {plan["warning"]}' if plan.get("warning") else ""))
-        self.guidance.setText(
-            "Review archives as packages; the Hub checks internal files and backups "
-            "when preparing installation. Stage 2 must wait for the required flat-game "
-            "first run. A found or verified archive is not a VR readiness result.")
+        self._update_workflow_guidance()
 
     def _set_rows(self, records):
         self.table.clearSelection()
@@ -686,11 +691,25 @@ class GuidedDownloadsPage(QWidget):
             # These explicit download links/labels are presentation only.
             # Keep the saved scan's dependency identity, status and evidence.
             display = (self.recipe or {}).get("archive_display", {}).get(record.get("id"), {})
+            status = record["status"]
+            selected = (record.get("candidates") or [{}])[0]
+            label = status
+            if status == "Possible archive — inspect first":
+                if record.get("candidate_incomplete"):
+                    label = "Rescan required — incomplete candidates"
+                elif record.get("ambiguous") or (record.get("matches", 0) > 1 and "candidates" not in record):
+                    label = "Choose archive"
+                elif selected.get("tags"):
+                    version = record.get("release_expected") if selected.get("expected") else selected["tags"][0]
+                    label = f"{version} — " + ("Bundle matched" if selected.get("expected") and record.get("release_fixed")
+                        else "Latest release matched" if selected.get("expected") else "Release matched")
+                elif selected.get("copies", 0) > 1:
+                    label = "Identical copies — review"
             values = (
                 str(display.get("name", record["name"])),
                 str(record["phase_label"]),
                 Path(record["file"]).name if record.get("file") else "—",
-                record["status"],
+                label,
             )
             for col, value in enumerate(values):
                 cell = QTableWidgetItem(value)
@@ -702,16 +721,24 @@ class GuidedDownloadsPage(QWidget):
                     cell.setToolTip(
                         str(record["file"]) +
                         (f"\nSize: {human_file_size(size)}" if size else "") +
-                        (f"\n{count} matching candidates; shown archive is the planner's selection."
+                        (f"\n{count} matching files; shown archive is the suggested candidate."
                          if count > 1 else ""))
                 if col == 3:
-                    cell.setForeground(QColor(COLOR.get(value, "#A7ADB7")))
-                    cell.setIcon(status_icon(value))
-                    cell.setToolTip(value + (
+                    cell.setForeground(QColor(COLOR.get(status, "#A7ADB7")))
+                    cell.setIcon(status_icon(status))
+                    evidence = (
                         "\nA scan is not permission to install."
-                        if value == "Pinned SHA-256 verified" else
+                        if status == "Pinned SHA-256 verified" else
+                        "\nOfficial SHA-256 match: " + ", ".join(selected["tags"]) +
+                        "\nRelease identity only; compatibility and installation still require review."
+                        if selected.get("tags") else
                         "\nA filename match does not establish archive authenticity."
-                        if value == "Possible archive — inspect first" else ""))
+                        if status == "Possible archive — inspect first" else "")
+                    if selected.get("copies", 0) > 1:
+                        evidence += f"\n{selected['copies']} byte-identical copies; newest modified representative shown."
+                    if record.get("release_notice"):
+                        evidence += "\n" + record["release_notice"]
+                    cell.setToolTip(label + evidence)
                 cell.setData(Qt.UserRole, record.get("file", ""))
                 self.table.setItem(i, col, cell)
             url = planner.source_url(display.get("url", record.get("url")))
@@ -753,8 +780,49 @@ class GuidedDownloadsPage(QWidget):
             return "mod", f"Review {len(rows)} verified archives"
         return "mod", "Review installation"
 
+    def _selected_row_record(self):
+        rows = (self._last_plan or {}).get("rows", [])
+        i = self.table.currentRow()
+        return rows[i] if 0 <= i < len(rows) else {}
+
+    def _update_workflow_guidance(self):
+        if not self.recipe:
+            return
+        row = self._selected_row_record()
+        route, _ = self._review_action()
+        plan = self._last_plan or {}
+        if route == "guide":
+            message = "Follow this game's existing Setup Guide. Archive detection alone is not installation readiness."
+        elif row.get("status") == "Archive changed — rescan required" or row.get("candidate_incomplete"):
+            message = "Archive selection is stale or incomplete. Scan local archives again before review."
+        elif row.get("phase", 1) > 1:
+            message = "Stage 2: complete the required flat-game first launch using Setup Guide. The existing installation gate remains in place."
+        elif row.get("status") in ("Hash mismatch — do not install", "Hash not verified — do not install") or (
+                self.recipe.get("method") in ("bepinex", "ervr") and
+                (plan.get("mismatch") or plan.get("unverified"))):
+            message = "Archive verification blocked. Obtain the correct package from its source and rescan."
+        elif row.get("matches", 0) > 1 and not row.get("sha256") and "candidates" not in row:
+            message = "Saved scan predates candidate detection. Scan local archives to choose the intended version."
+        elif row.get("ambiguous"):
+            message = "Multiple different or unidentified archives match this dependency. Choose the intended archive before review."
+        elif row.get("release_expected") and not any(c.get("expected") for c in row.get("candidates", [])):
+            message = f"Could not identify expected release {row['release_expected']} by SHA-256. Check the source before selecting an archive."
+        elif row.get("status") == "Not found locally" or plan.get("missing", 0) and self.recipe.get("method") in ("bepinex", "ervr"):
+            message = "Required archive missing. Open source, download the dependency and rescan."
+        elif plan.get("rows") and plan.get("verified") == len(plan["rows"]):
+            message = "All required archives are pinned-hash verified. Continue to installation review."
+        else:
+            message = "Review archives as packages; the Hub checks internal files, destinations and backups. A release match does not establish compatibility."
+        if row.get("release_notice"):
+            message += " " + row["release_notice"]
+        self.guidance.setText(message)
+
     def _update_review_action(self):
         route, label = self._review_action()
+        row = self._selected_row_record()
+        if route != "guide" and not row.get("sha256") and (
+                row.get("ambiguous") or (row.get("matches", 0) > 1 and "candidates" not in row)):
+            label = "Choose archive"
         self.install_review_button.setText(label if self.recipe else "Review installation")
         self.install_review_button.setToolTip(
             "Open this game's existing manual setup instructions."
@@ -762,6 +830,7 @@ class GuidedDownloadsPage(QWidget):
             "Review the selected profile ZIP, exact destination and full-directory backup. Nothing changes without confirmation."
             if route == "profile" else
             "Review selected archives and backup policy. Nothing changes without confirmation.")
+        self._update_workflow_guidance()
 
     def _fresh_review_rows(self):
         """Recheck the persisted scan identity before reusing a selection."""
@@ -791,6 +860,25 @@ class GuidedDownloadsPage(QWidget):
             path = cell.data(Qt.UserRole)
             if path and Path(path).is_file():
                 self.inspect_requested.emit(str(path))
+
+    def _choose_archive_candidate(self, row):
+        options = row.get("candidates", [])
+        if not options or row.get("candidate_incomplete"):
+            self._folder_feedback("Multiple archive matches need a fresh scan before review.")
+            return None
+        labels = ["Select an archive"]
+        for c in options:
+            ident = c["identity"]
+            date = datetime.fromtimestamp(ident["mtime_ns"] / 1e9).strftime("%Y-%m-%d %H:%M")
+            tags = ", ".join(c["tags"]) or "Release unknown"
+            labels.append(f"{Path(c['file']).name}  |  {tags}  |  "
+                          f"{human_file_size(ident['size'])}  |  {date}  |  {c['file']}")
+        chosen, ok = QInputDialog.getItem(
+            self, "Choose dependency archive", "Choose the archive you intend to review (no installation):",
+            labels, 0, False)
+        if not ok or chosen not in labels[1:]:
+            return None
+        return options[labels.index(chosen) - 1]
 
     def _request_install_review(self):
         """Route only current recipe selections to existing review handlers."""
@@ -825,7 +913,32 @@ class GuidedDownloadsPage(QWidget):
                             "Hash not verified — do not install"):
                         self._folder_feedback("Selected archive is blocked. Rescan or choose another archive.")
                         return
-                    if row.get("file"):
+                    if row.get("status") == "Not found locally":
+                        self._folder_feedback("Required archive missing. Open source, download it and rescan, or use the manual review tool.")
+                        return
+                    if row.get("candidate_incomplete"):
+                        self._folder_feedback("Incomplete candidate scan. Choose a more specific archive folder and rescan.")
+                        return
+                    if row.get("ambiguous") or (row.get("matches", 0) > 1 and "candidates" not in row):
+                        selected = self._choose_archive_candidate(row)
+                        if selected is None:
+                            return
+                        # A nested dialog can outlive the original selection or
+                        # encounter a replaced file. Recheck exact evidence.
+                        if not self.recipe or self.recipe["id"] != rid or self.table.currentRow() != i:
+                            return
+                        try:
+                            refreshed = self._fresh_review_rows()
+                        except (ValueError, RuntimeError, OSError) as exc:
+                            self._folder_feedback(str(exc))
+                            return
+                        if (not refreshed or i >= len(refreshed)
+                                or selected not in refreshed[i].get("candidates", [])
+                                or planner.archive_identity(Path(selected["file"])) != selected["identity"]):
+                            self._folder_feedback("Selected archive changed. Rescan before review.")
+                            return
+                        request["archives"] = [selected["file"]]
+                    elif row.get("file"):
                         request["archives"] = [row["file"]]
         if route == "profile":
             request["route"] = "profile"
