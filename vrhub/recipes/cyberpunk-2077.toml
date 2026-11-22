@@ -12,9 +12,9 @@ setup = [
   "Check that the plain game runs under Proton first.",
   "Once only: enable the 'version' DLL override so CET and friends load under Proton. Run: protontricks 1091500 --gui, pick the default wineprefix, Run winecfg, open the Libraries tab, add 'version', then Apply (the method on the Red Modding wiki's CET Linux page).",
   "Download the MAIN file of every mod in the checklist below (the links open each Nexus page; a free account is needed). Mods 1-14 first; the VR port (last row) comes later. Skip any 'test' or 'optional' files, and keep the file names Nexus gives you: the hub tells the mods apart by the number in the name.",
-  "Click 'Install mod file…' and select all of mods 1-14 at once. The hub sorts them into the right order, checks every archive before touching the game, and then shows the checklist.",
+  "In Install / Update, scan local archives. Use More installation tools > Choose archives manually… for the deliberate batch of mods 1-14. The Hub reviews the order, destinations and backup policy before any authorized installation.",
   "Make sure the checklist says READY, then start the game once WITHOUT VR so the mod loaders create their files, and quit.",
-  "Download the CyberpunkVR Port (last row) and install it the same way.",
+  "Download the CyberpunkVR Port (last row), rescan, select that dependency and review installation. The existing Stage 2 gate applies.",
 ]
 
 play = [

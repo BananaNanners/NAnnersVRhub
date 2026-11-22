@@ -10,8 +10,8 @@ mod_page = "https://github.com/jbusfield/HL_UEVR/releases/tag/v2.0.6"
 setup = [
   "Launch the Epic Games copy once through Heroic. Keep the Wine/Proton runner and prefix already selected in that game's Heroic settings.",
   "Download BOTH UEVR.zip and HogwartsLegacy.zip from the linked HL_UEVR v2.0.6 release. Use its packaged UEVR build with this profile; do not substitute the Fatekeeper build or mix files from older Hogwarts profiles.",
-  "Click 'Install mod file…' and select UEVR.zip. This installs the complete injector/backend bundle into Hogwarts Legacy's Heroic prefix only.",
-  "Click 'Install profile…' and select HogwartsLegacy.zip. The Hub installs its scripts, data, model files and plugin DLLs together. An existing untracked HogwartsLegacy profile is backed up and replaced; remove a Hub-recorded profile first if replacing one.",
+  "In Install / Update, scan local archives and choose Review installation to review the injector and profile together in Hogwarts Legacy's Heroic prefix.",
+  "Review both archive inventories and recovery warnings. The existing profile safety workflow requires a verified whole-directory backup and separate recovery review for an existing Hub record. Live UEVR dependency installation and profile replacement remain gated.",
   "In this game's Heroic environment variables, review PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES with value 1 when using Proton. Do not paste Steam's %command% into Heroic. The Hub does not change Heroic's settings.",
   "If the injector requests .NET, use this game's Heroic Settings -> Wine -> Run EXE on prefix to run the Windows x64 .NET 6 Desktop Runtime installer. Do not use Steam AppID 990080 or protontricks for this Heroic copy.",
   "Disable DLSS Frame Generation before injection; disable HDR for the initial UEVR test. These settings are reviewed manually.",

@@ -818,11 +818,15 @@ class HubWindow(QMainWindow):
         install_tools_layout = QVBoxLayout(self.install_tools_panel)
         install_tools_layout.setContentsMargins(4, 5, 4, 5)
         install_tools_layout.setSpacing(7)
-        install_tools_layout.addLayout(_row(self.install_btn, self.profile_btn,
-                                            self.verify_btn, self.inspect_btn))
-        # Explicit per-archive inspection is a secondary investigative tool,
-        # not a required step for every dependency in the main checklist.
-        install_tools_layout.addLayout(_row(self.downloads.inspect))
+        # Retain the old handler objects for compatibility, but expose only
+        # a single context-dependent manual fallback through the page.
+        for button in (self.install_btn, self.profile_btn):
+            button.setParent(self.install_tools_panel)
+            button.hide()
+        install_tools_layout.addLayout(_row(self.downloads.manual_review_button,
+                                            self.downloads.download_button))
+        install_tools_layout.addLayout(_row(self.verify_btn, self.inspect_btn,
+                                            self.downloads.inspect))
         install_tools_layout.addLayout(_row(self.kharvox_folder_btn,
                                             self.doom_prepare_btn, self.doom_import_btn))
         self.install_tools_panel.hide()
@@ -830,8 +834,11 @@ class HubWindow(QMainWindow):
         self.install_tools_toggle.toggled.connect(
             lambda active: self.install_tools_toggle.setText(
                 "Hide installation tools" if active else "More installation tools"))
-        self.downloads.layout().insertWidget(5, self.install_tools_toggle)
-        self.downloads.layout().insertWidget(6, self.install_tools_panel)
+        self.downloads.review_footer.insertWidget(0, self.install_tools_toggle)
+        after = self.downloads.layout().indexOf(self.downloads.review_actions) + 1
+        self.downloads.layout().insertWidget(after, self.install_tools_panel)
+        self._install_tools_game = None
+        self.downloads.advanced_availability_changed.connect(self._sync_install_tools)
 
         self.update_tools_toggle = QPushButton("More update tools")
         self.update_tools_toggle.setObjectName("launcherDisclosure")
@@ -1231,9 +1238,15 @@ class HubWindow(QMainWindow):
         self.kharvox_folder_btn.setVisible(kharvox)
         for button in (self.doom_prepare_btn, self.doom_probe_btn, self.doom_logs_btn, self.doom_import_btn):
             button.setVisible(kharvox)
-        for button in [self.install_btn,self.uninstall_btn,self.profile_btn,self.unprofile_btn,
-                       self.verify_btn,self.inspect_btn,self.key_btn]:
+        for button in (self.uninstall_btn, self.unprofile_btn, self.key_btn):
             button.setVisible(not kharvox)
+        self.install_btn.hide()
+        self.profile_btn.hide()
+        # Reset disclosure on game changes, not on unrelated refreshes.
+        rid = r.get("id") if r else None
+        if self._install_tools_game != rid:
+            self._install_tools_game = rid
+            self.install_tools_toggle.setChecked(False)
         self.controller_bindings.set_recipe(r)
         self.refresh_compatibility()
         verification = hub.verify(r) if r else None
@@ -1279,9 +1292,13 @@ class HubWindow(QMainWindow):
         self.game_play_btn.setText(play_label or "Launch game")
         self.game_play_btn.setVisible(bool(play_label))
         self.game_play_btn.setEnabled(bool(play_label))
-        self.verify_btn.setEnabled(bool(r and (r.get("components") or r.get("packages"))))
+        can_verify = bool(r and (r.get("components") or r.get("packages")))
+        self.verify_btn.setEnabled(can_verify)
+        self.verify_btn.setVisible(can_verify and not kharvox)
         self.preflight_btn.setEnabled(bool(r))
-        self.inspect_btn.setEnabled(bool(r and r.get("method") in {"gameroot", "bepinex", "ervr"}))
+        can_inspect = bool(r and r.get("method") in {"gameroot", "bepinex", "ervr"})
+        self.inspect_btn.setEnabled(can_inspect)
+        self.inspect_btn.setVisible(can_inspect and not kharvox)
         has_profile = bool(r and "profile" in r)
         self.profile_btn.setEnabled(has_profile)
         self.unprofile_btn.setEnabled(has_profile)
@@ -1293,7 +1310,22 @@ class HubWindow(QMainWindow):
             self.bridge_log_btn.setText(
                 "Open MO2 bridge log" if r.get("handler") == "skyrim-vr"
                 else hub.game_bridge_log_label(r))
+        self._sync_install_tools()
         self.update_live_status()
+
+    def _sync_install_tools(self):
+        """Only meaningful actions are exposed; no empty disclosure."""
+        r = self.downloads.recipe or {}
+        supports_inspect = r.get("method") in {"gameroot", "bepinex", "ervr"}
+        self.inspect_btn.setVisible(supports_inspect and self.downloads.inspect.isHidden())
+        controls = (self.downloads.manual_review_button, self.downloads.download_button,
+                    self.verify_btn, self.inspect_btn, self.downloads.inspect,
+                    self.kharvox_folder_btn, self.doom_prepare_btn, self.doom_import_btn)
+        available = any(not b.isHidden() for b in controls)
+        if not available:
+            self.install_tools_toggle.setChecked(False)
+        self.install_tools_toggle.setVisible(available)
+        self.install_tools_panel.setVisible(available and self.install_tools_toggle.isChecked())
 
     def _update_game_tab_icon_colors(self, selected: int) -> None:
         """Selected navigation icon is dark on banana-yellow; others stay muted."""

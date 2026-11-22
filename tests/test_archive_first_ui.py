@@ -71,7 +71,7 @@ class ArchiveChecklistTests(unittest.TestCase):
             self.assertFalse(cell.icon().isNull())
             self.assertIn("not permission",cell.toolTip())
         self.assertEqual(self.page.install_review_button.text(),
-                         f"Review {len(recipe['packages'])} verified archives")
+                         "Install verified dependencies")
         requests = []
         self.page.install_review_requested.connect(requests.append)
         self.page.install_review_button.click()
@@ -128,6 +128,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.page.set_recipe(recipe)
         events = []
         self.page.install_review_requested.connect(events.append)
+        self.assertEqual(self.page.install_review_button.text(), "Choose archive")
         with mock.patch.object(self.page, "_choose_archive_candidate", return_value=None) as chooser:
             self.page.install_review_button.click()
         chooser.assert_called_once()
@@ -154,7 +155,9 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.page.install_review_requested.connect(events.append)
         self.page.install_review_button.click()
         self.assertFalse(events)
-        self.assertIn("Complete the verified archive set", self.page.folder_action_feedback.text())
+        self.assertTrue(self.page.install_review_button.isHidden())
+        self.assertTrue(self.page.scan.isEnabled())
+        self.assertIn("Missing or stale", self.page.guidance.text())
 
     def test_guide_only_and_switching_game_clear_previous_profile_intent(self):
         self._scan_fixture("fatekeeper", ("SLASHER-Win64-Shipping.zip",))
@@ -263,7 +266,9 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.page.set_recipe(updated)
         self.assertEqual(self.page.table.item(0,3).text(), "Not checked")
         self.assertIn("Rescan required",self.page.scan_age.text())
-        self.assertEqual(self.page.install_review_button.text(), "Review installation")
+        self.assertEqual(self.page.install_review_button.text(), "Scan local archives")
+        self.assertTrue(self.page.install_review_button.isHidden())
+        self.assertTrue(self.page.manual_review_button.isHidden())
         self.assertEqual((self.root / "scans.json").read_bytes(),before)
 
     def test_filename_match_missing_and_changed_never_render_verified(self):

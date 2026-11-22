@@ -11,8 +11,8 @@ setup = [
   "Install protontricks, then launch Fatekeeper once from Steam (Proton on) so its Proton prefix exists.",
   "Download UEVR_FK.zip (VR mod / injector) and SLASHER-Win64-Shipping.zip (Fatekeeper VR profile) from their separate download links.",
   "Once only: install the .NET 6 Desktop Runtime into the game's prefix with: protontricks-launch --no-bwrap --appid 2186990 --no-background-wineserver <windowsdesktop-runtime-6.0.x-win-x64.exe>",
-  "In Install / Update > More installation tools, select UEVR_FK.zip with Install mod file.",
-  "Review SLASHER-Win64-Shipping.zip using the Hub profile workflow. Existing profile records require recovery review; live profile replacement remains gated.",
+  "In Install / Update, scan local archives and choose Review installation to review the injector and profile together.",
+  "Review the two exact prefix destinations and recovery warnings. Existing profile records require recovery review; live UEVR dependency installation and profile replacement remain gated.",
   "In the game's graphics settings, turn DLSS Frame Generation off.",
 ]
 

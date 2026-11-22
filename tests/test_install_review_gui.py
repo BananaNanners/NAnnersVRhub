@@ -170,7 +170,13 @@ class HubGuidedInstallTests(unittest.TestCase):
         self.window.downloads.install_review_requested.connect(events.append)
         with mock.patch.object(self.window, "_pick_many",
                                return_value=[]) as picker:
-            self.window.downloads.install_review_button.click()
+            self.assertTrue(self.window.downloads.install_review_button.isHidden())
+            self.window.tabs.setCurrentIndex(1)
+            self.window.game_details_tabs.setCurrentWidget(self.window.downloads)
+            self.window.install_tools_toggle.setChecked(True)
+            self.app.processEvents()
+            self.assertTrue(self.window.downloads.manual_review_button.isVisible())
+            self.window.downloads.manual_review_button.click()
         picker.assert_called_once()
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["game_id"], "valheim")

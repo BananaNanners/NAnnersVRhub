@@ -77,14 +77,18 @@ class QtVerifiedDownloadTests(unittest.TestCase):
         self.page.table.selectRow(0)
         self.app.processEvents()
         self.assertFalse(self.page.download_button.isEnabled())
+        self.assertTrue(self.page.download_button.isHidden())
+        self.assertTrue(self.page.download_status.isHidden())
         self.assertIn("No pinned SHA-256", self.page.download_status.text())
         self.assertTrue(self.page.table.cellWidget(0, 4).isEnabled())
 
     def test_valheim_pinned_github_row_enables_transfer(self):
         recipe, item = self.select_valheim()
         self.assertTrue(self.page.download_button.isEnabled())
+        self.assertTrue(self.page.download_button.isVisible())
         self.assertIn("SHA-256 verified", self.page.download_status.text())
         self.assertFalse(self.page.download_cancel.isEnabled())
+        self.assertTrue(self.page.download_cancel.isHidden())
 
     def test_game_switch_and_scan_never_start_network_transfer(self):
         with mock.patch("vrhub.downloads_gui.verified_download.download",
@@ -211,9 +215,16 @@ class QtVerifiedDownloadTests(unittest.TestCase):
                         side_effect=cancellable):
             self.page._start_verified_download(authorization)
             self.assertTrue(invoked.wait(2))
+            self.assertTrue(self.page.download_cancel.isVisible())
+            self.assertTrue(self.page.download_status.isVisible())
+            self.assertTrue(self.page.download_button.isHidden())
             self.page.cancel_download()
+            self.page._update_download_button()
             self.assertFalse(self.page.download_cancel.isEnabled())
+            self.assertTrue(self.page.download_cancel.isVisible())
             self.wait_transfer()
+        self.assertTrue(self.page.download_cancel.isHidden())
+        self.assertTrue(self.page.download_status.isVisible())
         self.assertIn("cancelled", self.page.download_status.text().lower())
         self.assertFalse(list(self.folder.iterdir()))
 

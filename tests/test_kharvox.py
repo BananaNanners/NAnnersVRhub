@@ -235,5 +235,6 @@ class KharvoxTests(unittest.TestCase):
                 window.table.selectRow(next(i for i in range(9) if 'Subnautica' in window.table.item(i,0).text()))
                 app.processEvents();self.assertTrue(window.kharvox_folder_btn.isHidden())
                 self.assertTrue(window.doom_prepare_btn.isHidden());self.assertTrue(window.doom_probe_btn.isHidden());self.assertTrue(window.doom_import_btn.isHidden())
-                self.assertFalse(window.install_btn.isHidden())
+                self.assertTrue(window.install_btn.isHidden())
+                self.assertFalse(window.install_tools_toggle.isHidden())
             finally:window.close();app.processEvents()

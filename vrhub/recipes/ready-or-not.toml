@@ -7,7 +7,7 @@ manual_download = true
 
 setup = [
   "Download the VRO zip from the mod page (a Nexus login is needed).",
-  "Click 'Install mod file…' and choose the zip.",
+  "Scan local archives, then choose Review installation for the detected VRO ZIP.",
   "Copy the launch options above into the game's Steam Properties > General.",
   "In that same screen, choose 'DirectX 11' in the launch option dropdown if it's offered; otherwise add -d3d11 to the launch options.",
   "In the game's controller settings, turn aim assist intensity off.",

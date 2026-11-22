@@ -9,7 +9,7 @@ mod_page = "https://github.com/Okabintaro/SubmersedVR/releases/tag/0.2.1"
 setup = [
   "Use Steam's default Subnautica branch, not legacy/experimental. Select your existing working Proton build, start the plain game once, then close it before installing mods.",
   "Download SubmersedVR_0.2.1.zip and Tobey.s.BepInEx.Pack.for.Subnautica.zip from the two pinned author release pages below. Do not choose Source code ZIPs, Below Zero files, or a generic BepInEx build.",
-  "Click Install mod file… and select BOTH downloaded ZIPs together. The Hub checks their release hashes, installs the complete Windows payloads and controller bindings, and backs up overwritten files outside the game directory. It does not bundle the mods.",
+  "Scan local archives and choose Install verified dependencies when BOTH pinned ZIPs are verified. This opens the safety review. The Hub checks their release hashes, installs the complete Windows payloads and controller bindings, and backs up overwritten files outside the game directory. It does not bundle the mods.",
   "An already recorded Hub install must be removed before replacement. The older BepInEx/patchers/Tobey folder, when present, is backed up and retired during installation as recommended by the current loader release. Unrelated plugins are retained.",
   "Remove VR Enhancements or the older SN1MC/Motion Controls mod with their existing installer before using SubmersedVR. The Hub recognizes VREnhancements.dll/SN1MC.dll, but does not detect every possible conflict.",
   "Use xrizer as the host OpenVR adapter with WiVRn. Copy the Hub launch options into Steam Properties -> General. Review the winhttp override, runtime import and WiVRn comp_ipc exposure there; the Hub does not edit Steam settings.",

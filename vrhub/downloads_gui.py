@@ -119,6 +119,7 @@ class GuidedDownloadsPage(QWidget):
     install_review_requested = Signal(object)
     scan_idle = Signal()
     download_idle = Signal()
+    advanced_availability_changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -133,6 +134,7 @@ class GuidedDownloadsPage(QWidget):
         self._download_notice = None  # (game_id, result message, color)
         self._rescan_after_download = False
         self._saved_error = None
+        self._download_cancelling = False
         try:
             self._saved = archive_scans.load_saved()
         except (ValueError, OSError) as exc:
@@ -148,10 +150,8 @@ class GuidedDownloadsPage(QWidget):
         outer.addWidget(title)
 
         explanation = QLabel(
-            "Scan downloaded archives for this game. A green check means a "
-            "recipe-pinned SHA-256 matched; yellow means review required, "
-            "including official release matches. Red means blocked. Scanning is read-only. "
-            "Drag column dividers to resize or double-click to fit text.")
+            "Green: pinned SHA-256 verified. Yellow: review required. Red: blocked. "
+            "Scanning never installs files.")
         explanation.setObjectName("downloadsExplanation")
         explanation.setWordWrap(True)
         outer.addWidget(explanation)
@@ -284,7 +284,10 @@ class GuidedDownloadsPage(QWidget):
             header.moveSection(header.visualIndex(logical), visual)
         outer.addWidget(self.table, 1)
 
-        footer = QHBoxLayout()
+        self.review_actions = QWidget(self)
+        self.review_footer = QHBoxLayout(self.review_actions)
+        self.review_footer.setContentsMargins(0, 0, 0, 0)
+        footer = self.review_footer
         self.inspect = QPushButton("Inspect selected archive")
         self.inspect.setObjectName("downloadsAction")
         self.inspect.setToolTip(
@@ -294,15 +297,23 @@ class GuidedDownloadsPage(QWidget):
         self.inspect.clicked.connect(self._inspect)
         footer.addWidget(self.inspect)
         self.install_review_button = QPushButton("Review installation")
-        self.install_review_button.setObjectName("downloadsAction")
+        self.install_review_button.setObjectName("primaryAction")
         self.install_review_button.setToolTip(
             "Review selected archives and backup policy.\n"
             "The Hub checks every destination internally.\n"
             "Nothing changes without confirmation.")
         self.install_review_button.clicked.connect(self._request_install_review)
-        footer.addWidget(self.install_review_button)
+        self.manual_review_button = QPushButton("Choose archives manually…")
+        self.manual_review_button.setObjectName("downloadsAction")
+        self.manual_review_button.setToolTip(
+            "Explicit fallback when archives need manual selection. "
+            "Opens the existing safety review; never installs directly.")
+        self.manual_review_button.clicked.connect(self._request_manual_review)
+        self.manual_review_button.hide()
+        footer.addWidget(self.manual_review_button)
         footer.addStretch()
-        outer.addLayout(footer)
+        footer.addWidget(self.install_review_button)
+        outer.addWidget(self.review_actions)
 
         transfer_actions = QHBoxLayout()
         transfer_actions.setSpacing(8)
@@ -317,6 +328,7 @@ class GuidedDownloadsPage(QWidget):
         self.download_cancel = QPushButton("Cancel download")
         self.download_cancel.setObjectName("downloadsAction")
         self.download_cancel.setEnabled(False)
+        self.download_cancel.hide()
         self.download_cancel.setToolTip(
             "Cancel the active transfer.\n"
             "Any unfinished temporary file is removed.")
@@ -335,6 +347,7 @@ class GuidedDownloadsPage(QWidget):
         self.download_status.setWordWrap(True)
         self.download_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
         outer.addWidget(self.download_status)
+        self.download_status.hide()
 
         self.download_button.clicked.connect(self._request_download)
         self.download_cancel.clicked.connect(self.cancel_download)
@@ -345,7 +358,7 @@ class GuidedDownloadsPage(QWidget):
             "The existing Setup guide remains the source for installation order.")
         self.guidance.setObjectName("downloadsExplanation")
         self.guidance.setWordWrap(True)
-        outer.addWidget(self.guidance)
+        outer.insertWidget(outer.indexOf(self.review_actions), self.guidance)
         self.table.itemSelectionChanged.connect(self._update_inspect_button)
         self.table.itemSelectionChanged.connect(self._update_review_action)
         self.set_recipe(None)
@@ -397,8 +410,9 @@ class GuidedDownloadsPage(QWidget):
                 "Saved scan history needs review; original data was preserved.")
         else:
             self.saved_scan_count.setText(
-                f"Saved archive scans: {len(self._saved)} game profiles · "
-                "Historical results retained across Hub updates.")
+                f"Saved archive scans: {len(self._saved)} game profiles")
+        self.saved_scan_count.setToolTip(
+            "Historical results retained across Hub updates. A saved scan is not fresh verification.")
         rid = recipe.get("id") if recipe else None
         self._show_backup_safety(recipe)
         error = None
@@ -508,8 +522,7 @@ class GuidedDownloadsPage(QWidget):
         scanned = datetime.fromisoformat(record["scanned_at"]).astimezone()
         self.scan_age.setText(
             f"Saved scan: {scanned:%Y-%m-%d %H:%M} (local time) · "
-            "Historical snapshot, not a fresh verification. "
-            "Rescan when archives are added, removed or updated.")
+            "Historical snapshot; rescan after archive changes.")
 
     def _invalidate_changed_locations(self):
         try:
@@ -523,6 +536,7 @@ class GuidedDownloadsPage(QWidget):
             self._saved.pop(rid, None)
 
     def _display_unsanned(self, recipe, error):
+        self.summary.setToolTip("")
         self._set_rows([
             {**c, "phase_label": ("Later: install after first flat launch"
                                    if c["phase"] > 1 else "Stage 1: prerequisites"),
@@ -609,6 +623,8 @@ class GuidedDownloadsPage(QWidget):
         except (ValueError, RuntimeError, OSError) as exc:
             self.summary.setText(f"Cannot scan folder: {exc}")
             return
+        self._folder_feedback("")
+        self.summary.setToolTip("")
         self.progress.show()
         self.summary.setText("Scanning local archives and checking any pinned release hashes…")
         for btn in (self.set_global, self.set_game, self.clear_game,
@@ -621,6 +637,8 @@ class GuidedDownloadsPage(QWidget):
         worker.failed.connect(lambda message, token=worker: self._failed(message, token))
         worker.finished.connect(lambda token=worker: self._finished(token))
         worker.start()
+        self._update_review_action()
+        self._update_download_button()
 
     def _completed(self, result, worker):
         if self.worker is not worker:
@@ -641,6 +659,7 @@ class GuidedDownloadsPage(QWidget):
                 self._show_plan(result)
                 self.scan_age.setText(
                     f"Scan completed but could not be saved: {exc}")
+                self._folder_feedback(f"Scan completed but could not be saved: {exc}")
             return
         self._saved[worker.recipe["id"]] = rec
         self._saved_error = None
@@ -653,6 +672,7 @@ class GuidedDownloadsPage(QWidget):
     def _failed(self, message, worker):
         if self.worker is worker:
             self.summary.setText(f"Could not scan archive folder: {message}")
+            self._folder_feedback(f"Could not scan archive folder: {message}")
 
     def _finished(self, worker):
         if self.worker is not worker:
@@ -671,14 +691,23 @@ class GuidedDownloadsPage(QWidget):
             and not row.get("candidate_incomplete")
             and bool((row.get("candidates") or [{}])[0].get("tags"))
             for row in plan["rows"])
-        self.summary.setText(
-            f'{len(plan["rows"])} dependencies · {plan["scanned"]} archives found in folder · {plan["verified"]} pinned hashes verified '
-            + (f'· {official} official release matches — review required ' if official else "")
-            + f'· {plan["possible"] - official} possible matches needing review '
-            f'· {plan["mismatch"]} mismatched (BLOCKED) '
-            f'· {plan["unverified"]} unchecked (BLOCKED) · {plan["missing"]} missing'
-            + (f' · {changed} changed — rescan required' if changed else "")
-            + (f' — {plan["warning"]}' if plan.get("warning") else ""))
+        counts = (
+            (plan["verified"], "pinned hashes verified"),
+            (official, "official release matches — review required"),
+            (plan["possible"] - official, "possible matches needing review"),
+            (plan["mismatch"], "mismatched (BLOCKED)"),
+            (plan["unverified"], "unchecked (BLOCKED)"),
+            (plan["missing"], "missing"),
+            (changed, "changed — rescan required"),
+        )
+        heading = f'{len(plan["rows"])} dependencies · {plan["scanned"]} archives found in folder'
+        details = [f"{count} {label}" for count, label in counts]
+        current = [f"{count} {label}" for count, label in counts if count]
+        if plan.get("warning"):
+            current.append(str(plan["warning"]))
+            details.append(str(plan["warning"]))
+        self.summary.setText(" · ".join([heading, *current]))
+        self.summary.setToolTip(" · ".join([heading, *details]))
         self._update_workflow_guidance()
 
     def _set_rows(self, records):
@@ -697,7 +726,9 @@ class GuidedDownloadsPage(QWidget):
             if status == "Possible archive — inspect first":
                 if record.get("candidate_incomplete"):
                     label = "Rescan required — incomplete candidates"
-                elif record.get("ambiguous") or (record.get("matches", 0) > 1 and "candidates" not in record):
+                elif self._needs_rescan(record):
+                    label = "Rescan required — older candidate evidence"
+                elif record.get("ambiguous"):
                     label = "Choose archive"
                 elif selected.get("tags"):
                     version = record.get("release_expected") if selected.get("expected") else selected["tags"][0]
@@ -779,7 +810,7 @@ class GuidedDownloadsPage(QWidget):
                         for r in rows)
                 and len({r["file"] for r in rows}) == len(rows)
                 and {r["id"] for r in rows} == {c["id"] for c in components}):
-            return "mod", f"Review {len(rows)} verified archives"
+            return "mod", "Install verified dependencies"
         return "mod", "Review installation"
 
     def _has_uevr_pair(self):
@@ -788,6 +819,118 @@ class GuidedDownloadsPage(QWidget):
         return ((self.recipe or {}).get("id") in SUPPORTED
                 and len(rows) == 2 and [r.get("id") for r in rows] == ["uevr", "profile"]
                 and all(r.get("file") for r in rows))
+
+    @staticmethod
+    def _needs_rescan(row):
+        return (row.get("status") == "Archive changed — rescan required"
+                or row.get("candidate_incomplete")
+                or (row.get("matches", 0) > 1 and not row.get("sha256")
+                    and "candidates" not in row))
+
+    @staticmethod
+    def _verification_blocked(row):
+        return row.get("status") in (
+            "Hash mismatch — do not install", "Hash not verified — do not install")
+
+    def _primary_action(self):
+        """Presentation only. The existing review dispatcher still revalidates."""
+        recipe = self.recipe or {}
+        method = recipe.get("method", "file")
+        rows = (self._last_plan or {}).get("rows", [])
+        row = self._selected_row_record()
+        route, label = self._review_action()
+        if not recipe:
+            return "idle", "Review installation"
+        if method == "guide":
+            return route, label
+        if not rows:
+            return "scan", "Scan local archives"
+        # A complete pinned set and the UEVR pair are batch workflows;
+        # an invalid dependency must not be bypassed with a different selection.
+        batch = method in ("bepinex", "ervr", "uevr")
+        relevant = rows if batch or not row else [row]
+        if any(self._verification_blocked(r) for r in relevant):
+            return "blocked", "Installation blocked"
+        if any(self._needs_rescan(r) for r in relevant):
+            return "scan", "Scan local archives"
+        if method in ("bepinex", "ervr"):
+            if label != "Install verified dependencies":
+                return "scan", "Scan local archives"
+            return route, label
+        if method == "uevr":
+            if route == "uevr-pair":
+                return route, "Choose archive" if any(r.get("ambiguous") for r in rows) else label
+            if route == "profile":
+                if not row.get("file"):
+                    return "scan", "Scan local archives"
+                return route, "Choose archive" if row.get("ambiguous") else label
+            if not row:
+                profile = next((r for r in rows if r.get("id") == "profile" and r.get("file")), None)
+                if profile:
+                    return "profile", "Choose archive" if profile.get("ambiguous") else "Review profile"
+            if not any(r.get("file") for r in rows):
+                return "scan", "Scan local archives"
+            return route, label
+        if route == "mod":
+            if row:
+                if not row.get("file"):
+                    return "scan", "Scan local archives"
+                return route, "Choose archive" if row.get("ambiguous") else label
+            available = [r for r in rows if r.get("file")]
+            if not available:
+                return "scan", "Scan local archives"
+            if len(available) == 1:
+                return route, "Choose archive" if available[0].get("ambiguous") else label
+            return "select", "Select dependency"
+        return route, label
+
+    def _manual_review_route(self):
+        """One deliberate fallback; never offered for stale/blocked evidence."""
+        recipe = self.recipe or {}
+        method = recipe.get("method", "file")
+        rows = (self._last_plan or {}).get("rows", [])
+        if (not recipe or self._saved_error or not self._last_folder
+                or (recipe.get("id") in self._saved and not rows)
+                or any(self._needs_rescan(r) or self._verification_blocked(r)
+                       for r in rows)):
+            return None
+        if method == "uevr":
+            if recipe.get("profile") and not any(r.get("id") == "profile" and r.get("file") for r in rows):
+                return "profile"
+            return None
+        if self._review_action()[0] != "mod":
+            return None
+        if not rows:
+            return "mod"
+        # Unpinned multi-package workflows retain deliberate manual batch
+        # selection, without making users pick a single detected archive twice.
+        if method == "gameroot" and sum(bool(r.get("file")) for r in rows) > 1:
+            return "mod"
+        if method not in ("bepinex", "ervr") and not any(r.get("file") for r in rows):
+            return "mod"
+        return None
+
+    def _request_manual_review(self):
+        if (not self.manual_review_button.isEnabled()
+                or self.manual_review_button.isHidden()
+                or self.worker is not None or self.download_worker is not None):
+            return
+        route = self._manual_review_route()
+        if route and self.recipe:
+            if self._last_plan:
+                try:
+                    fresh = self._fresh_review_rows()
+                    if fresh != self._last_plan.get("rows") or any(
+                            self._needs_rescan(row) or self._verification_blocked(row)
+                            for row in fresh):
+                        raise ValueError("Archive evidence changed or is blocked. Rescan before manual review.")
+                except (ValueError, RuntimeError, OSError) as exc:
+                    self._folder_feedback(str(exc))
+                    return
+            request = {"game_id": self.recipe["id"], "archives": [], "origin": "downloads-page"}
+            if route == "profile":
+                request["route"] = route
+            self.install_review_requested.emit(request)
 
     def _selected_row_record(self):
         rows = (self._last_plan or {}).get("rows", [])
@@ -798,9 +941,17 @@ class GuidedDownloadsPage(QWidget):
         if not self.recipe:
             return
         row = self._selected_row_record()
-        route, _ = self._review_action()
+        route, label = self._primary_action()
         plan = self._last_plan or {}
-        if route == "uevr-pair":
+        if route == "blocked":
+            message = "Archive verification blocked. Obtain the correct package from its source and rescan."
+        elif route == "scan":
+            message = "Scan the archive folder. Missing or stale dependencies must be checked before review."
+        elif route == "select":
+            message = "Select a dependency to review. For a manual batch, use More installation tools."
+        elif label == "Choose archive":
+            message = "Different archive candidates need your selection before review."
+        elif route == "uevr-pair":
             message = "Review both downloaded dependencies together. Existing injector/profile files and recovery needs are evaluated separately. No installation is authorized."
         elif route == "guide":
             message = "Follow this game's existing Setup Guide. Archive detection alone is not installation readiness."
@@ -824,24 +975,34 @@ class GuidedDownloadsPage(QWidget):
             message = "All required archives are pinned-hash verified. Continue to installation review."
         else:
             message = "Review archives as packages; the Hub checks internal files, destinations and backups. A release match does not establish compatibility."
+        if row.get("phase", 1) > 1 and "Stage 2" not in message:
+            message += " Stage 2 requires the game's first flat launch; the installation gate remains in place."
         if row.get("release_notice"):
             message += " " + row["release_notice"]
         self.guidance.setText(message)
 
     def _update_review_action(self):
-        route, label = self._review_action()
-        row = self._selected_row_record()
-        if route not in ("guide", "uevr-pair") and not row.get("sha256") and (
-                row.get("ambiguous") or (row.get("matches", 0) > 1 and "candidates" not in row)):
-            label = "Choose archive"
-        self.install_review_button.setText(label if self.recipe else "Review installation")
+        route, label = self._primary_action()
+        busy = self.worker is not None or self.download_worker is not None
+        # The existing top scan control is the primary action for scan states.
+        # Do not display a second identical button.
+        self.install_review_button.setVisible(route not in ("scan", "idle"))
+        self.install_review_button.setEnabled(not busy and route not in ("blocked", "select", "scan", "idle"))
+        self.install_review_button.setText(label)
+        manual = self._manual_review_route()
+        self.manual_review_button.setVisible(bool(manual))
+        self.manual_review_button.setEnabled(bool(manual) and not busy)
+        self.manual_review_button.setText("Choose profile manually…" if manual == "profile"
+                                          else "Choose archives manually…")
         self.install_review_button.setToolTip(
             "Open this game's existing manual setup instructions."
             if route == "guide" and self.recipe else
             "Review the selected profile ZIP, exact destination and full-directory backup. Nothing changes without confirmation."
             if route == "profile" else
-            "Review selected archives and backup policy. Nothing changes without confirmation.")
+            "Review selected archives and backup policy. Nothing changes without confirmation."
+            if route != "blocked" else "Verification blocked. Obtain the correct archive and rescan.")
         self._update_workflow_guidance()
+        self.advanced_availability_changed.emit()
 
     def _fresh_review_rows(self):
         """Recheck the persisted scan identity before reusing a selection."""
@@ -862,7 +1023,10 @@ class GuidedDownloadsPage(QWidget):
         row = self.table.currentRow()
         entry = self.table.item(row, 0) if row >= 0 else None
         path = entry.data(Qt.UserRole) if entry else None
-        self.inspect.setEnabled(bool(path and Path(path).is_file()))
+        supported = (self.recipe or {}).get("method") in {"gameroot", "bepinex", "ervr"}
+        self.inspect.setVisible(bool(supported and path))
+        self.inspect.setEnabled(bool(supported and path and Path(path).is_file()))
+        self.advanced_availability_changed.emit()
 
     def _inspect(self):
         row = self.table.currentRow()
@@ -896,7 +1060,17 @@ class GuidedDownloadsPage(QWidget):
         if not self.recipe or not self.install_review_button.isEnabled():
             return
         rid = self.recipe["id"]
-        route, _ = self._review_action()
+        route, _ = self._primary_action()
+        if route in ("blocked", "scan", "idle", "select"):
+            return
+        if route in ("profile", "mod") and self.table.currentRow() < 0:
+            rows = (self._last_plan or {}).get("rows", [])
+            if (self.recipe or {}).get("method") not in ("bepinex", "ervr"):
+                available = [i for i, row in enumerate(rows)
+                             if row.get("file") and (route != "profile" or row.get("id") == "profile")]
+                if len(available) != 1:
+                    return
+                self.table.selectRow(available[0])
         request = {"game_id": rid, "archives": [], "origin": "downloads-page"}
         if route == "guide":
             self.install_review_requested.emit(dict(request, route="guide"))
@@ -1007,9 +1181,8 @@ class GuidedDownloadsPage(QWidget):
     def _update_download_button(self):
         if not hasattr(self, "download_button"):
             return
-        active = bool(
-            (self.download_worker and self.download_worker.isRunning()) or
-            (self.worker and self.worker.isRunning()))
+        transferring = self.download_worker is not None
+        active = transferring or self.worker is not None
         component, status = self._selected_component()
         eligible, reason = (
             verified_download.source_support(self.recipe, component)
@@ -1018,16 +1191,22 @@ class GuidedDownloadsPage(QWidget):
             self.allow_transfers and eligible and not active
             and status != "Pinned SHA-256 verified")
         self.download_button.setEnabled(can_download)
-        self.download_cancel.setEnabled(
-            bool(self.download_worker and self.download_worker.isRunning()))
-        if active:
+        self.download_button.setVisible(bool(eligible and not active
+                                             and status != "Pinned SHA-256 verified"))
+        self.download_cancel.setVisible(transferring)
+        self.download_cancel.setEnabled(transferring and not self._download_cancelling)
+        self.advanced_availability_changed.emit()
+        if transferring:
+            self.download_status.show()
             return  # never replace transfer progress with row-selection hints
         if (self._download_notice and self.recipe
                 and self._download_notice[0] == self.recipe["id"]):
             _, message, color = self._download_notice
             self.download_status.setText(message)
             self.download_status.setStyleSheet(f"color: {color};")
+            self.download_status.show()
             return
+        self.download_status.hide()
         self.download_status.setStyleSheet("")
         if component and status == "Pinned SHA-256 verified":
             self.download_status.setText(
@@ -1087,13 +1266,17 @@ class GuidedDownloadsPage(QWidget):
             return
         self._rescan_after_download = False
         self._download_notice = None
+        self._download_cancelling = False
         self.download_status.setStyleSheet("")
+        self.download_status.show()
         self.download_progress.setRange(0, 0)
         self.download_progress.show()
         self.download_status.setText(
             f"Downloading and SHA-256 verifying {authority.label}. "
             "No mod files will be installed.")
         self.download_button.setEnabled(False)
+        self.download_button.hide()
+        self.download_cancel.show()
         self.download_cancel.setEnabled(True)
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan, self.install_review_button):
@@ -1116,6 +1299,8 @@ class GuidedDownloadsPage(QWidget):
         worker.finished.connect(
             lambda token=worker: self._download_finished(token))
         worker.start()
+        self._update_review_action()
+        self._update_download_button()
 
     def _download_progress(self, current, total, worker):
         if worker is not self.download_worker:
@@ -1173,6 +1358,8 @@ class GuidedDownloadsPage(QWidget):
         self._rescan_after_download = False
         self.download_progress.hide()
         self.download_cancel.setEnabled(False)
+        self.download_cancel.hide()
+        self._download_cancelling = False
         self.download_worker = None
         worker.deleteLater()
         self.set_recipe(self.recipe)
@@ -1185,6 +1372,7 @@ class GuidedDownloadsPage(QWidget):
     def cancel_download(self):
         if self.download_worker and self.download_worker.isRunning():
             self.download_worker.cancel()
+            self._download_cancelling = True
             self.download_cancel.setEnabled(False)
             self.download_status.setText(
                 "Cancelling the transfer. Unfinished data will be discarded.")
