@@ -79,6 +79,94 @@ class ArchiveChecklistTests(unittest.TestCase):
             row["file"] for row in record["plan"]["rows"]], "origin": "downloads-page"}])
         self.assertEqual((self.root / "scans.json").read_bytes(),before)
 
+    def _scan_fixture(self, rid, names):
+        recipe = hub.load_recipes()[rid]
+        for name in names:
+            (self.folder / name).write_bytes(b"fixture archive")
+        record = archive_scans.persist(planner.build_plan(recipe, self.folder))
+        self.page._saved[rid] = record
+        self.page.set_recipe(recipe)
+        return recipe, record
+
+    def test_uevr_profile_and_injector_route_without_extra_picker(self):
+        for rid, names in (
+            ("fatekeeper", ("UEVR_FK.zip", "SLASHER-Win64-Shipping.zip")),
+            ("hogwarts-legacy", ("UEVR.zip", "HogwartsLegacy.zip")),
+        ):
+            with self.subTest(game=rid):
+                recipe, record = self._scan_fixture(rid, names)
+                events = []
+                self.page.install_review_requested.connect(events.append)
+                try:
+                    self.page.table.selectRow(1)
+                    self.assertEqual(self.page.install_review_button.text(), "Review profile")
+                    self.page.install_review_button.click()
+                    self.assertEqual(events[-1], {
+                        "game_id": rid, "route": "profile",
+                        "archives": [record["plan"]["rows"][1]["file"]],
+                        "origin": "downloads-page"})
+                    self.assertTrue(events[-1]["archives"][0])
+                    self.page.table.selectRow(0)
+                    self.assertEqual(self.page.install_review_button.text(), "Open Setup Guide")
+                    self.page.install_review_button.click()
+                    self.assertEqual(events[-1]["route"], "guide")
+                    self.assertEqual(events[-1]["archives"], [])
+                finally:
+                    self.page.install_review_requested.disconnect(events.append)
+                for name in names:
+                    (self.folder / name).unlink()
+
+    def test_changed_profile_does_not_emit_review_or_fallback(self):
+        _, record = self._scan_fixture("fatekeeper", ("SLASHER-Win64-Shipping.zip",))
+        self.page.table.selectRow(1)
+        path = Path(record["plan"]["rows"][1]["file"])
+        path.write_bytes(b"different contents and size")
+        events = []
+        self.page.install_review_requested.connect(events.append)
+        self.page.install_review_button.click()
+        self.assertFalse(events)
+        self.assertIn("blocked", self.page.folder_action_feedback.text())
+
+    def test_incomplete_pinned_set_does_not_emit_partial_batch(self):
+        recipe = self.pinned_recipe()
+        (self.folder / "loader.zip").unlink()
+        self.page._saved[recipe["id"]] = archive_scans.persist(
+            planner.build_plan(recipe, self.folder))
+        self.page.set_recipe(recipe)
+        events = []
+        self.page.install_review_requested.connect(events.append)
+        self.page.install_review_button.click()
+        self.assertFalse(events)
+        self.assertIn("Complete the verified archive set", self.page.folder_action_feedback.text())
+
+    def test_guide_only_and_switching_game_clear_previous_profile_intent(self):
+        self._scan_fixture("fatekeeper", ("SLASHER-Win64-Shipping.zip",))
+        self.page.table.selectRow(1)
+        events = []
+        self.page.install_review_requested.connect(events.append)
+        for rid in ("skyrim-vr-mgo", "doom-2016-gog"):
+            self.page.set_recipe(hub.load_recipes()[rid])
+            self.assertEqual(self.page.install_review_button.text(), "Open Setup Guide")
+            self.page.install_review_button.click()
+            self.assertEqual(events[-1]["game_id"], rid)
+            self.assertEqual(events[-1]["route"], "guide")
+            self.assertEqual(events[-1]["archives"], [])
+
+    def test_selected_unpinned_mod_routes_to_existing_review(self):
+        for rid, filename in (("cyberpunk-2077", "CET-107.zip"),
+                              ("ready-or-not", "VRO-6914.zip")):
+            _, record = self._scan_fixture(rid, (filename,))
+            self.page.table.selectRow(0)
+            events = []
+            self.page.install_review_requested.connect(events.append)
+            self.page._request_install_review()
+            request = events[-1]
+            self.assertEqual(request["game_id"], rid)
+            self.assertEqual(request["archives"], [record["plan"]["rows"][0]["file"]])
+            self.assertTrue(request["archives"][0])
+            self.assertNotIn("route", request)
+            self.page.install_review_requested.disconnect(events.append)
+
     def test_changed_recipe_pin_hides_historical_checks_without_rewriting_snapshot(self):
         recipe = self.pinned_recipe()
         record = archive_scans.persist(planner.build_plan(recipe,self.folder))

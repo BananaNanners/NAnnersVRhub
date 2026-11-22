@@ -195,6 +195,42 @@ class HubGuidedInstallTests(unittest.TestCase):
             self.window.install_profile()
         install.assert_not_called()
 
+    def test_profile_request_reuses_exact_path_and_never_installs(self):
+        self.window.sidebar.game_list.setCurrentRow(next(
+            i for i, row in enumerate(self.window.rows)
+            if row["recipe"]["id"] == "fatekeeper"))
+        path = self.root / "SLASHER-Win64-Shipping.zip"
+        with mock.patch.object(self.window, "_pick") as picker, mock.patch(
+                "vrhub.gui.hub.review_profile_install") as plan, mock.patch(
+                "vrhub.gui.ProfileReviewDialog") as dialog, mock.patch(
+                "vrhub.gui.hub.install_profile") as install:
+            # Even a faulty dialog reporting accepted cannot authorize writes.
+            dialog.return_value.exec.return_value = QDialog.Accepted
+            dialog.return_value.confirmed_by_user = True
+            self.window.review_requested_install({
+                "game_id": "fatekeeper", "route": "profile",
+                "archives": [str(path)], "origin": "downloads-page"})
+            picker.assert_not_called()
+            self.assertEqual(plan.call_args.args[1], path)
+            self.assertFalse(dialog.call_args.kwargs["allow_install"])
+            install.assert_not_called()
+
+    def test_wrong_game_or_wrong_route_cannot_review(self):
+        with mock.patch.object(self.window, "_pick") as picker, mock.patch.object(
+                self.window, "review_profile_archive") as profile:
+            for rid in ("fatekeeper", "valheim"):
+                self.window.review_requested_install({
+                    "game_id": rid, "route": "profile", "archives": ["wrong.zip"]})
+            picker.assert_not_called()
+            profile.assert_not_called()
+
+    def test_guide_route_navigates_without_picker(self):
+        with mock.patch.object(self.window, "_pick_many") as picker:
+            self.window.review_requested_install({
+                "game_id": "valheim", "route": "guide", "archives": []})
+            self.assertIs(self.window.game_details_tabs.currentWidget(), self.window.details)
+            picker.assert_not_called()
+
     def test_cancelling_dialog_never_invokes_install(self):
         with mock.patch("vrhub.gui.install_review.build_install_plan",
                         return_value=fixture_plan()), mock.patch(

@@ -1553,7 +1553,21 @@ class HubWindow(QMainWindow):
         r = self.current()
         if not r or request.get("game_id") != r["id"]:
             return
+        route = request.get("route", "mod")
         files = [Path(f) for f in request.get("archives", [])]
+        if route == "guide":
+            self.game_details_tabs.setCurrentWidget(self.details)
+            return
+        if route == "profile":
+            if r.get("method") != "uevr" or not r.get("profile") or len(files) > 1:
+                return
+            if files:
+                self.review_profile_archive(r, files[0])
+            else:
+                self.install_profile()
+            return
+        if route != "mod" or r.get("method") in ("uevr", "guide"):
+            return
         if not files:
             files = self._pick_many(f"Choose {r['name']} archive(s) to review")
         if files:
@@ -1600,23 +1614,21 @@ class HubWindow(QMainWindow):
         zip_file = self._pick("Review UEVR profile ZIP before replacing anything")
         if zip_file is None:
             return
+        self.review_profile_archive(recipe, zip_file)
+
+    def review_profile_archive(self, recipe, zip_file):
+        """Both checklist and manual picker share the read-only profile gate."""
+        current = self.current()
+        if not current or current["id"] != recipe["id"] or not current.get("profile"):
+            return
         try:
             plan = hub.review_profile_install(recipe, zip_file, _roots())
         except (RuntimeError, OSError, ValueError, zipfile.BadZipFile) as exc:
             QMessageBox.warning(self, "UEVR profile review blocked", str(exc))
             return
-        # Dev5C3 is a read-only milestone: live activation needs separate approval.
+        # Dev5C3 live profile replacement remains mechanically disabled.
         dialog = ProfileReviewDialog(plan, self, allow_install=False)
-        if dialog.exec() != QDialog.Accepted or not dialog.confirmed_by_user:
-            return
-        self._run(
-            lambda: hub.install_profile(
-                recipe, zip_file, _roots(),
-                approved_fingerprint=plan.fingerprint, confirmed=True),
-            "Verified UEVR profile installed",
-            lambda out: f"Installed {len(out)} reviewed files.\n"
-                        "Persistent original directory backup is retained.\n"
-                        "Restoring later requires full checksum validation.")
+        dialog.exec()
 
     def uninstall(self):
         r = self.current()

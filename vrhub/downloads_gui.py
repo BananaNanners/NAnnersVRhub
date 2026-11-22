@@ -345,6 +345,7 @@ class GuidedDownloadsPage(QWidget):
         self.guidance.setWordWrap(True)
         outer.addWidget(self.guidance)
         self.table.itemSelectionChanged.connect(self._update_inspect_button)
+        self.table.itemSelectionChanged.connect(self._update_review_action)
         self.set_recipe(None)
 
     def _sync_folder_actions(self):
@@ -676,6 +677,8 @@ class GuidedDownloadsPage(QWidget):
             "first run. A found or verified archive is not a VR readiness result.")
 
     def _set_rows(self, records):
+        self.table.clearSelection()
+        self.table.setCurrentCell(-1, -1)
         self.table.setRowCount(0)  # prevent stale QTableWidget link widgets
         self.table.setRowCount(len(records))
         for i, record in enumerate(records):
@@ -722,23 +725,58 @@ class GuidedDownloadsPage(QWidget):
             else:
                 self.table.setItem(i, 4, QTableWidgetItem("—"))
         self.columns.schedule_rows()
-        # Make the existing all-pinned-package route discoverable. This is
-        # display only: _request_install_review still passes paths to the
-        # original full manifest builder and revalidation gate.
-        components = planner.plan_components(self.recipe) if self.recipe else []
-        complete_pinned = (
-            bool(self.recipe and self.recipe.get("method") in ("bepinex", "ervr"))
-            and bool(components) and len(records) == len(components)
-            and all(c.get("sha256") for c in components)
-            and all(r.get("file") and r.get("status") == "Pinned SHA-256 verified"
-                    for r in records)
-            and len({r["file"] for r in records}) == len(records)
-            and {r.get("id") for r in records} == {c["id"] for c in components})
-        self.install_review_button.setText(
-            f"Review {len(records)} verified archives" if complete_pinned
-            else "Review installation")
+        self._update_review_action()
         self._update_inspect_button()
         self._update_download_button()
+
+    def _review_action(self):
+        """Resolve UI intent only; never grant install authority."""
+        recipe = self.recipe or {}
+        method = recipe.get("method", "file")
+        component, _ = self._selected_component()
+        if method == "uevr":
+            if recipe.get("profile") and component and component["id"] == "profile":
+                return "profile", "Review profile"
+            return "guide", "Open Setup Guide"
+        if method not in {"bepinex", "ervr", "gameroot"} and not (
+                recipe.get("files") and recipe["files"][0].get("kind") == "pak"):
+            return "guide", "Open Setup Guide"
+        rows = (self._last_plan or {}).get("rows", [])
+        components = planner.plan_components(recipe) if recipe else []
+        if (method in ("bepinex", "ervr") and components
+                and len(rows) == len(components)
+                and all(c.get("sha256") for c in components)
+                and all(r.get("file") and r.get("status") == "Pinned SHA-256 verified"
+                        for r in rows)
+                and len({r["file"] for r in rows}) == len(rows)
+                and {r["id"] for r in rows} == {c["id"] for c in components}):
+            return "mod", f"Review {len(rows)} verified archives"
+        return "mod", "Review installation"
+
+    def _update_review_action(self):
+        route, label = self._review_action()
+        self.install_review_button.setText(label if self.recipe else "Review installation")
+        self.install_review_button.setToolTip(
+            "Open this game's existing manual setup instructions."
+            if route == "guide" and self.recipe else
+            "Review the selected profile ZIP, exact destination and full-directory backup. Nothing changes without confirmation."
+            if route == "profile" else
+            "Review selected archives and backup policy. Nothing changes without confirmation.")
+
+    def _fresh_review_rows(self):
+        """Recheck the persisted scan identity before reusing a selection."""
+        if not self._last_plan:
+            return None
+        saved = self._saved.get(self.recipe["id"])
+        folder, _ = self._folder()
+        if not saved or not folder or saved["folder"] != str(folder):
+            raise ValueError("Scan local archives again before reusing this selection.")
+        keys = ("id", "sha256", "phase", "hint", "name", "url")
+        expected = [tuple(c.get(k) for k in keys)
+                    for c in planner.plan_components(self.recipe)]
+        if expected != [tuple(c.get(k) for k in keys) for c in saved["plan"]["rows"]]:
+            raise ValueError("Dependency requirements changed. Rescan local archives.")
+        return archive_scans.displayed_record(saved)["plan"]["rows"]
 
     def _update_inspect_button(self):
         row = self.table.currentRow()
@@ -755,28 +793,43 @@ class GuidedDownloadsPage(QWidget):
                 self.inspect_requested.emit(str(path))
 
     def _request_install_review(self):
-        """Emit only file selections. Parent must rebuild the exact manifest."""
+        """Route only current recipe selections to existing review handlers."""
         if not self.recipe or not self.install_review_button.isEnabled():
             return
         rid = self.recipe["id"]
-        paths = []
-        method = self.recipe.get("method")
-        if self._last_plan and self._last_plan.get("game_id") == rid:
-            records = self._last_plan["rows"]
-            if method in ("bepinex", "ervr"):
-                # An ordered set is required for pinned multi-package installs.
-                paths = [row["file"] for row in records
-                         if row.get("status") == "Pinned SHA-256 verified"
-                         and row.get("file") and Path(row["file"]).is_file()]
+        route, _ = self._review_action()
+        request = {"game_id": rid, "archives": [], "origin": "downloads-page"}
+        if route == "guide":
+            self.install_review_requested.emit(dict(request, route="guide"))
+            return
+        try:
+            rows = self._fresh_review_rows()
+        except (ValueError, RuntimeError, OSError) as exc:
+            self._folder_feedback(str(exc))
+            return
+        if rows is not None:
+            if self.recipe.get("method") in ("bepinex", "ervr"):
+                if (not rows or any(r.get("status") != "Pinned SHA-256 verified"
+                                    or not r.get("file") for r in rows)
+                        or len({r["file"] for r in rows}) != len(rows)):
+                    self._folder_feedback("Complete the verified archive set and rescan before review.")
+                    return
+                request["archives"] = [r["file"] for r in rows]
             else:
                 i = self.table.currentRow()
-                if 0 <= i < len(records):
-                    row = records[i]
-                    if (row.get("file") and Path(row["file"]).is_file()
-                            and row.get("status") != "Archive changed — rescan required"):
-                        paths = [row["file"]]
-        self.install_review_requested.emit({
-            "game_id": rid, "archives": paths, "origin": "downloads-page"})
+                if 0 <= i < len(rows):
+                    row = rows[i]
+                    if row.get("status") in (
+                            "Archive changed — rescan required",
+                            "Hash mismatch — do not install",
+                            "Hash not verified — do not install"):
+                        self._folder_feedback("Selected archive is blocked. Rescan or choose another archive.")
+                        return
+                    if row.get("file"):
+                        request["archives"] = [row["file"]]
+        if route == "profile":
+            request["route"] = "profile"
+        self.install_review_requested.emit(request)
 
     def _selected_component(self):
         """Resolve selection against the CURRENT recipe, not snapshot data."""
