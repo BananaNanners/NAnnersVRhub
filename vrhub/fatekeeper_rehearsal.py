@@ -107,16 +107,24 @@ def _stage_hub_records(fixture, recipe, payload):
 
 
 def rehearse_install(archives, verified_backend):
-    """Run the real staged payload and record rollback in an isolated fixture."""
-    records = {"other-game": {"files": ["untouched"]}}
-    with prepare(archives, {}, fetch_backend=lambda: verified_backend, hub_records=records) as (
-        fixture, plan, payload
-    ):
-        transaction.execute(fixture, plan)
-        for name, data in payload.items():
-            if transaction._read(fixture, "installed", name) != data:
-                raise RuntimeError("Installed fixture did not match the reviewed payload.")
-        transaction.rollback(fixture)
-        restored = transaction._read(fixture, "installed", "hub/state.json")
-        if json.loads(restored) != records or transaction._inventory(fixture) != plan.before:
-            raise RuntimeError("Fixture rollback did not restore the original Hub records.")
+    """Run the FK4 writer and recovery journal against an isolated prefix."""
+    from . import fatekeeper_commit
+    from .fatekeeper_install import PreparedInstall
+
+    payload = build_payload(archives, b"", fetch_backend=lambda: verified_backend)
+    with TemporaryDirectory(prefix="nanners-fk4-", dir="/tmp") as temp:
+        root = Path(temp)
+        prefix, injector, profile, state_path = fatekeeper_commit._roots(root)
+        prefix.mkdir()
+        records = {"other-game": {"files": ["untouched"]}}
+        hub._save_state(records, path=state_path)
+        before = state_path.read_bytes()
+        writes = {str(prefix / name): data for name, data in payload.items()}
+        plan = PreparedInstall(prefix, profile_safety._snapshot(injector),
+                               profile_safety._snapshot(profile), records, writes)
+        fatekeeper_commit.commit(root, plan)
+        if any(Path(name).read_bytes() != data for name, data in writes.items()):
+            raise RuntimeError("Installed files did not match the reviewed payload.")
+        fatekeeper_commit.recover(root)
+        if state_path.read_bytes() != before or injector.exists() or profile.exists():
+            raise RuntimeError("Rollback did not restore files and Hub records.")
