@@ -13,7 +13,7 @@ from .uevr_dependency_review import (
 )
 
 
-def _backend():
+def fetch_verified_backend():
     page = FATEKEEPER_BACKEND_URL.replace("/download/", "/tag/").rsplit("/", 1)[0]
     kind, name = verified_download._verified_request(page, FATEKEEPER_BACKEND_URL)
     if name != "UEVRBackend.dll":
@@ -21,11 +21,14 @@ def _backend():
     opener = urllib.request.build_opener(verified_download._NoRedirect(),
                                          urllib.request.ProxyHandler({}))
     with verified_download._open_release(FATEKEEPER_BACKEND_URL, kind, opener=opener) as asset:
-        return asset.read(FATEKEEPER_BACKEND_SIZE + 1)
+        data = asset.read(FATEKEEPER_BACKEND_SIZE + 1)
+    if len(data) != FATEKEEPER_BACKEND_SIZE or transaction._sha(data) != FATEKEEPER_BACKEND_SHA256:
+        raise RuntimeError("Fatekeeper backend verification failed.")
+    return data
 
 
 @contextmanager
-def prepare(archives, installed, *, fetch_backend=_backend):
+def prepare(archives, installed, *, fetch_backend=fetch_verified_backend):
     """Prepare a disposable transaction from two pinned archives and the patched backend."""
     recipe = hub.load_recipes()["fatekeeper"]
     with TemporaryDirectory(prefix="nanners-fatekeeper-stage-", dir="/tmp") as temp:

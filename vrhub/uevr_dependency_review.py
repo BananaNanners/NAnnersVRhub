@@ -57,6 +57,7 @@ class DependencyReview:
     release_tags: tuple[tuple[str, ...], tuple[str, ...]]
     blockers: tuple[str, ...]
     backend_status: str = ""
+    needs_backend_verification: bool = False
 
 
 def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
@@ -134,6 +135,7 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
             if entry.get("file") != str(paths[i]) or entry.get("identity") != identities[i] or entry.get("sha256") != sha:
                 raise RuntimeError("Archive scan evidence changed; rescan before review.")
             tags[i] = tuple(entry.get("tags", ()))
+    needs_backend_verification = False
     if pins:
         backend_status = (
             "Verified Nightly 1133 and Fatekeeper profile v1.0.4. "
@@ -141,6 +143,8 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
         )
         if snapshot["files"].get("UEVRBackend.dll", {}).get("sha256") == FATEKEEPER_BACKEND_SHA256:
             backend_status += " The installed backend already matches."
+        else:
+            needs_backend_verification = True
     blockers = list(profile.blocked)
     if snapshot["exists"] or recipe["id"] in hub.state():
         blockers.append("Existing injector directory or Hub record requires separate recovery review. No injector backup or replacement is authorized.")
@@ -148,4 +152,4 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
         blockers.append("Matching Hogwarts Legacy injector/profile release is not established. Do not mix release bundles without compatibility review.")
     return DependencyReview(recipe["name"], str(paths[0]), digest, str(dest), rels,
                             size, len(snapshot["files"]), len(snapshot["dirs"]),
-                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status)
+                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status, needs_backend_verification)

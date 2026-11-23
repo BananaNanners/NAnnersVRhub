@@ -1,9 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Read-only dialog; deliberately no mutation or confirmation callback."""
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QHBoxLayout
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QHBoxLayout
 from .archive_checklist_ui import archive_table
 from .install_review import human_file_size as size
+
+
+class BackendVerification(QThread):
+    result = Signal(bool)
+
+    def run(self):
+        from .fatekeeper_rehearsal import fetch_verified_backend
+        try:
+            fetch_verified_backend()
+        except (OSError, ValueError, RuntimeError):
+            self.result.emit(False)
+        else:
+            self.result.emit(True)
 
 
 class DependencyReviewDialog(QDialog):
@@ -46,7 +59,7 @@ class DependencyReviewDialog(QDialog):
             f"{plan.existing_files} files, {plan.existing_dirs} directories / {size(plan.existing_bytes)}"+chr(10)+
             f"Release evidence: {', '.join(plan.release_tags[0]) or 'Not established'}")
         if plan.backend_status:
-            label(plan.backend_status)
+            self.backend = label(plan.backend_status)
         self.profile = label(
             f"Profile destination: {plan.profile.destination}"+chr(10)+
             f"Archive: {plan.profile.profile_files} files / {size(plan.profile.profile_bytes)}; existing: "
@@ -81,3 +94,18 @@ class DependencyReviewDialog(QDialog):
         self.apply_button.setToolTip("Live UEVR dependency installation is not implemented or authorized.")
         buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
+
+        if plan.needs_backend_verification:
+            self.backend.setText(plan.backend_status + " Verifying the pinned backend release...")
+            worker = BackendVerification(QApplication.instance())
+            worker.result.connect(self.show_backend_result)
+            worker.finished.connect(worker.deleteLater)
+            worker.start()
+
+    def show_backend_result(self, verified):
+        if verified:
+            self.backend.setText(self.plan.backend_status + " Backend SHA-256 verified.")
+        else:
+            self.backend.setText(
+                "Backend verification failed. Check your connection and reopen Review installation. "
+                "No installation files were changed.")
