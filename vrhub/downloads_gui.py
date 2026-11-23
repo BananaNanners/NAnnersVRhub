@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -136,6 +136,11 @@ class PreUpdateSafetyWorker(QThread):
             result = preupdate_safety.review(
                 self.recipe, self.scan, self.state, self.decisions,
                 self.integrity, cancel=self.cancel_flag)
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+            # Pure, read-only adapter analysis, no executable handoff.
+            result["integration"] = update_integration.assess(
+                self.recipe, self.state, self.decisions, self.integrity, result)
             if self.cancel_flag.is_set():
                 raise installed_integrity.Cancelled()
         except installed_integrity.Cancelled:
@@ -1184,6 +1189,30 @@ class GuidedDownloadsPage(QWidget):
             if row["untracked_collisions"]:
                 lines.append("  Untracked/unsafe targets: " + ", ".join(row["untracked_collisions"]))
             lines.extend("  " + text for text in row["order"])
+        integration = result.get("integration")
+        if isinstance(integration, dict) and integration.get("game_id") == result["game_id"]:
+            lines.extend((
+                "",
+                "UPDATE ADAPTER CONTRACTS — PLANNING ONLY / NO LIVE EXECUTION",
+                f"{integration['drafts']} draft adapter(s); "
+                f"{integration['manual']} manual workflow(s). "
+                "Every live update remains blocked.",
+            ))
+            for contract in integration["contracts"]:
+                lines.append(
+                    f"  {contract['name']}: {contract['adapter_label']} · "
+                    f"{contract['contract_stage']}")
+                lines.append(
+                    f"    Existing ownership: "
+                    f"{'recorded' if contract['recorded_ownership'] else 'not verified'} · "
+                    f"installed integrity: "
+                    f"{'observed' if contract['integrity_observed'] else 'not verified'} · "
+                    f"future target map: "
+                    f"{contract['mapped_destinations'] if contract['mapped_destinations'] is not None else 'Unknown'}")
+                lines.append("    Next integration gaps: " + " | ".join(
+                    contract["blockers"][:2]))
+                lines.append("    Live adapter disabled; fresh backup, compatibility, "
+                             "runtime lock and rollback validation required.")
         self.safety_details.setPlainText(chr(10).join(lines))
         self.safety_details.show()
         self.comparison_panel.setMinimumHeight(490)
