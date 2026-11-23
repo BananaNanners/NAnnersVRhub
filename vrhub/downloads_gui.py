@@ -295,8 +295,8 @@ class GuidedDownloadsPage(QWidget):
         outer.addWidget(title)
 
         explanation = QLabel(
-            "Green: pinned SHA-256 verified. Yellow: review required. Red: blocked. "
-            "Scanning never installs files.")
+            "Find downloaded VR dependencies, then review what needs installing. "
+            "Scanning never changes game files.")
         explanation.setObjectName("downloadsExplanation")
         explanation.setWordWrap(True)
         outer.addWidget(explanation)
@@ -432,32 +432,37 @@ class GuidedDownloadsPage(QWidget):
             header.moveSection(header.visualIndex(logical), visual)
         outer.addWidget(self.table, 1)
 
-        # An optional, read-only evidence view. The main archive checklist
-        # remains unchanged and is never replaced with inferred versions.
-        self.comparison_toggle = QPushButton("Compare versions ▸")
+        # Deep diagnostics, not a second player-facing Updates workflow.
+        # Preserve the historical read-only provenance/safety widgets and
+        # their test hooks, but keep them in a collapsed technical disclosure.
+        self.comparison_toggle = QPushButton("Advanced diagnostics ▸")
         self.comparison_toggle.setObjectName("downloadsAction")
         self.comparison_toggle.setCheckable(True)
         self.comparison_toggle.setToolTip(
-            "Compare Hub installation records, locally scanned ZIPs and the last "
-            "separately refreshed online release metadata. Does not install or authorize anything.")
+            "Optional technical details about downloaded ZIPs, installed-file "
+            "evidence and preservation risks. For versions use the Updates tab. "
+            "Nothing is installed or changed here.")
         self.comparison_panel = QWidget(self)
         comparison_layout = QVBoxLayout(self.comparison_panel)
         comparison_layout.setContentsMargins(0, 0, 0, 0)
         comparison_layout.setSpacing(5)
         self.comparison_note = QLabel(
-            "Read-only planning: Installed uses Hub provenance; Downloaded uses local SHA evidence; "
-            "Latest uses the separate Updates check. Run Verify installed files when needed. "
-            "A readiness candidate is NOT permission to install or replace mods.")
+            "Technical archive evidence only. See Updates for installed and latest "
+            "versions. These records help diagnose unclear ZIPs, ownership and "
+            "preservation risks; they never authorize replacement.")
         self.comparison_note.setWordWrap(True)
         comparison_layout.addWidget(self.comparison_note)
         self.comparison_summary = QLabel()
         self.comparison_summary.setWordWrap(True)
         comparison_layout.addWidget(self.comparison_summary)
+        # Updates alone owns the visible installed/latest version comparison.
+        self.comparison_summary.hide()
         self.readiness_summary = QLabel(
-            "Update readiness: no installation authorized. Compare versions and verify installed files first.")
+            "Technical readiness evidence: no installation or update authorized.")
         self.readiness_summary.setObjectName("archiveReadinessSummary")
         self.readiness_summary.setWordWrap(True)
         comparison_layout.addWidget(self.readiness_summary)
+        self.readiness_summary.hide()
         self.comparison_table = QTableWidget(0, 5)
         self.comparison_table.setObjectName("archiveVersionComparisonTable")
         self.comparison_table.setHorizontalHeaderLabels(
@@ -475,6 +480,7 @@ class GuidedDownloadsPage(QWidget):
             (200, 170, 225, 140, 275),
             expand_weights=(2, 1, 2, 1, 3), min_row_height=55)
         comparison_layout.addWidget(self.comparison_table)
+        self.comparison_table.hide()
         self.safety_button = QPushButton("Review replacement safety (read-only)")
         self.safety_button.setObjectName("downloadsAction")
         self.safety_button.setToolTip(
@@ -499,7 +505,7 @@ class GuidedDownloadsPage(QWidget):
         # This page sits inside a scroll area. Explicitly reserve enough
         # vertical space when disclosure children appear; otherwise Qt may
         # compress the panel and overlap the evidence table and safety review.
-        self.comparison_panel.setMinimumHeight(300)
+        self.comparison_panel.setMinimumHeight(0)
         self.comparison_panel.hide()
         self._comparison_scroll_timer = QTimer(self)
         self._comparison_scroll_timer.setSingleShot(True)
@@ -608,6 +614,26 @@ class GuidedDownloadsPage(QWidget):
         self.guidance.setObjectName("downloadsExplanation")
         self.guidance.setWordWrap(True)
         outer.insertWidget(outer.indexOf(self.review_actions), self.guidance)
+        # Dev5D3-Y: move the ORIGINAL guarded primary action above the long
+        # dependency table. Do not add a duplicate button or a second route.
+        # The scan controls, backup warnings and next-step guidance now sit
+        # together before the scrollable technical checklist.
+        outer.removeWidget(self.review_actions)
+        outer.insertWidget(outer.indexOf(self.table), self.review_actions)
+        outer.removeWidget(self.guidance)
+        outer.insertWidget(outer.indexOf(self.table), self.guidance)
+        # Historical scan metadata is still visible, but should never push
+        # the action off a small screen before the archive checklist.
+        for scan_note in (self.scan_age, self.saved_scan_count):
+            outer.removeWidget(scan_note)
+            outer.insertWidget(outer.indexOf(self.table), scan_note)
+        # Deep diagnostics follow installed-file troubleshooting rather than
+        # splitting the scan -> review task with a second version table.
+        outer.removeWidget(self.comparison_toggle)
+        outer.removeWidget(self.comparison_panel)
+        anchor = outer.indexOf(self.integrity_details) + 1
+        outer.insertWidget(anchor, self.comparison_toggle)
+        outer.insertWidget(anchor + 1, self.comparison_panel)
         self.table.itemSelectionChanged.connect(self._update_inspect_button)
         self.table.itemSelectionChanged.connect(self._update_review_action)
         self.set_recipe(None)
@@ -1043,7 +1069,8 @@ class GuidedDownloadsPage(QWidget):
 
     def _toggle_comparison(self, open_):
         self.comparison_panel.setVisible(bool(open_))
-        self.comparison_toggle.setText("Compare versions ▾" if open_ else "Compare versions ▸")
+        self.comparison_toggle.setText(
+            "Hide advanced diagnostics ▴" if open_ else "Advanced diagnostics ▸")
         if open_:
             self._comparison_scroll_timer.start(0)
         else:
@@ -1055,7 +1082,7 @@ class GuidedDownloadsPage(QWidget):
         while widget is not None and not isinstance(widget, QScrollArea):
             widget = widget.parentWidget()
         if widget is not None and self.comparison_panel.isVisible():
-            widget.ensureWidgetVisible(self.comparison_table, 0, 24)
+            widget.ensureWidgetVisible(self.safety_button, 0, 24)
 
     def set_online_results(self, results):
         """Update from the separate Updates tab refresh; never fetch here."""
@@ -1141,7 +1168,7 @@ class GuidedDownloadsPage(QWidget):
         self.safety_summary.setText("Replacement safety: not reviewed.")
         self.safety_details.clear()
         self.safety_details.hide()
-        self.comparison_panel.setMinimumHeight(300)
+        self.comparison_panel.setMinimumHeight(0)
 
     def _scroll_to_safety(self):
         parent = self.parentWidget()
@@ -1516,7 +1543,7 @@ class GuidedDownloadsPage(QWidget):
                              "runtime lock and rollback validation required.")
         self.safety_details.setPlainText(chr(10).join(lines))
         self.safety_details.show()
-        self.comparison_panel.setMinimumHeight(490)
+        self.comparison_panel.setMinimumHeight(345)
         self.comparison_panel.updateGeometry()
         QTimer.singleShot(0, self._scroll_to_safety)
 
@@ -1528,7 +1555,7 @@ class GuidedDownloadsPage(QWidget):
                 "Replacement safety could not be checked. No installation authorized.")
             self.safety_details.setPlainText(error)
             self.safety_details.show()
-            self.comparison_panel.setMinimumHeight(490)
+            self.comparison_panel.setMinimumHeight(345)
             self.comparison_panel.updateGeometry()
             QTimer.singleShot(0, self._scroll_to_safety)
 
@@ -1538,7 +1565,7 @@ class GuidedDownloadsPage(QWidget):
             self._safety_result = None
             self.safety_summary.setText("Replacement safety review canceled; no changes made.")
             self.safety_details.hide()
-            self.comparison_panel.setMinimumHeight(300)
+            self.comparison_panel.setMinimumHeight(0)
 
     def _safety_finished(self, worker):
         if worker is not self.safety_worker:
@@ -1951,7 +1978,7 @@ class GuidedDownloadsPage(QWidget):
         elif route == "scan":
             message = "Scan the archive folder. Missing or stale dependencies must be checked before review."
         elif route == "select":
-            message = "Select a dependency to review. For a manual batch, use More installation tools."
+            message = "Select a dependency below, or choose multiple archives manually."
         elif label == "Choose archive":
             message = "Different archive candidates need your selection before review."
         elif route == "uevr-pair":
