@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -141,6 +141,11 @@ class PreUpdateSafetyWorker(QThread):
             # Pure, read-only adapter analysis, no executable handoff.
             result["integration"] = update_integration.assess(
                 self.recipe, self.state, self.decisions, self.integrity, result)
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+            # Consolidate review-only gates; never build an executable plan.
+            result["unified"] = unified_update_plan.assess(
+                self.recipe, result, result["integration"])
             if self.cancel_flag.is_set():
                 raise installed_integrity.Cancelled()
         except installed_integrity.Cancelled:
@@ -1169,6 +1174,24 @@ class GuidedDownloadsPage(QWidget):
             "Compatibility: " + result["compatibility"],
             "Recovery: " + result["recovery"],
         ]
+        unified = result.get("unified")
+        if (isinstance(unified, dict) and unified.get("game_id") == result["game_id"]
+                and unified.get("authorized") is False
+                and unified.get("live_executor_connected") is False):
+            lines.extend((
+                "",
+                "UNIFIED UPDATE PLAN — REVIEW ONLY / LIVE UPDATE DISABLED",
+                unified["summary"],
+                "Evidence reported below is not compatibility approval or update permission.",
+            ))
+            for item in unified["rows"]:
+                lines.append(
+                    f"  {item['name']}: {item['label']} · "
+                    f"{item['observed_count']}/{item['observed_total']} review signals observed")
+                lines.append("    Next: " + item["next_step"])
+            lines.append(
+                "  Hard live gates: fresh backup · runtime lock · real compatibility · "
+                "rollback validation · explicit approval · no live executor")
         for row in result["rows"]:
             lines.extend((
                 "",
