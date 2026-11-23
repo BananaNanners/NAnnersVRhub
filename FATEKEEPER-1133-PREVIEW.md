@@ -70,3 +70,15 @@ Disposable fresh install, repair, interruption, and rollback passed.
 Focused suite: 23 passed. Full suite: 1,507 passed, one skipped.
 The working Fatekeeper prefix has zero proposed writes and 115 preserved
 files. KDE acceptance pending. The live gate remains closed.
+
+## Dev5D3-FK6B - Gameplay Validation on the Existing Install
+
+2026-11-23 (Pacific): Player accepted the FK6A KDE preview at 0280b36,
+explicitly confirming preservation of SDK discovery metadata and the attachment
+configuration. FK6B read-only preflight rechecked the pinned archives and
+existing backend: Install 0 / Replace 0 / Preserve 115. The live-write gate
+was closed. No installation, repair, rollback, or Hub state write was run.
+
+Gameplay acceptance is pending for this run: LuaLoader, VR rendering, head
+tracking, stereo depth, and left and right Quest 3 input. Controller results
+are player-reported. Previous successful sessions are historical evidence.
