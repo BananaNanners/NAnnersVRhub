@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit, ownership_triage, preservation_decisions
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit, ownership_triage, preservation_decisions, update_manifest_preview
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -167,6 +167,12 @@ class PreUpdateSafetyWorker(QThread):
             # existing review displays recommendations only. No auto-adoption.
             result["preservation"] = preservation_decisions.assess(
                 self.recipe, result["triage"])
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+            # Only sampled read-only real mappings: NEVER an executable
+            # before/after plan. A complete manifest exists for fake fixtures.
+            result["manifest_preview"] = update_manifest_preview.preview_from_review(
+                self.recipe, result, result["preservation"])
             if self.cancel_flag.is_set():
                 raise installed_integrity.Cancelled()
         except installed_integrity.Cancelled:
@@ -1301,6 +1307,49 @@ class GuidedDownloadsPage(QWidget):
             lines.append(
                 "  LIVE UPDATE DISABLED: fresh complete backup · game lock · "
                 "real compatibility · recovery · separate approval · no executor.")
+        manifest = result.get("manifest_preview")
+        if (isinstance(manifest, dict) and manifest.get("game_id") == result["game_id"]
+                and manifest.get("evidence_level") == "real_readonly_samples"
+                and manifest.get("candidate_mapping_complete") is False
+                and manifest.get("live_update_authorized") is False
+                and manifest.get("executable_plan") is None):
+            lines.extend((
+                "",
+                "PRESERVATION-AWARE UPDATE MANIFEST PREVIEW — READ ONLY",
+                "BEFORE: recorded ownership counts only, NOT a verified current whole-tree snapshot.",
+                "AFTER: prospective destination SAMPLES only, NOT a complete target manifest.",
+                "A sample match is NOT proof of no overlap; real compatibility and live updating remain blocked.",
+            ))
+            kinds = {
+                "known_conflict": "Known ownership/destination conflict",
+                "preservation_review": "Modified-file preservation review required",
+                "mapping_incomplete": "Full future target mapping unavailable",
+                "sample_only": "Mapped destination sample only — NOT a safe-to-update result",
+                "manual_or_guide": "Manual setup; no automated manifest",
+            }
+            for item in manifest["rows"]:
+                old = item["current_managed_count"]
+                new = item["candidate_count"]
+                lines.append(
+                    f"  {item['name']}: {kinds.get(item['status'], 'Unverified')} · "
+                    f"before recorded: {old if old is not None else 'unknown'} · "
+                    f"candidate targets: {new if new is not None else 'unknown'}")
+                if item["preservation_review_count"]:
+                    lines.append(
+                        f"    {item['preservation_review_count']} changed-file "
+                        "preservation decision(s) need overlap review.")
+                if item["known_conflicts"]:
+                    lines.append(
+                        f"    {len(item['known_conflicts'])} conflict hint(s); "
+                        "manual inspection required.")
+                if item["sample_paths"]:
+                    lines.append(
+                        "    Sampled future paths (partial): " +
+                        ", ".join(item["sample_paths"][:3]))
+                lines.append("    Next: " + item["next_step"])
+            lines.append(
+                "  LIVE UPDATE DISABLED: no full real before/after data, "
+                "no fresh backup, no real recovery approval, no executor.")
         unified = result.get("unified")
         if (isinstance(unified, dict) and unified.get("game_id") == result["game_id"]
                 and unified.get("authorized") is False
