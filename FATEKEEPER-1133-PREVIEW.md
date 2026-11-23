@@ -82,3 +82,20 @@ was closed. No installation, repair, rollback, or Hub state write was run.
 Gameplay acceptance is pending for this run: LuaLoader, VR rendering, head
 tracking, stereo depth, and left and right Quest 3 input. Controller results
 are player-reported. Previous successful sessions are historical evidence.
+
+## Dev5D3-FK6B1 - Full Hub Preview Fidelity
+
+Player outcome: launch Fatekeeper or Hogwarts from the same Hub controls
+used for gameplay, and understand why an archive is blocked before changing
+any game files. The full KDE preview reuses private preview state while
+reading host Heroic metadata and passing host XDG paths to launch children.
+
+Verified discovery of both games, Hogwarts's existing Proton-CachyOS-latest
+runner and prefix, and launch-button dispatch with process starts mocked.
+A Fatekeeper checksum failure opens the existing blocked review with archive,
+pinned version and approved source. Focused: 52 passed. Full: 1,509 passed,
+one skipped. KDE player acceptance and actual launches are pending. Live mod
+installation, removal and recovery remain gated.
+
+Next: FK6B live gameplay validation on the unchanged Fatekeeper install,
+then FK7 sign-off and E1 controlled real-world update pilot.

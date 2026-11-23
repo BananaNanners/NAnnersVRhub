@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import launch_environment
+
 from . import heroic, heroic_epic
 
 
@@ -58,7 +60,7 @@ class GameHandler:
         # saved/default launch choice is respected.  Do not inject renderer or
         # other game-specific arguments here; Steam remains the source of truth.
         uri = f"steam://launch/{recipe['steam_appid']}/dialog"
-        return subprocess.Popen([steam, uri], start_new_session=True)
+        return subprocess.Popen([steam, uri], start_new_session=True, **launch_environment.subprocess_kwargs())
 
     def diagnostics(self, recipe: dict, game: Path | None) -> list[str]:
         return []
@@ -339,7 +341,7 @@ class SkyrimVRHandler(GameHandler):
         if not steam:
             raise RuntimeError("Steam command was not found in PATH.")
         uri = f"steam://rungameid/{shortcut['gameid']}"
-        return subprocess.Popen([steam, uri], start_new_session=True)
+        return subprocess.Popen([steam, uri], start_new_session=True, **launch_environment.subprocess_kwargs())
 
     @staticmethod
     def _steam_root_from_shortcut(shortcut: dict) -> Path | None:
@@ -727,7 +729,8 @@ class HeroicUEVRHandler(GameHandler):
 
     def launch_play(self, recipe, game):
         info = heroic_epic.context(recipe)
-        return subprocess.Popen(heroic_epic.command(info, play=True), start_new_session=True)
+        return subprocess.Popen(heroic_epic.command(info, play=True), start_new_session=True,
+                                **launch_environment.subprocess_kwargs())
 
     def preflight_rows(self, recipe, game):
         try:
@@ -950,7 +953,8 @@ class HeroicGOGHandler(GameHandler):
         exe = self._exe(recipe, game)
         if exe and not exe.is_file():
             raise RuntimeError(f"Configured game executable was not found: {exe}")
-        return subprocess.Popen(heroic.heroic_command(self._appid(recipe), "gog"), start_new_session=True)
+        return subprocess.Popen(heroic.heroic_command(self._appid(recipe), "gog"), start_new_session=True,
+                                **launch_environment.subprocess_kwargs())
 
     def launch(self, recipe: dict, game: Path | None) -> subprocess.Popen:
         """Launch KHARVOX experimentally using Heroic's prefix and Proton.

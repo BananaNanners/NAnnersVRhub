@@ -6,13 +6,15 @@ import os
 import re
 import shutil
 from pathlib import Path
+
+from . import launch_environment
 from urllib.parse import urlencode
 
 FLATPAK_ID = "com.heroicgameslauncher.hgl"
 
 
 def default_roots():
-    value = os.environ.get("XDG_CONFIG_HOME", "")
+    value = launch_environment.host_config_home()
     base = Path(value) if value and Path(value).is_absolute() else Path.home() / ".config"
     return list(dict.fromkeys(p.resolve() for p in [base / "heroic", Path.home() / f".var/app/{FLATPAK_ID}/config/heroic"]))
 

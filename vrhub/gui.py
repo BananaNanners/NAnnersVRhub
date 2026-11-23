@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QFile
                                QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget,
                                QScrollArea, QSizePolicy, QStyle)
 
+from . import launch_environment
 from . import __version__, app_updates, compatibility, heroic_epic, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates, game_saves
 from .handlers import get_handler
 from .cli import _roots
@@ -111,7 +112,8 @@ class HeroicInjectorDialog(QDialog):
 
     def open_heroic(self):
         try:
-            subprocess.Popen(heroic_epic.command(self.info, play=False), start_new_session=True)
+            subprocess.Popen(heroic_epic.command(self.info, play=False), start_new_session=True,
+                             **launch_environment.subprocess_kwargs())
         except (RuntimeError, OSError) as exc:
             QMessageBox.warning(self, "Open Heroic manually", str(exc))
 
@@ -1610,6 +1612,16 @@ class HubWindow(QMainWindow):
                 QMessageBox.warning(self, "KHARVOX review blocked (nothing changed)", str(exc))
                 return
             kharvox_archive_review.ReviewDialog(plan, self).exec()
+            return
+        if route == "uevr-hash-review":
+            from . import pinned_release_review
+
+            try:
+                plan = pinned_release_review.build_uevr_hash_review(r, request.get("rows"))
+            except (RuntimeError, OSError, ValueError) as exc:
+                QMessageBox.warning(self, "UEVR installation review", str(exc))
+                return
+            pinned_release_review.ReviewDialog(plan, self, checksum_failure=True).exec()
             return
         if route == "uevr-pair":
             from . import uevr_dependency_review

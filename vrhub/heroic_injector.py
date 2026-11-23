@@ -14,6 +14,8 @@ import subprocess
 import threading
 from pathlib import Path
 
+from . import launch_environment
+
 from . import heroic_epic
 
 _launches = {}
@@ -39,7 +41,7 @@ def plan(info, exe):
     if kind not in {"wine", "proton"} or not _executable(runner):
         raise RuntimeError("Heroic's selected Wine/Proton runner is unavailable on the host. Review it in Heroic or use Run EXE on prefix.")
     settings = info["settings"]
-    env = dict(os.environ)
+    env = launch_environment.child_environment()
     # A Hub launched from Steam/another game must not target its prefix or IDs.
     for key in list(env):
         if key.startswith("STEAM_COMPAT_") or key in {

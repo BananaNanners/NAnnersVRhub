@@ -18,6 +18,8 @@ import tomllib
 import zipfile
 from pathlib import Path
 
+from . import launch_environment
+
 from . import runtime, updates
 from .paths import guard_path
 from .handlers import get_handler
@@ -1204,4 +1206,4 @@ def launch_injector(recipe: dict, steam_roots=None):
         raise RuntimeError("protontricks-launch not found. Install protontricks "
                            "(e.g. `sudo pacman -S protontricks`, or `pipx install protontricks`).")
     return subprocess.Popen([tool, "--no-bwrap", "--appid", str(recipe["steam_appid"]),
-                             "--no-background-wineserver", str(exe)])
+                             "--no-background-wineserver", str(exe)], **launch_environment.subprocess_kwargs())

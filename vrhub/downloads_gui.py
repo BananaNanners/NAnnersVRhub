@@ -1866,6 +1866,10 @@ class GuidedDownloadsPage(QWidget):
         relevant = rows if batch or not row else [row]
         if method in ("bepinex", "ervr") and self._pin_review_set(rows):
             return "pinned-release-review", "Review installation"
+        if method == "uevr" and recipe.get("archive_pins") and any(
+                r.get("file") and r.get("sha256") and self._verification_blocked(r)
+                and not self._needs_rescan(r) for r in rows):
+            return "uevr-hash-review", "Review installation"
         if any(self._verification_blocked(r) for r in relevant):
             return "blocked", "Installation blocked"
         if any(self._needs_rescan(r) for r in relevant):
@@ -1975,6 +1979,8 @@ class GuidedDownloadsPage(QWidget):
                 message += f" Latest upstream archive: {latest}."
             if record.get("release_notice"):
                 message += " " + record["release_notice"]
+        elif route == "uevr-hash-review":
+            message = "Review the failed checksum and the required release. Installation is blocked."
         elif route == "blocked":
             message = "Archive verification blocked. Obtain the correct package from its source and rescan."
         elif route == "scan":
@@ -2100,6 +2106,16 @@ class GuidedDownloadsPage(QWidget):
             return
         if route == "kharvox-review":
             self._request_kharvox_review(rid)
+            return
+        if route == "uevr-hash-review":
+            try:
+                rows = self._fresh_review_rows()
+                if rows != self._last_plan["rows"]:
+                    raise ValueError("Archive evidence changed. Rescan before review.")
+            except (ValueError, RuntimeError, OSError) as exc:
+                self._folder_feedback(str(exc))
+                return
+            self.install_review_requested.emit({"game_id": rid, "route": route, "rows": rows})
             return
         if route == "pinned-release-review":
             try:

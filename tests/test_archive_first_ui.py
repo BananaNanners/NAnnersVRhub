@@ -61,6 +61,27 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertEqual(self.page.table.rowCount(), 15)
         self.assertIn("Later", self.page.table.item(14,1).text())
 
+    def test_fatekeeper_bad_pin_opens_blocked_installation_review(self):
+        from vrhub import pinned_release_review
+
+        recipe = hub.load_recipes()["fatekeeper"]
+        (self.folder / "uevr.zip").write_bytes(b"different injector")
+        record = archive_scans.persist(planner.build_plan(recipe, self.folder))
+        self.page._saved = {"fatekeeper": record}
+        self.page.set_recipe(recipe)
+        action, label = self.page._primary_action()
+        self.assertEqual((action, label), ("uevr-hash-review", "Review installation"))
+        self.assertTrue(self.page.install_review_button.isEnabled())
+        requests = []
+        self.page.install_review_requested.connect(requests.append)
+        self.page.install_review_button.click()
+        review = pinned_release_review.build_uevr_hash_review(recipe, requests[0]["rows"])
+        self.assertIn("nightly-01133", review[0][1])
+        self.assertIn("praydog/UEVR-nightly", review[0][3])
+        dialog = pinned_release_review.ReviewDialog(review, checksum_failure=True)
+        self.addCleanup(dialog.close)
+        self.assertFalse(dialog.apply_button.isEnabled())
+
     def test_pinned_check_marks_and_complete_existing_batch_request(self):
         recipe = self.pinned_recipe()
         record = archive_scans.persist(planner.build_plan(recipe,self.folder))
