@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -146,6 +146,14 @@ class PreUpdateSafetyWorker(QThread):
             # Consolidate review-only gates; never build an executable plan.
             result["unified"] = unified_update_plan.assess(
                 self.recipe, result, result["integration"])
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+            # Explicitly requested REAL directory metadata audit. Observe
+            # only recipe-discovered directories; do not hash current files,
+            # adopt legacy mods or create a live installation capability.
+            result["real_audit"] = real_readiness_audit.audit_game(
+                self.recipe, self.state, integrity=self.integrity,
+                safety=result, integration=result["integration"])
             if self.cancel_flag.is_set():
                 raise installed_integrity.Cancelled()
         except installed_integrity.Cancelled:
@@ -1174,6 +1182,41 @@ class GuidedDownloadsPage(QWidget):
             "Compatibility: " + result["compatibility"],
             "Recovery: " + result["recovery"],
         ]
+        audit = result.get("real_audit")
+        if (isinstance(audit, dict) and audit.get("game_id") == result["game_id"]
+                and audit.get("authorized") is False
+                and audit.get("real_installer_connected") is False):
+            location_names = {
+                "directory": "Located directory (identity not a file check)",
+                "missing": "Missing", "symlink": "Symlink — not trusted",
+                "not_directory": "Not a directory", "unresolved": "Not located",
+                "unavailable": "Cannot safely inspect",
+                "not_applicable": "Not applicable",
+            }
+            integrity_names = {
+                "verified_at_prior_check": "SHA matched at PRIOR on-demand check",
+                "needs_review_at_prior_check": "PRIOR SHA check needs review",
+                "unknown_at_prior_check": "PRIOR SHA check unknown",
+                "not_checked": "SHA not checked in this review",
+            }
+            lines.extend((
+                "",
+                "REAL INSTALLATION READINESS AUDIT — READ ONLY / LIVE UPDATE DISABLED",
+                audit["summary"],
+                "Game location: " + location_names.get(audit["game_location"], "Unknown"),
+                "Profile location: " + location_names.get(audit["profile_location"], "Unknown"),
+                "Retained originals: " + audit["retained_originals"].replace("_", " "),
+                "File hashes are NOT recalculated by this audit. Previous checks may be stale.",
+            ))
+            for item in audit["rows"]:
+                lines.append(
+                    f"  {item['name']}: {item['verdict'].replace('_', ' ')} · "
+                    f"Hub ownership: {'recorded' if item['root_bound_ownership'] else 'unverified'} · "
+                    f"{integrity_names.get(item['integrity'], 'Unknown')}")
+                lines.append("    Next: " + item["next_step"])
+            lines.append(
+                "  All live gates unresolved: fresh verified backup · game lock · "
+                "real compatibility · tested real recovery · separate approval · executor disabled")
         unified = result.get("unified")
         if (isinstance(unified, dict) and unified.get("game_id") == result["game_id"]
                 and unified.get("authorized") is False
