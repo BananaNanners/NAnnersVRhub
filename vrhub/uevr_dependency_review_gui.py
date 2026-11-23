@@ -45,6 +45,8 @@ class DependencyReviewDialog(QDialog):
             f"Archive: {len(plan.injector_files)} files / {size(plan.injector_bytes)}; existing: "
             f"{plan.existing_files} files, {plan.existing_dirs} directories / {size(plan.existing_bytes)}"+chr(10)+
             f"Release evidence: {', '.join(plan.release_tags[0]) or 'Not established'}")
+        if plan.backend_status:
+            label(plan.backend_status)
         self.profile = label(
             f"Profile destination: {plan.profile.destination}"+chr(10)+
             f"Archive: {plan.profile.profile_files} files / {size(plan.profile.profile_bytes)}; existing: "

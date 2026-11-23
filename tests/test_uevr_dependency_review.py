@@ -59,6 +59,39 @@ class DependencyReviewTests(unittest.TestCase):
         self.assertEqual((self.profile / "config.txt").read_bytes(), b"old")
         self.assertFalse((self.root / "isolated-state.json").exists())
 
+    def test_older_fatekeeper_backend_is_flagged(self):
+        plan = self.plan()
+        self.assertIn("needs the verified backend update", plan.backend_status)
+        dialog = DependencyReviewDialog(plan)
+        self.addCleanup(dialog.close)
+        self.assertFalse(dialog.apply_button.isEnabled())
+        self.assertFalse(self.dest.exists())
+
+    def test_verified_backend_is_recognized_and_can_be_staged(self):
+        from hashlib import sha256
+
+        asset = b"known-good backend"
+        with mock.patch.multiple(review, FATEKEEPER_BACKEND_SIZE=len(asset),
+                                 FATEKEEPER_BACKEND_SHA256=sha256(asset).hexdigest()):
+            self.write_zip(self.injector_zip, {"UEVRInjector.exe": b"exe", "UEVRBackend.dll": asset})
+            self.assertIn("matches the build", self.plan().backend_status)
+            stage = self.root / "stage"
+            stage.mkdir()
+            backend = stage / "UEVRBackend.dll"
+            backend.write_bytes(b"old")
+            with self.assertRaisesRegex(RuntimeError, "verification failed"):
+                review.stage_fatekeeper_backend(stage, b"x" * len(asset))
+            self.assertEqual(backend.read_bytes(), b"old")
+            self.assertEqual(review.stage_fatekeeper_backend(stage, asset), backend)
+            self.assertEqual(backend.read_bytes(), asset)
+            original_inode = backend.stat().st_ino
+            self.assertEqual(review.stage_fatekeeper_backend(stage, asset), backend)
+            self.assertEqual(backend.stat().st_ino, original_inode)
+            self.dest.mkdir(parents=True)
+            (self.dest / backend.name).write_bytes(asset)
+            self.assertIn("installed backend already matches", self.plan().backend_status)
+            self.assertEqual((self.dest / backend.name).read_bytes(), asset)
+
     def test_unsafe_injector_zip_and_missing_backend_rejected(self):
         for entries in ({"UEVRInjector.exe": b"exe"}, {"../escape": b"x"},
                         {"UEVRInjector.exe": b"exe", "UEVRBackend.dll": b"dll", "A": b"a", "A/file": b"b"}):

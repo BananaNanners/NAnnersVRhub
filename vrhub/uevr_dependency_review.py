@@ -1,12 +1,45 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Combined UEVR dependency review only. No extraction, backup or apply API."""
+"""Read-only UEVR dependency review and offline Fatekeeper backend staging."""
 from dataclasses import dataclass
+from hashlib import sha256
+from tempfile import NamedTemporaryFile
 from pathlib import Path
 import zipfile
 
 from . import hub, profile_safety, install_review, download_planner
 
 SUPPORTED = {"fatekeeper", "hogwarts-legacy"}
+
+FATEKEEPER_BACKEND_URL = (
+    "https://github.com/joeyhodge/UEVR/releases/download/"
+    "100526UE58_6RefreshUpdate/UEVRBackend.dll"
+)
+FATEKEEPER_BACKEND_SHA256 = "b883dd7f0b5e06bff74b42b4fabc66fc7c39c6baff57634d5132abe5b05ed6fc"
+FATEKEEPER_BACKEND_SIZE = 15_203_840
+
+
+def stage_fatekeeper_backend(staging_directory: Path, asset: bytes) -> Path:
+    """Replace the backend in a disposable injector staging directory."""
+    if len(asset) != FATEKEEPER_BACKEND_SIZE or sha256(asset).hexdigest() != FATEKEEPER_BACKEND_SHA256:
+        raise RuntimeError("Fatekeeper backend verification failed. Retry using the approved release asset.")
+    if staging_directory.is_symlink() or not staging_directory.is_dir():
+        raise RuntimeError("Choose a regular injector staging directory.")
+    destination = staging_directory / "UEVRBackend.dll"
+    if destination.is_symlink() or not destination.is_file():
+        raise RuntimeError("The staged Fatekeeper injector is missing a regular backend file.")
+    if (destination.stat().st_size == FATEKEEPER_BACKEND_SIZE
+            and profile_safety._digest(destination) == FATEKEEPER_BACKEND_SHA256):
+        return destination
+    with NamedTemporaryFile(dir=staging_directory, delete=False) as temporary:
+        temporary_path = Path(temporary.name)
+        try:
+            temporary.write(asset)
+            temporary.close()
+            temporary_path.replace(destination)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+    return destination
+
 
 
 @dataclass(frozen=True)
@@ -23,6 +56,7 @@ class DependencyReview:
     profile: profile_safety.ProfilePlan
     release_tags: tuple[tuple[str, ...], tuple[str, ...]]
     blockers: tuple[str, ...]
+    backend_status: str = ""
 
 
 def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
@@ -62,8 +96,23 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
                 for rel in rels for i in range(1, len(rel.split("/")))):
             raise RuntimeError("Injector archive contains colliding paths.")
         size = sum(z.getinfo(orig).file_size for orig, _ in entries)
+        backend_status = ""
+        if recipe["id"] == "fatekeeper":
+            member = next(orig for orig, rel in entries if rel == "UEVRBackend.dll")
+            verified = False
+            if z.getinfo(member).file_size == FATEKEEPER_BACKEND_SIZE:
+                with z.open(member) as backend:
+                    verified = sha256(backend.read(FATEKEEPER_BACKEND_SIZE + 1)).hexdigest() == FATEKEEPER_BACKEND_SHA256
+            backend_status = (
+                "Fatekeeper backend matches the build confirmed in gameplay." if verified else
+                "Fatekeeper needs the verified backend update before installation. "
+                "The backend in this archive differs from the build confirmed in gameplay."
+            )
     digest = profile_safety._digest(paths[0])
     snapshot = profile_safety._snapshot(dest)
+    if recipe["id"] == "fatekeeper" and snapshot["files"].get("UEVRBackend.dll", {}).get(
+            "sha256") == FATEKEEPER_BACKEND_SHA256:
+        backend_status += " The installed backend already matches the tested build."
     profile = hub.review_profile_install(recipe, paths[1], steam_roots)
     if profile.destination != str(profile_dest):
         raise RuntimeError("Profile destination changed during review.")
@@ -87,4 +136,4 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
         blockers.append("Matching Hogwarts Legacy injector/profile release is not established. Do not mix release bundles without compatibility review.")
     return DependencyReview(recipe["name"], str(paths[0]), digest, str(dest), rels,
                             size, len(snapshot["files"]), len(snapshot["dirs"]),
-                            snapshot["bytes"], profile, tuple(tags), tuple(blockers))
+                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status)
