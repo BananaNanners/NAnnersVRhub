@@ -91,7 +91,12 @@ def _live_snapshot(name: str, selected: bool) -> tuple[dict, list[dict]]:
                 "SteamVR": {"vrserver", "vrcompositor"}}.get(name)
     running = bool(names & expected) if names is not None and expected else None
     headset = dict(connected=None, system_name="", source="unavailable",
-                   detail="Connection telemetry is currently supported for a selected WiVRn runtime only.")
+                   detail=("SteamVR selected: the Hub can observe SteamVR server "
+                           "processes but cannot verify headset connection through "
+                           "SteamVR telemetry. Check the headset in SteamVR or in VR."
+                           if selected and name == "SteamVR" else
+                           "Headset connection telemetry is currently available "
+                           "for a selected WiVRn runtime only."))
     if selected and name == "WiVRn":
         headset = wivrn_status.read_status()
         if headset["connected"] is not None:
@@ -131,10 +136,39 @@ def _live_snapshot(name: str, selected: bool) -> tuple[dict, list[dict]]:
                 controllers_verified=False), rows
 
 
+def _selection_target(path) -> str | None:
+    """Observe a selected symlink target; never rewrite or switch it."""
+    if path is None:
+        return None
+    try:
+        return str(path.resolve())
+    except (OSError, RuntimeError):
+        return str(path)
+
+
+def _scope_for_runtime(name: str) -> str:
+    if name == "WiVRn":
+        evidence = "read-only WiVRn headset connection telemetry"
+    elif name == "SteamVR":
+        evidence = ("SteamVR server-process observation only; SteamVR headset "
+                    "connection telemetry is unavailable in this scanner")
+    else:
+        evidence = "limited read-only runtime and server-process evidence"
+    return ("Host checks plus " + evidence + ". Controller tracking, graphics "
+            "rendering, Proton access and per-game VR readiness require "
+            "separate live verification.")
+
+
 def refresh_live(report: dict) -> dict:
-    """Refresh only status rows; rescan the host if runtime selection changes."""
+    """Refresh selected runtime and connection state; never switch runtimes.
+
+    Re-read manifest contents AND symlink targets: users may select SteamVR
+    for a test, then switch back to WiVRn without restarting the Hub.
+    """
     path, lib = runtime.active_runtime()
-    if [str(path) if path else None, lib] != report["selection"]:
+    current = [str(path) if path else None, lib]
+    if (current != report.get("selection")
+            or _selection_target(path) != report.get("selection_target")):
         return scan()
     result = copy.deepcopy(report)
     live, rows = _live_snapshot(report["runtime"], bool(path and lib))
@@ -233,8 +267,9 @@ def scan() -> dict:
     return dict(schema_version=2, hub_version=__version__, scanned_at=datetime.now(timezone.utc).isoformat(),
                 status=status, runtime=name, hardware_verified=False, rows=rows, live=live,
                 selection=[str(path) if path else None, lib],
+                selection_target=_selection_target(path),
                 environment={k: os.environ[k] for k in ENV_KEYS if k in os.environ},
-                scope="Host checks plus read-only WiVRn connection telemetry. Controller tracking, graphics rendering, Proton access and game readiness need live/per-game verification.")
+                scope=_scope_for_runtime(name))
 
 
 def report_text(report: dict) -> str:

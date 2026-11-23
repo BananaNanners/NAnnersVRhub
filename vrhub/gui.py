@@ -1098,7 +1098,12 @@ class HubWindow(QMainWindow):
         self.headset_state.setText("Headset: " + ("CONNECTED" if headset else "DISCONNECTED" if headset is False else "UNKNOWN"))
         self.headset_state.setStyleSheet(f"color: {GREEN if headset else YELLOW if headset is False else MUTED};")
         self.controllers_state.setStyleSheet(f"color: {MUTED};")
-        self.scan_summary.setText(f"{report['status']}  •  Live status checked: {local_time(live['sampled_at'])}")
+        self.scan_summary.setText(
+            f"{report['status']}  •  OpenXR: {report['runtime']} selected"
+            f"  •  Live status: {local_time(live['sampled_at'])}"
+            if live["runtime_selected"] else
+            f"{report['status']}  •  OpenXR selection unavailable"
+            f"  •  Live status: {local_time(live['sampled_at'])}")
         self.runtime_label.setText(f"●  {selection}")
         self.runtime_label.setStyleSheet(f"color: {GREEN if live['runtime_selected'] else RED};")
         scrollbar = self.system_details.verticalScrollBar()
