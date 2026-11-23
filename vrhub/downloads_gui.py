@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit, ownership_triage
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit, ownership_triage, preservation_decisions
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -161,6 +161,12 @@ class PreUpdateSafetyWorker(QThread):
             result["triage"] = ownership_triage.assess(
                 self.recipe, self.state, result["real_audit"],
                 integrity=self.integrity)
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+            # This never saves file decisions or authorizes an update: the
+            # existing review displays recommendations only. No auto-adoption.
+            result["preservation"] = preservation_decisions.assess(
+                self.recipe, result["triage"])
             if self.cancel_flag.is_set():
                 raise installed_integrity.Cancelled()
         except installed_integrity.Cancelled:
@@ -1259,6 +1265,42 @@ class GuidedDownloadsPage(QWidget):
                         f"    {item['unreported_issues']} additional unmatched file(s) "
                         "not listed; bounded verifier output is NOT a full inventory.")
                 lines.append("    Next: " + item["next_step"])
+        preservation = result.get("preservation")
+        if (isinstance(preservation, dict) and
+                preservation.get("game_id") == result["game_id"] and
+                preservation.get("session_only") is True and
+                preservation.get("live_update_authorized") is False and
+                preservation.get("choices_saved") is False and
+                preservation.get("recorded_file_hashes_rewritten") is False):
+            lines.extend((
+                "",
+                "MODIFIED-FILE PRESERVATION DECISION WORKSHEET — READ ONLY",
+                preservation["summary"],
+                "Recommendations are NOT user decisions and do NOT enforce file preservation.",
+                "Review paths: preserve existing · investigate unknown · consider future replacement.",
+                "No choice saved. No backup created, owner adopted, hash updated, repair or update authorized.",
+            ))
+            if not preservation["rows"]:
+                lines.append(
+                    "  No listed differences to plan. This is NOT proof of valid "
+                    "ownership or a clean installation.")
+            for item in preservation["rows"]:
+                labels = {
+                    "preserve_existing": "Recommend preserving current file pending review",
+                    "investigate_unknown": "Investigate difference before deciding",
+                    "consider_future_replacement": "Potential future replacement review ONLY",
+                }
+                lines.append(
+                    f"  {item['component_name']}: {item['relative_file']} · "
+                    f"{labels[item['draft_decision']]}")
+                lines.append("    Next: " + item["next_step"])
+            if preservation["unreported_differences"]:
+                lines.append(
+                    f"  {preservation['unreported_differences']} unlisted difference(s) "
+                    "must be independently reviewed before any plan.")
+            lines.append(
+                "  LIVE UPDATE DISABLED: fresh complete backup · game lock · "
+                "real compatibility · recovery · separate approval · no executor.")
         unified = result.get("unified")
         if (isinstance(unified, dict) and unified.get("game_id") == result["game_id"]
                 and unified.get("authorized") is False
