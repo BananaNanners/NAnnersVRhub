@@ -1406,6 +1406,52 @@ class GuidedDownloadsPage(QWidget):
             lines.append(
                 "  LIVE UPDATE DISABLED: installation and deletion require "
                 "fresh backups, current integrity, compatibility, recovery and consent.")
+        if result["game_id"] == "cyberpunk-2077":
+            payloads = [
+                row for row in result["rows"]
+                if isinstance(row.get("payload_evidence"), dict)
+                and row["payload_evidence"].get("game_id") == result["game_id"]
+                and row["payload_evidence"].get("live_update_authorized") is False
+            ]
+            lines.extend((
+                "",
+                "ARCHIVE PAYLOAD CLASSIFICATION & COMPATIBILITY EVIDENCE — READ ONLY",
+                f"{len(payloads)} local Cyberpunk ZIP payload review(s) classified.",
+                "Filename/ZIP-metadata labels only: documentation-looking entries "
+                "are NOT approved exclusions, and optional entries are NOT selected.",
+                "Nexus release authenticity, newest version, actual game build, "
+                "runtime compatibility, payload CRC, and current ownership remain UNVERIFIED.",
+            ))
+            for entry in payloads:
+                evidence = entry["payload_evidence"]
+                categories = evidence["counts"]
+                lines.append(
+                    f"  {entry['name']}: {categories['installable']} installable · "
+                    f"{categories['documentation']} documentation · "
+                    f"{categories['optional']} optional · "
+                    f"{categories['unknown']} unknown · "
+                    f"{categories['unsafe']} unsafe signal(s)")
+                if evidence["regular_members"] is None:
+                    lines.append(
+                        "    Unsafe/invalid ZIP metadata: the member inventory "
+                        "and exact unsafe count could not be trusted.")
+                for category in ("documentation", "optional", "unknown"):
+                    if evidence["samples"][category]:
+                        lines.append(
+                            f"    {category.title()} example(s): "
+                            + ", ".join(evidence["samples"][category][:3]))
+                lines.append("    Next: " + evidence["reason"])
+                lines.append(
+                    "    Component required-file rule: " +
+                    ("present (not compatibility proof)" if
+                     evidence["required_payload_contract_exists"] and
+                     evidence["required_payload_contract_satisfied"] else
+                     "required payload missing or not established" if
+                     evidence["required_payload_contract_exists"] else
+                     "no recipe-specific required-file contract"))
+            lines.append(
+                "  STRICT MAPPING STILL REQUIRED · LIVE UPDATE DISABLED · "
+                "NO FILES INSTALLED, EXCLUDED, OR MODIFIED")
         unified = result.get("unified")
         if (isinstance(unified, dict) and unified.get("game_id") == result["game_id"]
                 and unified.get("authorized") is False

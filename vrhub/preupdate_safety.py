@@ -12,7 +12,7 @@ import re
 from pathlib import Path, PurePosixPath
 from threading import Event
 
-from . import hub, bepinex, installed_integrity, install_review, profile_safety, download_planner, cyberpunk_archive_mapping
+from . import hub, bepinex, installed_integrity, install_review, profile_safety, download_planner, cyberpunk_archive_mapping, payload_evidence
 
 MAX_ITEMS = 2500
 MAX_TOTAL_BACKUP_BYTES = 2 * 1024 * 1024 * 1024
@@ -188,7 +188,7 @@ def _managed_files(recipe, component, state):
     return tuple(sorted(set(paths)))
 
 
-def _prospective(recipe, component, row, cancel):
+def _prospective(recipe, component, row, cancel, *, payload_details=None):
     """Determine destinations only when the existing bounded archive parser can.
 
     Gameroot ZIPs may contain wrappers and install-specific remapping; never
@@ -240,7 +240,23 @@ def _prospective(recipe, component, row, cancel):
         if (not single_unpinned_cyberpunk and
                 (not isinstance(expected, str) or candidate_sha != expected)):
             return (), "Candidate digest no longer matches recorded scan; rescan."
-        install_review._zip_preflight(path)
+        # X: classify Cyberpunk ZIP member *metadata* before strict W mapping.
+        # A recognized README is advisory evidence, never permission to drop
+        # it from a complete install-target list or install anything.
+        if recipe.get("id") == "cyberpunk-2077":
+            evidence = payload_evidence.classify_zip(recipe, component, path)
+            if payload_details is not None:
+                payload_details.update(evidence)
+            if not evidence["metadata_preflight_passed"]:
+                return (), "Cyberpunk ZIP payload safety preflight failed; review required."
+            # The advisory report must refer to the same stable archive hash
+            # verified above. Never show a classification of changed bytes.
+            if profile_safety._digest(path) != candidate_sha:
+                if payload_details is not None:
+                    payload_details.clear()
+                return (), "Candidate digest changed during payload classification; rescan."
+        else:
+            install_review._zip_preflight(path)
         selected = ()
         mapping = "Exact future destinations require a separately approved staging/mapping design."
         if recipe.get("packages") and row.get("status") == "Pinned SHA-256 verified":
@@ -274,15 +290,30 @@ def _prospective(recipe, component, row, cancel):
                 "all regular members accounted for, source version unverified.")
         if selected:
             # A ZIP changed between SHA validation and reading its central
-            # directory is never accepted as a stable target map.
+            # directory is never accepted as a stable target map or a
+            # Cyberpunk payload-classification report.
             if profile_safety._digest(path) != candidate_sha:
+                if payload_details is not None:
+                    payload_details.clear()
                 return (), "Candidate digest changed during mapping; rescan."
             return selected, mapping
     except cyberpunk_archive_mapping.MappingBlocked as exc:
-        # This exception carries only a bounded, developer-authored category;
-        # never include raw filenames from a hostile ZIP in the report.
+        # The strict W mapping may refuse safe documentation/optional members
+        # which X classified. Keep that classification only if the reviewed
+        # ZIP's digest is still identical.
+        if payload_details is not None and payload_details:
+            try:
+                if profile_safety._digest(path) != candidate_sha:
+                    payload_details.clear()
+                    return (), "Candidate digest changed during strict mapping; rescan."
+            except (OSError, RuntimeError, ValueError):
+                payload_details.clear()
+                return (), "Candidate cannot be reverified after mapping; rescan."
         return (), "Cyberpunk ZIP review blocked: " + str(exc)
     except (OSError, RuntimeError, ValueError, install_review.PlanRejected):
+        # Incomplete or changed metadata never leaves a stale advisory payload.
+        if payload_details is not None:
+            payload_details.clear()
         # Do not surface raw path content or untrusted archive metadata in GUI.
         return (), "Archive metadata could not be safely inspected for a replacement map."
     return (), "Exact future destinations require a separately approved staging/mapping design."
@@ -352,6 +383,7 @@ def review(recipe, scan, state, decisions, integrity=None, *, cancel=None):
         proposed = ()
         note = "No current candidate ZIP or archive plan."
         current = by_archive.get(cid)
+        classified_payload = {}
         # W: a single unambiguous Cyberpunk ZIP may be inspected for its
         # target layout even when the UPDATE-readiness gate is blocked by
         # missing installed-version or Nexus release proof. Mapping is never
@@ -368,7 +400,9 @@ def review(recipe, scan, state, decisions, integrity=None, *, cancel=None):
         )
         if not warning and (readiness.get("code") == "candidate"
                             or cyberpunk_layout_only):
-            proposed, note = _prospective(recipe, comp, current, cancel)
+            proposed, note = _prospective(
+                recipe, comp, current, cancel,
+                payload_details=classified_payload)
             safe_map = bool(proposed)
         # Dev5D3-V: preserve the complete bounded, already-mapped *relative*
         # install-target list in this one-shot read-only result. The public
@@ -418,7 +452,9 @@ def review(recipe, scan, state, decisions, integrity=None, *, cancel=None):
             "future_sample": list(proposed[:MAX_DETAIL]) if safe_map else [],
             "full_target_list": list(target_list),
             "full_target_provenance": provenance,
-            "mapping": note, "ownership_conflicts": duplicates,
+            "mapping": note,
+            "payload_evidence": classified_payload or None,
+            "ownership_conflicts": duplicates,
             "untracked_collisions": untracked,
             "integrity": file_status,
             "file_issue": issue, "order": stages,
