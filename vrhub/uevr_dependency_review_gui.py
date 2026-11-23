@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Review pinned dependencies and invoke the gated installer."""
+from collections import Counter
+
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QHBoxLayout
 from .archive_checklist_ui import archive_table
@@ -87,24 +89,42 @@ class DependencyReviewDialog(QDialog):
             f"Archive: {plan.profile.profile_files} files / {size(plan.profile.profile_bytes)}; existing: "
             f"{plan.profile.existing_files} files, {plan.profile.existing_dirs} directories / {size(plan.profile.existing_bytes)}"+chr(10)+
             f"Release evidence: {', '.join(plan.release_tags[1]) or 'Not established'}")
-        self.backup = label("Backup policy: existing profile requires the established verified whole-directory backup and recovery process. "
-                            "Injector recovery protection must be validated separately before any live installation.")
-        self.blockers = label(chr(10).join(plan.blockers) if plan.blockers else
-                              "No additional recovery blocker detected; this is not installation authorization.")
+        self.has_changes = True
+        if plan.file_decisions:
+            counts = Counter(action for action, _, _ in plan.file_decisions)
+            summary = " / ".join(f"{action} {counts[action]}" for action in ("Install", "Replace", "Preserve"))
+            self.has_changes = bool(counts["Install"] or counts["Replace"])
+            self.backup = label(summary)
+            status = ("Existing files selected for replacement and Hub records are backed up before writes."
+                      if self.has_changes else
+                      "Already compatible with the pinned packages. No file or Hub record writes are needed.")
+            self.blockers = label(status)
+        else:
+            self.backup = label("Backup policy: existing profile requires verified backup and recovery.")
+            self.blockers = label(chr(10).join(plan.blockers) if plan.blockers else
+                                  "No additional recovery blocker detected.")
         self.blockers.setStyleSheet("color:#FFD21A;font-weight:700")
         label("Archive identity and layout do not establish VR compatibility. Follow the Setup Guide for runtime prerequisites.")
-        self.inventory_toggle = QPushButton("Show exact archive file inventories")
+        details = "file decisions" if plan.file_decisions else "exact archive file inventories"
+        self.inventory_toggle = QPushButton("Show " + details)
         self.inventory_toggle.setCheckable(True)
         layout.addWidget(self.inventory_toggle)
         self.inventory = QPlainTextEdit()
         self.inventory.setReadOnly(True)
-        self.inventory.setPlainText(chr(10).join(("INJECTOR", *plan.injector_files,
-                                                   "", "PROFILE", *plan.profile.file_names)))
+        if plan.file_decisions:
+            self.inventory.setPlainText(chr(10).join(
+                f"{action}  |  {component}  |  {name}"
+                for action, component, name in sorted(
+                    plan.file_decisions, key=lambda row: (("Install", "Replace", "Preserve").index(row[0]), row[1], row[2]))
+            ))
+        else:
+            self.inventory.setPlainText(chr(10).join(("INJECTOR", *plan.injector_files,
+                                                       "", "PROFILE", *plan.profile.file_names)))
         self.inventory.hide()
         layout.addWidget(self.inventory)
         self.inventory_toggle.toggled.connect(self.inventory.setVisible)
         self.inventory_toggle.toggled.connect(lambda active: self.inventory_toggle.setText(
-            "Hide exact archive file inventories" if active else "Show exact archive file inventories"))
+            ("Hide " if active else "Show ") + details))
         layout.addStretch(1)
         buttons = QHBoxLayout()
         self.close_button = QPushButton("Close")
@@ -120,7 +140,7 @@ class DependencyReviewDialog(QDialog):
         if install_action is not None and not disposable_rehearsal:
             self.apply_button.setToolTip("Live installation requires separate authorization.")
             self.apply_button.clicked.connect(self.run_rehearsal)
-            self.apply_button.setEnabled(self.install_authorized() and not plan.needs_backend_verification)
+            self.apply_button.setEnabled(self.has_changes and self.install_authorized() and not plan.needs_backend_verification)
         if disposable_rehearsal:
             self.apply_button.setText("Test installation and rollback")
             self.apply_button.setToolTip("Runs only against a separate disposable prefix.")
@@ -135,7 +155,7 @@ class DependencyReviewDialog(QDialog):
     def show_backend_result(self, asset):
         if asset is not None:
             self.verified_asset = asset
-            self.apply_button.setEnabled(self.disposable_rehearsal or self.install_authorized())
+            self.apply_button.setEnabled(self.disposable_rehearsal or (self.has_changes and self.install_authorized()))
             self.backend.setText(self.plan.backend_status + " Backend SHA-256 verified.")
         else:
             self.backend.setText(
@@ -154,7 +174,7 @@ class DependencyReviewDialog(QDialog):
             super().closeEvent(event)
 
     def run_rehearsal(self):
-        if not self.disposable_rehearsal and not self.install_authorized():
+        if not self.disposable_rehearsal and (not self.has_changes or not self.install_authorized()):
             return
         if self.plan.needs_backend_verification and self.verified_asset is None:
             return

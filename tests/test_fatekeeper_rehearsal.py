@@ -136,3 +136,54 @@ class FatekeeperRehearsalTests(unittest.TestCase):
             backend.write_bytes(b"changed after review")
             with self.assertRaisesRegex(RuntimeError, "installation changed"):
                 fatekeeper_install.prepare_reviewed_install(plan)
+
+
+    def test_smart_preservation_fresh_repair_recovery_and_noop(self):
+        from vrhub import fatekeeper_commit
+
+        recipe = hub.load_recipes()["fatekeeper"]
+        with zipfile.ZipFile(self.archives[1], "a") as archive:
+            for name in review.FATEKEEPER_LOCAL_PROFILE_FILES - {"config.txt"}:
+                archive.writestr(name, b"packaged defaults")
+        recipe["archive_pins"]["profile"] = sha256(self.archives[1].read_bytes()).hexdigest()
+        root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="nanners-fk4-", dir="/tmp")))
+        prefix, injector, profile, state = fatekeeper_commit._roots(root)
+        prefix.mkdir()
+        with patch.multiple(hub, _pfx=lambda *_: prefix, _uevr_dir=lambda *_: injector,
+                            profile_dir=lambda *_: profile, state_file=lambda: state):
+            fresh = review.build_plan(recipe, self.archives)
+            self.assertTrue(all(action == "Install" for action, _, _ in fresh.file_decisions))
+            prepared = fatekeeper_install.prepare_reviewed_install(fresh, verified_backend=self.asset)
+            fatekeeper_commit.commit(root, prepared)
+            for name in review.FATEKEEPER_LOCAL_PROFILE_FILES:
+                self.assertTrue((profile / name).is_file())
+            fatekeeper_commit.recover(root)
+            self.assertFalse(profile.exists())
+            self.assertFalse(state.exists())
+
+            for name in review.FATEKEEPER_LOCAL_PROFILE_FILES | {"extra.ini"}:
+                path = profile / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"local data")
+            injector.mkdir(parents=True)
+            (injector / "UEVRBackend.dll").write_bytes(b"outdated")
+            state.write_bytes(b'{"unrelated":{}}  ')
+            repair = review.build_plan(recipe, self.archives)
+            for name in review.FATEKEEPER_LOCAL_PROFILE_FILES | {"extra.ini"}:
+                self.assertIn(("Preserve", "Profile", name), repair.file_decisions)
+            self.assertIn(("Replace", "Injector", "UEVRBackend.dll"), repair.file_decisions)
+            prepared = fatekeeper_install.prepare_reviewed_install(repair, verified_backend=self.asset)
+            fatekeeper_commit.commit(root, prepared, interrupt_after_files=True)
+            fatekeeper_commit.recover(root)
+            self.assertEqual(state.read_bytes(), b'{"unrelated":{}}  ')
+            self.assertEqual((injector / "UEVRBackend.dll").read_bytes(), b"outdated")
+            fatekeeper_commit.commit(root, prepared)
+            self.assertEqual((injector / "UEVRBackend.dll").read_bytes(), self.asset)
+            for name in review.FATEKEEPER_LOCAL_PROFILE_FILES | {"extra.ini"}:
+                self.assertEqual((profile / name).read_bytes(), b"local data")
+            compatible = review.build_plan(recipe, self.archives)
+            self.assertTrue(all(action == "Preserve" for action, _, _ in compatible.file_decisions))
+            with patch.object(fatekeeper_commit, "live_install_authorized", return_value=True), patch.object(
+                fatekeeper_commit, "_commit", side_effect=AssertionError("no-op opened a transaction")
+            ), patch.object(review.profile_safety, "_assert_game_stopped"):
+                self.assertEqual(fatekeeper_commit.install_reviewed(compatible, verified_backend=self.asset), [])

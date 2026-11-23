@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Read-only UEVR dependency review and offline Fatekeeper backend staging."""
 from dataclasses import dataclass, field
-from hashlib import sha256
+from hashlib import file_digest, sha256
 from tempfile import NamedTemporaryFile
 from pathlib import Path
 import zipfile
@@ -16,6 +16,33 @@ FATEKEEPER_BACKEND_URL = (
 )
 FATEKEEPER_BACKEND_SHA256 = "b883dd7f0b5e06bff74b42b4fabc66fc7c39c6baff57634d5132abe5b05ed6fc"
 FATEKEEPER_BACKEND_SIZE = 15_203_840
+
+
+# These files can contain local state even though the ZIP ships defaults.
+FATEKEEPER_LOCAL_PROFILE_FILES = frozenset({
+    "cache/sdk_discovery.json",
+    "data/dev/attachments_config_dev.json",
+    "config.txt",
+})
+
+
+def fatekeeper_file_decision(component, name, existing_digest, incoming_digest):
+    if existing_digest is None:
+        return "Install"
+    if (existing_digest == incoming_digest or
+            component == "Profile" and name in FATEKEEPER_LOCAL_PROFILE_FILES):
+        return "Preserve"
+    return "Replace"
+
+
+def _file_decisions(component, incoming, snapshot):
+    existing = snapshot["files"]
+    return tuple(
+        (fatekeeper_file_decision(component, name, existing.get(name, {}).get("sha256"),
+                                 incoming[name]) if name in incoming else "Preserve",
+         component, name)
+        for name in sorted(incoming.keys() | existing.keys())
+    )
 
 
 def stage_fatekeeper_backend(staging_directory: Path, asset: bytes) -> Path:
@@ -59,6 +86,7 @@ class DependencyReview:
     backend_status: str = ""
     needs_backend_verification: bool = False
     injector_snapshot: dict = field(default_factory=dict, repr=False)
+    file_decisions: tuple[tuple[str, str, str], ...] = ()
 
 
 def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
@@ -81,6 +109,10 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
         raise RuntimeError("Injector and profile destinations overlap.")
     if any(p.is_relative_to(prefix.resolve()) for p in paths):
         raise RuntimeError("Choose archives outside the game's prefix.")
+    pins = recipe.get("archive_pins", {}) if recipe["id"] == "fatekeeper" else {}
+    digest = profile_safety._digest(paths[0])
+    if pins and digest != pins.get("uevr"):
+        raise RuntimeError("Choose the official UEVR Nightly 1133 uevr.zip. Its checksum did not match.")
     install_review._zip_preflight(paths[0])
     with zipfile.ZipFile(paths[0]) as z:
         names = hub._zip_members(z)
@@ -110,10 +142,14 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
                 "Fatekeeper needs the verified backend update before installation. "
                 "The backend in this archive differs from the build confirmed in gameplay."
             )
-    digest = profile_safety._digest(paths[0])
-    pins = recipe.get("archive_pins", {})
-    if pins and digest != pins.get("uevr"):
-        raise RuntimeError("Choose the official UEVR Nightly 1133 uevr.zip. Its checksum did not match.")
+        injector_hashes = {}
+        if pins:
+            for original, name in entries:
+                if name == "UEVRBackend.dll":
+                    injector_hashes[name] = FATEKEEPER_BACKEND_SHA256
+                elif Path(name).suffix.lower() != ".pdb":
+                    with z.open(original) as stream:
+                        injector_hashes[name] = file_digest(stream, "sha256").hexdigest()
     snapshot = profile_safety._snapshot(dest)
     if recipe["id"] == "fatekeeper" and snapshot["files"].get("UEVRBackend.dll", {}).get(
             "sha256") == FATEKEEPER_BACKEND_SHA256:
@@ -121,6 +157,15 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
     profile = hub.review_profile_install(recipe, paths[1], steam_roots)
     if pins and profile.archive_sha256 != pins.get("profile"):
         raise RuntimeError("Choose Fatekeeper VR Profile v1.0.4. Its checksum did not match.")
+    decisions = ()
+    if pins:
+        with zipfile.ZipFile(paths[1]) as archive:
+            profile_hashes = {}
+            for entry, name in profile_safety._archive_entries(archive):
+                with archive.open(entry) as stream:
+                    profile_hashes[name] = file_digest(stream, "sha256").hexdigest()
+        decisions = (_file_decisions("Injector", injector_hashes, snapshot) +
+                     _file_decisions("Profile", profile_hashes, profile_safety._snapshot(profile_dest)))
     if profile.destination != str(profile_dest):
         raise RuntimeError("Profile destination changed during review.")
     if tuple(download_planner.archive_identity(p) for p in paths) != identities:
@@ -153,4 +198,4 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
         blockers.append("Matching Hogwarts Legacy injector/profile release is not established. Do not mix release bundles without compatibility review.")
     return DependencyReview(recipe["name"], str(paths[0]), digest, str(dest), rels,
                             size, len(snapshot["files"]), len(snapshot["dirs"]),
-                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status, needs_backend_verification, snapshot)
+                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status, needs_backend_verification, snapshot, decisions)

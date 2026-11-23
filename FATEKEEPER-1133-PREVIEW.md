@@ -56,3 +56,17 @@ suite passed 22 tests. The complete suite passed 1,506 with one skipped.
 PENDING: FK5 KDE acceptance and separate live authorization. Recover any
 active or committed transaction before opening another journal. Prior
 recovery artifacts are retained on retry.
+
+## Dev5D3-FK6A - Smart File Preservation
+
+Read-only FK6 review identified local SDK discovery metadata and a Warden's
+Ring attachment configuration as unnecessary replacements. FK6A preserves
+those files and the profile config.txt when present, still fills missing
+files, and repairs changed packaged components such as the backend. The
+existing review shows Install, Replace, and Preserve decisions. An empty
+write set skips the transaction and Hub record update.
+
+Disposable fresh install, repair, interruption, and rollback passed.
+Focused suite: 23 passed. Full suite: 1,507 passed, one skipped.
+The working Fatekeeper prefix has zero proposed writes and 115 preserved
+files. KDE acceptance pending. The live gate remains closed.

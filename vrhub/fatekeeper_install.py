@@ -33,7 +33,8 @@ def prepare_reviewed_install(review, steam_roots=None, *, verified_backend=None)
     archives = (Path(review.injector_archive), Path(review.profile.archive))
     refreshed = uevr_dependency_review.build_plan(recipe, archives, steam_roots)
     if (refreshed.profile.fingerprint != review.profile.fingerprint or
-            refreshed.injector_snapshot != review.injector_snapshot):
+            refreshed.injector_snapshot != review.injector_snapshot or
+            refreshed.file_decisions != review.file_decisions):
         raise RuntimeError("Fatekeeper installation changed. Reopen the review.")
     injector_before = profile_safety._snapshot(injector)
     profile_before = profile_safety._snapshot(profile)
@@ -64,8 +65,15 @@ def prepare_reviewed_install(review, steam_roots=None, *, verified_backend=None)
         dest, snapshot = expected_roots[root]
         subpath = relative.relative_to(root)
         current = snapshot["files"].get(subpath.as_posix(), {})
-        if current.get("sha256") != sha256(data).hexdigest():
+        component = "Injector" if dest == injector else "Profile"
+        action = uevr_dependency_review.fatekeeper_file_decision(
+            component, subpath.as_posix(), current.get("sha256"), sha256(data).hexdigest())
+        if (action, component, subpath.as_posix()) not in refreshed.file_decisions:
+            raise RuntimeError("Staged Fatekeeper payload differs from the reviewed decisions.")
+        if action != "Preserve":
             writes[str(dest / subpath)] = data
+    if len(writes) != sum(action != "Preserve" for action, _, _ in refreshed.file_decisions):
+        raise RuntimeError("Staged Fatekeeper write set is incomplete.")
     if (profile_safety._snapshot(injector) != injector_before or
             profile_safety._snapshot(profile) != profile_before or hub._load_state() != state):
         raise RuntimeError("Fatekeeper files or Hub records changed during preparation.")

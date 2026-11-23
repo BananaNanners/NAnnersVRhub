@@ -273,6 +273,8 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None):
     prepared = prepare_reviewed_install(review, steam_roots, verified_backend=verified_backend)
     if _live_destination(steam_roots) != destination:
         raise RuntimeError("Fatekeeper paths changed while staging. Reopen the review.")
+    if not prepared.writes:
+        return []
     _commit(destination, prepared)
     return [Path(name) for name in prepared.writes]
 
