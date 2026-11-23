@@ -9,6 +9,9 @@ from vrhub import hub, uevr_dependency_review as review
 from vrhub.uevr_dependency_review_gui import DependencyReviewDialog
 
 
+from tests.fatekeeper_fixtures import recipes as fixture_recipes
+
+
 class DependencyReviewTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -26,7 +29,7 @@ class DependencyReviewTests(unittest.TestCase):
         self.profile_zip = self.root / "profile.zip"
         self.write_zip(self.injector_zip, {"UEVR/UEVRInjector.exe": b"exe", "UEVR/UEVRBackend.dll": b"dll"})
         self.write_zip(self.profile_zip, {"test/config.txt": b"config", "test/plugins/custom.dll": b"custom"})
-        self.recipe = hub.load_recipes()["fatekeeper"]
+        self.recipe = fixture_recipes()["fatekeeper"]
         for patcher in (
             mock.patch.object(hub, "_pfx", return_value=self.prefix),
             mock.patch.object(hub, "_uevr_dir", return_value=self.dest),
@@ -111,7 +114,7 @@ class DependencyReviewTests(unittest.TestCase):
                 review.build_plan(self.recipe, files)
 
     def test_hogwarts_unknown_pair_explicitly_blocked(self):
-        self.recipe = hub.load_recipes()["hogwarts-legacy"]
+        self.recipe = fixture_recipes()["hogwarts-legacy"]
         plan = self.plan()
         self.assertTrue(any("Matching Hogwarts Legacy" in b for b in plan.blockers))
 

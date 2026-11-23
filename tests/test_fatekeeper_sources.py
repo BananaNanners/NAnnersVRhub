@@ -1,61 +1,26 @@
-"""Fatekeeper bundle and profile remain separate; source display is read-only."""
+"""Regression checks for the pinned Fatekeeper dependency workflow."""
 import unittest
-from vrhub import hub, updates, download_planner
 
-BASE = "https://github.com/jbusfield/FK_UEVR/releases"
-MOD = BASE + "/tag/1.0.0"
-PROFILE = BASE + "/tag/v1.0.4"
+from vrhub import download_planner, hub
+from vrhub.uevr_dependency_review import FATEKEEPER_BACKEND_SHA256, FATEKEEPER_BACKEND_URL
 
 
 class FatekeeperSourceTests(unittest.TestCase):
     def setUp(self):
         self.recipe = hub.load_recipes()["fatekeeper"]
 
-    def test_independent_bundle_and_profile_sources(self):
-        mod, profile = self.recipe["updates"]
-        self.assertEqual(mod["manual"], MOD)
-        self.assertEqual(mod["tracks"], ["fatekeeper"])
-        self.assertEqual(mod["available_version"], "1.0.0")
-        self.assertEqual(profile["github"], "jbusfield/FK_UEVR")
-        self.assertEqual(profile["tracks"], ["fatekeeper:profile"])
-
-    def test_profile_refresh_does_not_reclassify_mod_bundle(self):
-        seen = []
-        def fetch(repo):
-            seen.append(repo)
-            return {"tag": "v1.0.4", "published": "2026-11-20T00:00:00Z",
-                    "url": BASE+"/tag/v1.0.4"}
-        rows = updates.check_recipe(self.recipe, {
-            "fatekeeper": {"installed_at": 9999999999},
-            "fatekeeper:profile": {"installed_at": 1}}, fetch=fetch)
-        self.assertEqual(seen, ["jbusfield/FK_UEVR"])
-        self.assertEqual(rows[0]["page"], MOD)
-        self.assertEqual(rows[0]["latest_version"], "1.0.0")
-        self.assertEqual(rows[0]["status"], "unknown")
-        self.assertNotIn("installed_version", rows[0])
-        self.assertEqual(rows[1]["status"], "update")
-        self.assertEqual(rows[1]["latest_version"], "v1.0.4")
-        rows = updates.check_recipe(self.recipe, {"fatekeeper:profile":{"installed_at":1}}, fetch=fetch)
-        self.assertEqual(rows[0]["status"], "not_installed")
-
-    def test_guide_has_exactly_two_named_release_pages(self):
-        self.assertEqual(self.recipe["links"], [
-            {"label": "UEVR FK Mod", "url": MOD},
-            {"label": "Fatekeeper VR Profile", "url": PROFILE},
-        ])
-        for guide in (hub.details_text(self.recipe), hub.details_html(self.recipe)):
-            for url in (MOD, PROFILE):
-                self.assertIn(url, guide)
-            self.assertNotIn("praydog/UEVR-nightly", guide)
-            self.assertNotIn("joeyhodge/UEVR/releases", guide)
-            self.assertNotIn("OneStepLauncher", guide)
-            self.assertNotIn("/releases/download/", guide)
-
-    def test_historical_archive_sources_and_hints_unchanged(self):
+    def test_release_identity_and_pins(self):
         rows = download_planner.plan_components(self.recipe)
-        self.assertEqual([(r["id"], r["hint"]) for r in rows],
-                         [("uevr", "uevr_fk"), ("profile", "slasher")])
-        self.assertTrue(all(r["url"] == BASE+"/tag/1.0.0" for r in rows))
-        self.assertEqual(self.recipe["archive_display"]["uevr"]["url"], MOD)
-        self.assertEqual(self.recipe["archive_display"]["profile"]["url"], PROFILE)
-        self.assertNotIn("archive_release_link", self.recipe)
+        self.assertEqual([r["id"] for r in rows], ["uevr", "profile"])
+        self.assertIn("/praydog/UEVR-nightly/releases/tag/nightly-01133-", rows[0]["url"])
+        self.assertTrue(rows[1]["url"].endswith("/FK_UEVR/releases/tag/v1.0.4"))
+        self.assertEqual(rows[0]["sha256"], "a230efac51be0f7eaec77e08add970a89a0513a490ec1a130bfaaa5725f302e3")
+        self.assertEqual(rows[1]["sha256"], "a4abe6e99f9eb9c1822163431c6eb20933f2baa2cc9dc497ed067b8aa5da129b")
+        self.assertTrue(FATEKEEPER_BACKEND_URL.endswith("/100526UE58_6RefreshUpdate/UEVRBackend.dll"))
+        self.assertEqual(FATEKEEPER_BACKEND_SHA256, "b883dd7f0b5e06bff74b42b4fabc66fc7c39c6baff57634d5132abe5b05ed6fc")
+
+    def test_legacy_filename_does_not_match_new_component(self):
+        injector, _ = download_planner.plan_components(self.recipe)
+        for name in ("uevr.zip", "uevr (2).zip"):
+            self.assertTrue(download_planner._candidate_filename_match(name, injector, "fatekeeper"))
+        self.assertFalse(download_planner._candidate_filename_match("UEVR_FK.zip", injector, "fatekeeper"))

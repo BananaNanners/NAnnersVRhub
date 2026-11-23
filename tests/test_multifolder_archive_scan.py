@@ -16,6 +16,9 @@ from vrhub import hub, archive_scans as scans, download_planner as planner
 from vrhub.downloads_gui import GuidedDownloadsPage
 
 
+from tests.fatekeeper_fixtures import recipes as fixture_recipes
+
+
 class MultiFolderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -39,7 +42,7 @@ class MultiFolderTests(unittest.TestCase):
                     mock.patch.object(planner, "preferences_file", return_value=self.prefs)):
             ctx.start()
             self.addCleanup(ctx.stop)
-        self.recipe = copy.deepcopy(hub.load_recipes()["fatekeeper"])
+        self.recipe = copy.deepcopy(fixture_recipes()["fatekeeper"])
         self.page = GuidedDownloadsPage()
         self.page.show()
         self.addCleanup(self.page.close)

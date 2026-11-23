@@ -18,13 +18,16 @@ def release(repo):
             "url": "https://github.com/" + repo + "/releases/tag/" + tag}
 
 
+from tests.fatekeeper_fixtures import recipes as fixture_recipes
+
+
 class DependencyUpdatesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
-        self.recipes = hub.load_recipes()
+        self.recipes = fixture_recipes()
 
     def records(self, game, installed_at=1792444057):
         return updates.check_recipe(self.recipes[game],

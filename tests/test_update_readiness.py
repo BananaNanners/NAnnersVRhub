@@ -13,13 +13,16 @@ from vrhub import update_readiness as readiness
 from vrhub.downloads_gui import GuidedDownloadsPage
 
 
+from tests.fatekeeper_fixtures import recipes as fixture_recipes
+
+
 class ReadinessModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
-        self.recipe = copy.deepcopy(hub.load_recipes()["fatekeeper"])
+        self.recipe = copy.deepcopy(fixture_recipes()["fatekeeper"])
         self.new_sha = "b" * 64
         self.old_sha = "a" * 64
         self.profile = {
@@ -180,7 +183,7 @@ class ReadinessModelTests(unittest.TestCase):
         self.check("provenance")
 
     def test_filename_hint_cannot_authorize_cyberpunk(self):
-        recipe = hub.load_recipes()["cyberpunk-2077"]
+        recipe = fixture_recipes()["cyberpunk-2077"]
         comp = planner.plan_components(recipe)[0]
         name = comp["id"]
         plan = {"rows": [{**comp, "status": "Possible archive — inspect first",
@@ -202,7 +205,7 @@ class ReadinessModelTests(unittest.TestCase):
         self.assertTrue(all(not row["authorized"] for row in decisions))
 
     def test_pinned_loader_release_tag_from_recipe_source_not_filename(self):
-        recipe = hub.load_recipes()["valheim"]
+        recipe = fixture_recipes()["valheim"]
         comp = planner.plan_components(recipe)[0]
         plan = {"rows": [{**comp, "status": "Pinned SHA-256 verified",
                           "file": "/fixture/arbitrary-name.zip"}], "warning": None}
@@ -220,7 +223,7 @@ class ReadinessModelTests(unittest.TestCase):
                          "integrity-unchecked")
 
     def test_pin_change_disallows_relabel_as_installed(self):
-        recipe = hub.load_recipes()["valheim"]
+        recipe = fixture_recipes()["valheim"]
         comp = planner.plan_components(recipe)[1]
         plan = {"rows": [{**comp, "status": "Pinned SHA-256 verified",
                           "file": "/fixture/vhvr.zip"}], "warning": None}
@@ -269,7 +272,7 @@ class ReadinessGuiTests(unittest.TestCase):
         self.page = GuidedDownloadsPage()
         self.page.show()
         self.addCleanup(self.page.close)
-        self.recipe = hub.load_recipes()["valheim"]
+        self.recipe = fixture_recipes()["valheim"]
         self.page.set_recipe(self.recipe)
 
     def test_collapsed_default_five_columns_and_no_install_action_change(self):
@@ -293,7 +296,7 @@ class ReadinessGuiTests(unittest.TestCase):
                                        "status": "update", "latest_version": "v0.11.4"}])
         self.assertEqual(self.page.comparison_table.item(1, 3).text(), "v0.11.4")
         self.assertIn("Scan archives", self.page.comparison_table.item(1, 4).text())
-        self.page.set_recipe(hub.load_recipes()["fatekeeper"])
+        self.page.set_recipe(fixture_recipes()["fatekeeper"])
         self.assertIsNone(self.page._integrity_result)
         self.assertEqual(self.page.comparison_table.item(1, 3).text(), "Not checked")
 

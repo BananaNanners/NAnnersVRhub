@@ -1776,6 +1776,8 @@ class GuidedDownloadsPage(QWidget):
         if method == "uevr":
             if self._has_uevr_pair():
                 return "uevr-pair", "Review installation"
+            if recipe.get("archive_pins"):
+                return "scan", "Scan local archives"
             if recipe.get("profile") and component and component["id"] == "profile":
                 return "profile", "Review profile"
             return "guide", "Open Setup Guide"
@@ -1879,7 +1881,7 @@ class GuidedDownloadsPage(QWidget):
                 if not row.get("file"):
                     return "scan", "Scan local archives"
                 return route, "Choose archive" if row.get("ambiguous") else label
-            if not row:
+            if not row and not recipe.get("archive_pins"):
                 profile = next((r for r in rows if r.get("id") == "profile" and r.get("file")), None)
                 if profile:
                     return "profile", "Choose archive" if profile.get("ambiguous") else "Review profile"
@@ -2222,7 +2224,7 @@ class GuidedDownloadsPage(QWidget):
                 if (not row.get("file") or row.get("candidate_incomplete")
                         or row.get("status") not in ("Possible archive — inspect first", "Pinned SHA-256 verified")):
                     raise ValueError("A required archive is missing, stale or blocked. Rescan before review.")
-                if row.get("matches", 0) > 1 and "candidates" not in row:
+                if row.get("matches", 0) > 1 and not row.get("sha256") and "candidates" not in row:
                     raise ValueError("Saved scan predates candidate detection. Rescan first.")
                 if row.get("ambiguous"):
                     chosen = self._choose_archive_candidate(row)

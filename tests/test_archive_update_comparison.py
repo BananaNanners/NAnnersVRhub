@@ -11,13 +11,16 @@ from vrhub import hub, archive_update_comparison as comp, archive_scans, downloa
 from vrhub.downloads_gui import GuidedDownloadsPage
 
 
+from tests.fatekeeper_fixtures import recipes as fixture_recipes
+
+
 class ComparisonModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
     def recipe(self, rid):
-        return copy.deepcopy(hub.load_recipes()[rid])
+        return copy.deepcopy(fixture_recipes()[rid])
 
     def plan(self, recipe):
         rows = [
@@ -208,7 +211,7 @@ class ComparisonGuiTests(unittest.TestCase):
         self.addCleanup(self.page.close)
 
     def test_collapsed_independent_refresh_and_no_action_change(self):
-        recipe = hub.load_recipes()["valheim"]
+        recipe = fixture_recipes()["valheim"]
         self.page.set_recipe(recipe)
         self.assertFalse(self.page.comparison_panel.isVisible())
         self.assertEqual(self.page.comparison_table.rowCount(), 2)
@@ -223,18 +226,18 @@ class ComparisonGuiTests(unittest.TestCase):
         self.assertEqual(self.page.comparison_table.item(1,3).text(),"v0.11.3")
         self.assertEqual(action_before,(
             self.page.install_review_button.text(),self.page.install_review_button.isEnabled()))
-        self.page.set_recipe(hub.load_recipes()["fatekeeper"])
+        self.page.set_recipe(fixture_recipes()["fatekeeper"])
         self.assertEqual(self.page.comparison_table.item(1,3).text(),"Not checked")
         self.page.comparison_toggle.click()
         self.assertFalse(self.page.comparison_panel.isVisible())
 
     def test_guide_without_dependencies_does_not_show_empty_comparison(self):
-        self.page.set_recipe(hub.load_recipes()["skyrim-vr-mgo"])
+        self.page.set_recipe(fixture_recipes()["skyrim-vr-mgo"])
         self.assertTrue(self.page.comparison_toggle.isHidden())
         self.assertEqual(self.page.comparison_table.rowCount(),0)
 
     def test_model_rebuild_after_scan_without_online_fetch(self):
-        recipe=hub.load_recipes()["valheim"]
+        recipe=fixture_recipes()["valheim"]
         self.page.set_recipe(recipe)
         self.page.set_online_results([{"name":"VHVR (pinned GitHub build; review newer releases)",
                                        "latest_version":"v0.11.4","status":"update"}])

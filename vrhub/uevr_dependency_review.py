@@ -109,11 +109,16 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
                 "The backend in this archive differs from the build confirmed in gameplay."
             )
     digest = profile_safety._digest(paths[0])
+    pins = recipe.get("archive_pins", {})
+    if pins and digest != pins.get("uevr"):
+        raise RuntimeError("Choose the official UEVR Nightly 1133 uevr.zip. Its checksum did not match.")
     snapshot = profile_safety._snapshot(dest)
     if recipe["id"] == "fatekeeper" and snapshot["files"].get("UEVRBackend.dll", {}).get(
             "sha256") == FATEKEEPER_BACKEND_SHA256:
         backend_status += " The installed backend already matches the tested build."
     profile = hub.review_profile_install(recipe, paths[1], steam_roots)
+    if pins and profile.archive_sha256 != pins.get("profile"):
+        raise RuntimeError("Choose Fatekeeper VR Profile v1.0.4. Its checksum did not match.")
     if profile.destination != str(profile_dest):
         raise RuntimeError("Profile destination changed during review.")
     if tuple(download_planner.archive_identity(p) for p in paths) != identities:
@@ -129,6 +134,13 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
             if entry.get("file") != str(paths[i]) or entry.get("identity") != identities[i] or entry.get("sha256") != sha:
                 raise RuntimeError("Archive scan evidence changed; rescan before review.")
             tags[i] = tuple(entry.get("tags", ()))
+    if pins:
+        backend_status = (
+            "Verified Nightly 1133 and Fatekeeper profile v1.0.4. "
+            "Installation requires the verified joeyhodge backend. Debug symbols are omitted."
+        )
+        if snapshot["files"].get("UEVRBackend.dll", {}).get("sha256") == FATEKEEPER_BACKEND_SHA256:
+            backend_status += " The installed backend already matches."
     blockers = list(profile.blocked)
     if snapshot["exists"] or recipe["id"] in hub.state():
         blockers.append("Existing injector directory or Hub record requires separate recovery review. No injector backup or replacement is authorized.")

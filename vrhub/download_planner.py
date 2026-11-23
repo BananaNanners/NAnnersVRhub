@@ -304,11 +304,12 @@ def plan_components(recipe: dict):
             "hint": str(x["id"]),
         } for x in recipe["packages"]]
     if method == "uevr":
+        pins = recipe.get("archive_pins", {})
         return [
             {"id": "uevr", "name": "Matching UEVR injector package", "phase": 1,
-             "sha256": None, "url": base, "hint": ("uevr_fk" if rid == "fatekeeper" else "uevr")},
+             "sha256": pins.get("uevr"), "url": base, "hint": ("uevr-nightly" if rid == "fatekeeper" and pins else "uevr_fk" if rid == "fatekeeper" else "uevr")},
             {"id": "profile", "name": "Matching game profile", "phase": 1,
-             "sha256": None, "url": source_url(recipe.get("profile", {}).get("page")) or base,
+             "sha256": pins.get("profile"), "url": source_url(recipe.get("profile", {}).get("page")) or base,
              "hint": "slasher" if rid == "fatekeeper" else "hogwartslegacy"},
         ]
     if method == "guide" and rid == "doom-2016-gog" and recipe.get("handler") == "kharvox-gog":
@@ -348,6 +349,8 @@ def _candidate_filename_match(name: str, component: dict, rid: str) -> bool:
         return "ervr" in lower
     if hint == "uevr":
         return "uevr" in lower and "fk" not in lower and "profile" not in lower
+    if hint == "uevr-nightly":
+        return bool(re.fullmatch(r"uevr(?: \(\d+\))?\.zip", lower))
     if hint == "uevr_fk":
         return "uevr_fk" in lower
     if hint == "slasher":

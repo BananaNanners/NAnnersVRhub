@@ -18,12 +18,15 @@ def release(tag, day, payload, name="SLASHER-Win64-Shipping.zip"):
                         "digest": "sha256:" + hashlib.sha256(payload).hexdigest()}]}
 
 
+from tests.fatekeeper_fixtures import recipes as fixture_recipes
+
+
 class ReleaseRecognitionTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.folder = Path(self.tmp.name)
-        self.recipe = hub.load_recipes()["fatekeeper"]
+        self.recipe = fixture_recipes()["fatekeeper"]
         self.source = self.recipe["archive_releases"]["profile"]
         self.old = release("1.0.0", 1, b"old")
         self.latest = release("v1.0.4", 4, b"new")

@@ -46,6 +46,19 @@ class SimulatedCrash(RuntimeError):
 class Fixture:
     root: Path
     token: str
+    uevr_payload: bool = False
+
+    @property
+    def file_limit(self):
+        return 512 if self.uevr_payload else MAX_FILES
+
+    @property
+    def file_bytes(self):
+        return 64 * 1024 * 1024 if self.uevr_payload else MAX_FILE_BYTES
+
+    @property
+    def total_bytes(self):
+        return 256 * 1024 * 1024 if self.uevr_payload else MAX_TOTAL_BYTES
 
 
 @dataclass(frozen=True)
@@ -78,8 +91,8 @@ def _relative(value):
     return PurePosixPath(value)
 
 
-def _check_names(names):
-    if not isinstance(names, (tuple, list, dict)) or len(names) > MAX_FILES:
+def _check_names(names, limit=MAX_FILES):
+    if not isinstance(names, (tuple, list, dict)) or len(names) > limit:
         raise TransactionBlocked("Fixture file inventory exceeds bounded limit.")
     keys = list(names)
     for name in keys:
@@ -142,7 +155,7 @@ def _assert_fixture(fixture: Fixture):
             raise TransactionBlocked("Fixture root or marker is unsafe.")
         with marker.open("rb") as stream:
             content = json.load(stream)
-        if content != {"schema": 1, "token": fixture.token, "purpose": "dev5d3k-offline-only"}:
+        if content != {"schema": 1, "token": fixture.token, "purpose": "fatekeeper-uevr-rehearsal" if fixture.uevr_payload else "dev5d3k-offline-only"}:
             raise TransactionBlocked("Fixture token or marker mismatch.")
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as exc:
         raise TransactionBlocked("Fixture marker is unavailable or invalid.") from exc
@@ -192,9 +205,9 @@ def _read(fixture, section, rel, *, optional=False):
         raise TransactionBlocked("Unsafe fixture file read refused.") from exc
     with os.fdopen(fd, "rb", buffering=0) as stream:
         before = os.fstat(stream.fileno())
-        if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_FILE_BYTES:
+        if not stat.S_ISREG(before.st_mode) or before.st_size > fixture.file_bytes:
             raise TransactionBlocked("Nonregular or oversized fixture file.")
-        data = stream.read(MAX_FILE_BYTES + 1)
+        data = stream.read(fixture.file_bytes + 1)
         after = os.fstat(stream.fileno())
         if (len(data) != before.st_size or
                 (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
@@ -224,7 +237,7 @@ def _mkdir_for(fixture, section, rel):
 
 
 def _write(fixture, section, rel, data):
-    if not isinstance(data, bytes) or len(data) > MAX_FILE_BYTES:
+    if not isinstance(data, bytes) or len(data) > fixture.file_bytes:
         raise TransactionBlocked("Only bounded fixture bytes can be written.")
     parent = _mkdir_for(fixture, section, rel)
     dest = _target(fixture, section, rel)
@@ -274,7 +287,7 @@ def _seal(data, token):
 
 
 def _save_inventory(fixture, managed):
-    _check_names(managed)
+    _check_names(managed, fixture.file_limit)
     if any(not _check_sha(sha) for sha in managed.values()):
         raise TransactionBlocked("Cannot save malformed fixture ownership record.")
     body = {"schema": 1, "managed": managed}
@@ -300,20 +313,21 @@ def _journal(fixture):
 
 @contextmanager
 def fixture_sandbox(installed: dict[str, bytes], incoming: dict[str, bytes],
-                    *, managed: tuple[str, ...] | None = None):
+                    *, managed: tuple[str, ...] | None = None, uevr_payload=False):
     """Create and destroy an explicitly synthetic, private temporary game."""
-    _check_names(installed)
-    _check_names(incoming)
+    bounds = Fixture(Path("/tmp"), "", uevr_payload)
+    _check_names(installed, bounds.file_limit)
+    _check_names(incoming, bounds.file_limit)
     if not incoming:
         raise TransactionBlocked("Fixture needs at least one proposed payload.")
     owned = tuple(installed) if managed is None else tuple(managed)
-    _check_names(owned)
+    _check_names(owned, bounds.file_limit)
     if not set(owned).issubset(installed):
         raise TransactionBlocked("Owned file list is not present in fixture.")
-    if any(not isinstance(data, bytes) or len(data) > MAX_FILE_BYTES
+    if any(not isinstance(data, bytes) or len(data) > bounds.file_bytes
            for data in [*installed.values(), *incoming.values()]):
         raise TransactionBlocked("Only small, synthetic file bytes are accepted.")
-    if sum(map(len, installed.values())) + sum(map(len, incoming.values())) > MAX_TOTAL_BYTES:
+    if sum(map(len, installed.values())) + sum(map(len, incoming.values())) > bounds.total_bytes:
         raise TransactionBlocked("Fixture exceeds safe rehearsal byte limits.")
     # Fixed Linux-only /tmp boundary: never honor TMPDIR pointing into a
     # Steam/Heroic installation or another user-controlled game directory.
@@ -321,12 +335,12 @@ def fixture_sandbox(installed: dict[str, bytes], incoming: dict[str, bytes],
         root = Path(temp).resolve()
         token = secrets.token_hex(32)
         marker = root / ".nanners-offline-fixture.json"
+        fixture = Fixture(root, token, uevr_payload)
         marker.write_bytes(_json(
-            {"schema": 1, "token": token, "purpose": "dev5d3k-offline-only"}))
+            {"schema": 1, "token": token, "purpose": "fatekeeper-uevr-rehearsal" if fixture.uevr_payload else "dev5d3k-offline-only"}))
         marker.chmod(0o600)
         for folder in ("installed", "incoming", "transaction"):
             (root / folder).mkdir(mode=0o700)
-        fixture = Fixture(root, token)
         for name, data in installed.items():
             _write(fixture, "installed", name, data)
         for name, data in incoming.items():
@@ -342,7 +356,7 @@ def _inventory(fixture):
     if (doc.get("schema") != 1 or not isinstance(doc.get("managed"), dict)
             or seal != _seal(doc, fixture.token)):
         raise TransactionBlocked("Fixture ownership inventory missing or seal mismatch.")
-    _check_names(doc["managed"])
+    _check_names(doc["managed"], fixture.file_limit)
     if any(not _check_sha(value) for value in doc["managed"].values()):
         raise TransactionBlocked("Fixture ownership SHA-256 invalid.")
     return doc["managed"]
@@ -353,7 +367,7 @@ def _check_live(fixture, inventory):
     for rel, expected in inventory.items():
         data = _read(fixture, "installed", rel)
         total += len(data)
-        if total > MAX_TOTAL_BYTES or _sha(data) != expected:
+        if total > fixture.total_bytes or _sha(data) != expected:
             raise TransactionBlocked("Tracked installed fixture was manually modified.")
     return total
 
@@ -371,10 +385,10 @@ def _plan_body(fixture):
         for filename in files:
             rel = (Path(parent) / filename).relative_to(incoming_dir).as_posix()
             names.append(rel)
-    _check_names(names)
+    _check_names(names, fixture.file_limit)
     if not names:
         raise TransactionBlocked("No synthetic incoming files.")
-    if len(before) + len(names) > MAX_FILES:
+    if len(before) + len(names) > fixture.file_limit:
         raise TransactionBlocked("Too many fixture files.")
     # Windows/Proton deployments are not case-sensitive everywhere. A new
     # path that only differs in case from ANY existing owned file is unsafe,
@@ -390,7 +404,7 @@ def _plan_body(fixture):
         existing.extend(
             (Path(parent) / name).relative_to(installed_dir).as_posix()
             for name in files)
-    _check_names(existing)
+    _check_names(existing, fixture.file_limit)
     for current in existing:
         key = current.casefold()
         if key in occupied:
@@ -411,7 +425,7 @@ def _plan_body(fixture):
         old = before.get(rel)
         new = _sha(incoming)
         total += len(incoming) + (len(current) if current else 0)
-        if total > MAX_TOTAL_BYTES:
+        if total > fixture.total_bytes:
             raise TransactionBlocked("Update fixture exceeds safety byte limits.")
         if old == new:
             raise TransactionBlocked("Incoming payload has no recorded change.")
@@ -488,7 +502,7 @@ def _prepare(fixture, body, fault=None):
     for number, (rel, expected) in enumerate(sorted(body["before"].items()), 1):
         data = _read(fixture, "installed", rel)
         saved_total += len(data)
-        if saved_total > MAX_TOTAL_BYTES or _sha(data) != expected:
+        if saved_total > fixture.total_bytes or _sha(data) != expected:
             raise TransactionBlocked("Cannot back up changed/oversized installed fixture.")
         _write(fixture, "transaction", "backup/" + rel, data)
         if _sha(_read(fixture, "transaction", "backup/" + rel)) != expected:
@@ -522,9 +536,9 @@ def _verify_journal(fixture, journal, *, require_backups=True):
             not isinstance(modes_before, dict) or not isinstance(new_dirs, list)):
         raise RecoveryBlocked("Incomplete recovery inventory or directory snapshot.")
     try:
-        _check_names(before)
-        _check_names(after)
-        _check_names([r["path"] for r in rows])
+        _check_names(before, fixture.file_limit)
+        _check_names(after, fixture.file_limit)
+        _check_names([r["path"] for r in rows], fixture.file_limit)
         if len(dirs_before) + len(new_dirs) > MAX_DIRECTORIES:
             raise RecoveryBlocked("Directory manifest exceeds rehearsal bounds.")
         for name, mode in dirs_before.items():
@@ -543,7 +557,7 @@ def _verify_journal(fixture, journal, *, require_backups=True):
         for mode in modes_before.values():
             if type(mode) is not int or mode < 0 or mode > 0o7777:
                 raise RecoveryBlocked("Owned-file mode is invalid.")
-        if len(rows) < 1 or len(rows) > MAX_FILES:
+        if len(rows) < 1 or len(rows) > fixture.file_limit:
             raise RecoveryBlocked("Invalid journal entry count.")
         generated = dict(before)
         for row in rows:
@@ -552,7 +566,7 @@ def _verify_journal(fixture, journal, *, require_backups=True):
                     row.get("old") != before.get(rel) or
                     row.get("action") != ("replace" if rel in before else "add") or
                     type(row.get("new_size")) is not int or
-                    not 0 <= row["new_size"] <= MAX_FILE_BYTES):
+                    not 0 <= row["new_size"] <= fixture.file_bytes):
                 raise RecoveryBlocked("Journal ownership inconsistent.")
             generated[rel] = row["new"]
         if generated != after or any(not _check_sha(v) for v in before.values()):

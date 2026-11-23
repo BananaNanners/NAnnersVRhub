@@ -18,6 +18,9 @@ from tests.test_install_review_gui import fixture_plan
 from vrhub.profile_safety import ProfilePlan
 
 
+from tests.fatekeeper_fixtures import recipes as fixture_recipes
+
+
 class ArchiveChecklistTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -42,7 +45,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.app.processEvents()
 
     def pinned_recipe(self):
-        recipe = copy.deepcopy(hub.load_recipes()["valheim"])
+        recipe = copy.deepcopy(fixture_recipes()["valheim"])
         for pkg in recipe["packages"]:
             path = self.folder / (pkg["id"] + ".zip")
             payload = f"test-{pkg['id']}".encode()
@@ -51,7 +54,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         return recipe
 
     def test_archive_first_visual_order_keeps_existing_logical_columns(self):
-        self.page.set_recipe(hub.load_recipes()["cyberpunk-2077"])
+        self.page.set_recipe(fixture_recipes()["cyberpunk-2077"])
         header = self.page.table.horizontalHeader()
         self.assertEqual([header.logicalIndex(i) for i in range(5)], [2,0,3,1,4])
         self.assertEqual(self.page.table.horizontalHeaderItem(2).text(), "Downloaded archive")
@@ -80,7 +83,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertEqual((self.root / "scans.json").read_bytes(),before)
 
     def _scan_fixture(self, rid, names):
-        recipe = hub.load_recipes()[rid]
+        recipe = fixture_recipes()[rid]
         for name in names:
             (self.folder / name).write_bytes(b"fixture archive")
         record = archive_scans.persist(planner.build_plan(recipe, self.folder))
@@ -165,7 +168,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         events = []
         self.page.install_review_requested.connect(events.append)
         for rid in ("skyrim-vr-mgo",):
-            self.page.set_recipe(hub.load_recipes()[rid])
+            self.page.set_recipe(fixture_recipes()[rid])
             self.assertEqual(self.page.install_review_button.text(), "Open Setup Guide")
             self.page.install_review_button.click()
             self.assertEqual(events[-1]["game_id"], rid)
@@ -188,7 +191,7 @@ class ArchiveChecklistTests(unittest.TestCase):
             self.page.install_review_requested.disconnect(events.append)
 
     def _ambiguous_profile(self):
-        recipe = hub.load_recipes()["fatekeeper"]
+        recipe = fixture_recipes()["fatekeeper"]
         first = self.folder / "SLASHER-Win64-Shipping.zip"
         second = self.folder / "SLASHER-Win64-Shipping (1).zip"
         first.write_bytes(b"one fixture")
@@ -232,7 +235,7 @@ class ArchiveChecklistTests(unittest.TestCase):
     def test_release_match_keeps_review_color_and_no_picker(self):
         from vrhub.archive_releases import asset_catalog
         from tests.test_archive_releases import release
-        recipe = hub.load_recipes()["fatekeeper"]
+        recipe = fixture_recipes()["fatekeeper"]
         (self.folder / "SLASHER-Win64-Shipping (1).zip").write_bytes(b"old")
         expected = self.folder / "SLASHER-Win64-Shipping (2).zip"
         expected.write_bytes(b"new")
@@ -272,7 +275,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertEqual((self.root / "scans.json").read_bytes(),before)
 
     def test_filename_match_missing_and_changed_never_render_verified(self):
-        recipe = hub.load_recipes()["cyberpunk-2077"]
+        recipe = fixture_recipes()["cyberpunk-2077"]
         archive = self.folder / "CET-107.zip"
         archive.write_bytes(b"not pinned")
         record = archive_scans.persist(planner.build_plan(recipe,self.folder))
@@ -348,7 +351,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertTrue(dialog.confirm_targets.isChecked())
 
     def test_cyberpunk_review_dependency_identified(self):
-        recipe=hub.load_recipes()["cyberpunk-2077"]
+        recipe=fixture_recipes()["cyberpunk-2077"]
         plan=replace(fixture_plan(),game_id=recipe["id"],method="gameroot",
                      archives=("/test/CET-107.zip",),
                      package_labels=("Cyber Engine Tweaks",))
@@ -357,13 +360,13 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertEqual(dialog.archives.item(0,1).text(),"Cyber Engine Tweaks")
 
     def test_hogwarts_upstream_download_link_only_on_matching_recipe(self):
-        recipe=hub.load_recipes()["hogwarts-legacy"]
+        recipe=fixture_recipes()["hogwarts-legacy"]
         self.page.set_recipe(recipe)
         self.assertFalse(self.page.upstream_link.isHidden())
         self.assertIn("releases#release-100526UE58_6RefreshUpdate",
                       self.page.upstream_link.text())
         self.assertIn("jbusfield/HL_UEVR",planner.plan_components(recipe)[0]["url"])
-        self.page.set_recipe(hub.load_recipes()["fatekeeper"])
+        self.page.set_recipe(fixture_recipes()["fatekeeper"])
         self.assertTrue(self.page.upstream_link.isHidden())
         self.assertEqual(self.page.upstream_link.text(),"")
         self.assertEqual(self.page.table.item(0,0).text(), "UEVR FK — Mod / injector")
@@ -372,7 +375,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertEqual(self.page.table.item(1,0).text(), "Fatekeeper — VR profile")
         self.assertIn("/tag/v1.0.4",
                       self.page.table.cellWidget(1,4).toolTip())
-        self.page.set_recipe(hub.load_recipes()["cyberpunk-2077"])
+        self.page.set_recipe(fixture_recipes()["cyberpunk-2077"])
         self.assertTrue(self.page.upstream_link.isHidden())
         self.assertEqual(self.page.upstream_link.text(),"")
 

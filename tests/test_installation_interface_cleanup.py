@@ -11,6 +11,9 @@ from vrhub import hub, archive_scans, download_planner as planner
 from vrhub.downloads_gui import GuidedDownloadsPage
 
 
+from tests.fatekeeper_fixtures import recipes as fixture_recipes
+
+
 class CleanupTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -36,7 +39,7 @@ class CleanupTests(unittest.TestCase):
         self.page.install_review_requested.connect(self.events.append)
 
     def recipe(self, rid):
-        return copy.deepcopy(hub.load_recipes()[rid])
+        return copy.deepcopy(fixture_recipes()[rid])
 
     def scan(self, recipe):
         record = archive_scans.persist(planner.build_plan(recipe, self.folder))
