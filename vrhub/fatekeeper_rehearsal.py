@@ -28,9 +28,8 @@ def fetch_verified_backend():
     return data
 
 
-@contextmanager
-def prepare(archives, installed, *, fetch_backend=fetch_verified_backend, hub_records=None):
-    """Prepare a disposable transaction from two pinned archives and the patched backend."""
+def build_payload(archives, installed_backend, *, fetch_backend=fetch_verified_backend):
+    """Stage and validate the pinned payload before any target is changed."""
     recipe = hub.load_recipes()["fatekeeper"]
     with TemporaryDirectory(prefix="nanners-fatekeeper-stage-", dir="/tmp") as temp:
         root = Path(temp)
@@ -49,8 +48,7 @@ def prepare(archives, installed, *, fetch_backend=fetch_verified_backend, hub_re
         injector.mkdir()
         with zipfile.ZipFile(copies[0]) as archive:
             hub._extract(archive, "UEVRInjector.exe", injector)
-        backend_path = "drive_c/uevr/UEVRBackend.dll"
-        existing_backend = installed.get(backend_path, b"")
+        existing_backend = installed_backend
         approved = transaction._sha(existing_backend) == FATEKEEPER_BACKEND_SHA256
         stage_fatekeeper_backend(injector, existing_backend if approved else fetch_backend())
         profile = root / "profile"
@@ -66,13 +64,22 @@ def prepare(archives, installed, *, fetch_backend=fetch_verified_backend, hub_re
             for path in directory.rglob("*"):
                 if path.is_file() and not (directory == injector and path.suffix.lower() == ".pdb"):
                     payload[f"{prefix}/{path.relative_to(directory).as_posix()}"] = path.read_bytes()
-        staged = {name: data for name, data in payload.items() if installed.get(name) != data}
-        with transaction.fixture_sandbox(
-            installed, staged, uevr_payload=True, state=hub_records,
-        ) as fixture:
-            if hub_records is not None:
-                payload["hub/state.json"] = _stage_hub_records(fixture, recipe, payload)
-            yield fixture, transaction.build_plan(fixture), payload
+        return payload
+
+
+@contextmanager
+def prepare(archives, installed, *, fetch_backend=fetch_verified_backend, hub_records=None):
+    """Prepare a disposable transaction from the same pinned install payload."""
+    recipe = hub.load_recipes()["fatekeeper"]
+    backend = installed.get("drive_c/uevr/UEVRBackend.dll", b"")
+    payload = build_payload(archives, backend, fetch_backend=fetch_backend)
+    staged = {name: data for name, data in payload.items() if installed.get(name) != data}
+    with transaction.fixture_sandbox(
+        installed, staged, uevr_payload=True, state=hub_records,
+    ) as fixture:
+        if hub_records is not None:
+            payload["hub/state.json"] = _stage_hub_records(fixture, recipe, payload)
+        yield fixture, transaction.build_plan(fixture), payload
 
 
 def _stage_hub_records(fixture, recipe, payload):

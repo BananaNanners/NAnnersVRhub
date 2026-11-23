@@ -28,3 +28,17 @@ this milestone.
 ## Hub state rollback verification
 
 Checkpoint 7c2db61 restores exact disposable Hub state bytes, including legacy recovery records, after an interrupted Fatekeeper repair. Real pinned payload verification passed. Focused suite: 14 passed. Full suite: 1,498 passed, 1 skipped. Production installation is still gated. The accepted e536c29 KDE preview remains open.
+
+## Installer preflight
+
+The reviewed source stages the same pinned two-ZIP payload used by the
+rehearsal. Preflight binds it to the Hub-resolved prefix and reviewed injector
+and profile snapshots, skips files whose digests match, and returns a proposed
+write set. Existing destination files and Hub records are read-only.
+
+PASS: real pinned asset preflight against disposable destinations, 15 focused
+tests, and 1,499 full-suite tests passed (one skipped). The player-accepted
+e536c29 KDE preview remains open. No UI changes in this checkpoint.
+
+PENDING: connect this plan to a durable production commit and recovery journal,
+then review that workflow in KDE before any authorized live test.

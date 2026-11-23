@@ -7,6 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
+from vrhub import fatekeeper_install
 from vrhub import fatekeeper_rehearsal as rehearsal, hub, offline_transaction as transaction
 from vrhub import uevr_dependency_review as review
 
@@ -102,3 +103,36 @@ class FatekeeperRehearsalTests(unittest.TestCase):
             self.assertEqual(transaction._inventory(fixture), plan.before)
             self.assertEqual(transaction._read(fixture, "installed", self.backend), b"old")
             self.assertEqual(transaction._read(fixture, "installed", self.config), b"old-profile")
+
+
+    def test_installer_preflight_targets_reviewed_prefix_and_keeps_matching_backend(self):
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        prefix = root / "pfx"
+        injector = prefix / "drive_c/uevr"
+        profile = prefix / self.config.removesuffix("/config.txt")
+        injector.mkdir(parents=True)
+        backend = injector / "UEVRBackend.dll"
+        backend.write_bytes(self.asset)
+        state_path = root / "state.json"
+        hub._save_state({"unrelated": {"files": ["keep"]}}, path=state_path)
+        original_state = state_path.read_bytes()
+        with patch.multiple(hub, _pfx=lambda *_: prefix, _uevr_dir=lambda *_: injector,
+                            profile_dir=lambda *_: profile, state_file=lambda: state_path):
+            plan = review.build_plan(hub.load_recipes()["fatekeeper"], self.archives)
+            with patch.multiple(fatekeeper_install, FATEKEEPER_BACKEND_SIZE=len(self.asset),
+                                FATEKEEPER_BACKEND_SHA256=sha256(self.asset).hexdigest()):
+                prepared = fatekeeper_install.prepare_reviewed_install(plan, verified_backend=b"invalid")
+            self.assertEqual(prepared.prefix, prefix)
+            self.assertNotIn(str(backend), prepared.writes)
+            self.assertEqual(prepared.writes[str(profile / "config.txt")], b"profile")
+            self.assertEqual(prepared.state, {"unrelated": {"files": ["keep"]}})
+            self.assertEqual(state_path.read_bytes(), original_state)
+            self.assertEqual(backend.read_bytes(), self.asset)
+            self.assertFalse(profile.exists())
+            with patch.object(hub, "_uevr_dir", return_value=prefix / "other"):
+                with self.assertRaisesRegex(RuntimeError, "installation paths changed"):
+                    fatekeeper_install.prepare_reviewed_install(plan)
+
+            backend.write_bytes(b"changed after review")
+            with self.assertRaisesRegex(RuntimeError, "installation changed"):
+                fatekeeper_install.prepare_reviewed_install(plan)

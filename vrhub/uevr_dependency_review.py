@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Read-only UEVR dependency review and offline Fatekeeper backend staging."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from tempfile import NamedTemporaryFile
 from pathlib import Path
@@ -58,6 +58,7 @@ class DependencyReview:
     blockers: tuple[str, ...]
     backend_status: str = ""
     needs_backend_verification: bool = False
+    injector_snapshot: dict = field(default_factory=dict, repr=False)
 
 
 def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
@@ -152,4 +153,4 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
         blockers.append("Matching Hogwarts Legacy injector/profile release is not established. Do not mix release bundles without compatibility review.")
     return DependencyReview(recipe["name"], str(paths[0]), digest, str(dest), rels,
                             size, len(snapshot["files"]), len(snapshot["dirs"]),
-                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status, needs_backend_verification)
+                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status, needs_backend_verification, snapshot)
