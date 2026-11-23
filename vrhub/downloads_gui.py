@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit, ownership_triage
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -154,6 +154,13 @@ class PreUpdateSafetyWorker(QThread):
             result["real_audit"] = real_readiness_audit.audit_game(
                 self.recipe, self.state, integrity=self.integrity,
                 safety=result, integration=result["integration"])
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+            # Triage consumes only the prior on-demand SHA result and validated
+            # read-only ownership audit. No file reads, adoption or writes.
+            result["triage"] = ownership_triage.assess(
+                self.recipe, self.state, result["real_audit"],
+                integrity=self.integrity)
             if self.cancel_flag.is_set():
                 raise installed_integrity.Cancelled()
         except installed_integrity.Cancelled:
@@ -1217,6 +1224,41 @@ class GuidedDownloadsPage(QWidget):
             lines.append(
                 "  All live gates unresolved: fresh verified backup · game lock · "
                 "real compatibility · tested real recovery · separate approval · executor disabled")
+        triage = result.get("triage")
+        if (isinstance(triage, dict) and triage.get("game_id") == result["game_id"]
+                and triage.get("live_update_authorized") is False
+                and triage.get("legacy_state_migrated") is False
+                and triage.get("manual_files_adopted") is False):
+            lines.extend((
+                "",
+                "OWNERSHIP RECONCILIATION & MODIFIED-FILE TRIAGE — READ ONLY",
+                triage["summary"],
+                "Differences are NOT proof of damage or of a newer mod version.",
+                "No installed files read again, ownership adopted, SHA records rewritten or repair performed.",
+            ))
+            labels = {
+                "possible_customization": "Possible configuration customization (cause unverified)",
+                "binary_drift": "Binary difference (cause unknown)",
+                "other_modified": "Recorded file changed (cause unknown)",
+                "missing": "Missing recorded file",
+                "unsafe": "Unsafe path or file type",
+                "unknown": "Unable to verify safely",
+            }
+            for item in triage["rows"]:
+                lines.append(
+                    f"  {item['name']}: {item['classification'].replace('_', ' ')} · "
+                    f"prior SHA: {item['status']} · "
+                    f"Hub ownership: {'recorded' if item['owned_by_hub'] else 'unverified'}")
+                for issue in item["reported_issues"]:
+                    lines.append(
+                        f"    {labels.get(issue['category'], 'Unresolved issue')}: "
+                        + issue["relative_file"])
+                    lines.append("      Next: " + issue["next_step"])
+                if item["unreported_issues"]:
+                    lines.append(
+                        f"    {item['unreported_issues']} additional unmatched file(s) "
+                        "not listed; bounded verifier output is NOT a full inventory.")
+                lines.append("    Next: " + item["next_step"])
         unified = result.get("unified")
         if (isinstance(unified, dict) and unified.get("game_id") == result["game_id"]
                 and unified.get("authorized") is False
@@ -1373,6 +1415,12 @@ class GuidedDownloadsPage(QWidget):
             lines.append(f"{row['name']}: {row['status']} — {row['reason']}")
             for item in row["issues"]:
                 lines.append(f"  {item['status']}: {item['file']} — {item['detail']}")
+                if (item.get("status") in ("Modified", "Missing", "Unsafe", "Unknown")
+                        and installed_integrity._relative(item.get("file"))):
+                    category = ownership_triage._category(
+                        item["status"], item["file"])
+                    lines.append("    Triage (not a diagnosis): " +
+                                 ownership_triage._next_for(category))
             if len(row["issues"]) >= installed_integrity.MAX_ISSUES_PER_COMPONENT:
                 lines.append("  Additional differences may exist; output is bounded.")
         if isinstance(presence, dict):
