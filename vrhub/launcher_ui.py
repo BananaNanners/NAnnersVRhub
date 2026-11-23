@@ -153,6 +153,13 @@ class LauncherSidebar(QFrame):
         self.future_panel.hide()
         layout.addWidget(self.future_panel)
         self.future_toggle.toggled.connect(self._set_future_visible)
+        # Dev5D3-Y2: there is no Downloads/Backups/Settings/Logs page
+        # behind these disabled placeholders. Keep the old widgets as
+        # internal compatibility hooks for historical preview tests, but
+        # do not advertise destinations which cannot be opened. The real
+        # mod archives, recovery tools and game diagnostics stay in Games.
+        self.future_toggle.setEnabled(False)
+        self.future_toggle.hide()
 
         footer = QLabel("🍌  NAnnersVRhub  •  Linux VR")
         footer.setObjectName("launcherSideHint")
@@ -160,7 +167,9 @@ class LauncherSidebar(QFrame):
         self.set_page(1)
 
     def _set_future_visible(self, expanded):
-        self.future_panel.setVisible(bool(expanded))
+        # No unfinished navigation is exposed to regular players, even if
+        # a legacy caller sets the hidden toggle programmatically.
+        self.future_panel.setVisible(False)
         self.future_toggle.setText(
             "  Hide future sections  ▾" if expanded else "  Future sections  ▸")
 

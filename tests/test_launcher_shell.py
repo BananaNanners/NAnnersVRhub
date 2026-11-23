@@ -108,15 +108,15 @@ class LauncherShellTests(unittest.TestCase):
         self.assertIn("font-size: 14px", stylesheet)
         self.assertIn("#FFD21A", stylesheet)
 
-    def test_future_sections_expand_without_hiding_game_library(self):
-        self.assertFalse(self.window.sidebar.future_panel.isVisible())
-        self.window.sidebar.future_toggle.click()
+    def test_unimplemented_future_sections_hidden_from_player_sidebar(self):
+        sidebar = self.window.sidebar
+        self.assertFalse(sidebar.future_toggle.isVisible())
+        self.assertFalse(sidebar.future_toggle.isEnabled())
+        self.assertFalse(sidebar.future_panel.isVisible())
+        sidebar.future_toggle.setChecked(True)
         self.app.processEvents()
-        self.assertTrue(self.window.sidebar.future_panel.isVisible())
-        self.assertEqual(self.window.sidebar.game_list.count(), 9)
-        self.window.sidebar.future_toggle.click()
-        self.app.processEvents()
-        self.assertFalse(self.window.sidebar.future_panel.isVisible())
+        self.assertFalse(sidebar.future_panel.isVisible())
+        self.assertEqual(sidebar.game_list.count(), 9)
 
     def test_unimplemented_navigation_is_disabled_and_labeled(self):
         for label in ("Downloads", "Backups", "Settings", "Logs"):
