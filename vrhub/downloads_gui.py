@@ -1367,8 +1367,9 @@ class GuidedDownloadsPage(QWidget):
                 "COMPLETE DESTINATION MAPPING & PRESERVATION COVERAGE — READ ONLY",
                 f"{coverage['complete_recipe_target_lists']} of "
                 f"{coverage['total_dependencies']} recipe target lists mapped at review.",
-                "FULL list means mapped INSTALL TARGETS only — not full ZIP-member accounting, "
-                "not current ownership verification, and NOT a safe update.",
+                "FULL list means mapped INSTALL TARGETS; strict Cyberpunk ZIP maps "
+                "also account for every regular member. Neither verifies release "
+                "authenticity, current ownership, compatibility, or safe updating.",
                 "No complete real before/after, automatic preservation, backup or "
                 "release compatibility certification exists.",
             ))
@@ -1385,6 +1386,10 @@ class GuidedDownloadsPage(QWidget):
                     f"  {entry['name']}: {names.get(entry['status'], 'Review')} · "
                     f"mapped: {count if count is not None else 'unknown'} · "
                     f"source: {entry['mapped_by'] or 'not established'}")
+                if entry.get("mapped_by") == "cyberpunk_gameroot":
+                    lines.append(
+                        "    Strict ZIP member accounting at review only; "
+                        "Nexus release authenticity and game-build compatibility UNVERIFIED.")
                 if entry.get("preservation_overlaps") or entry.get("unmapped_preservation_issues"):
                     lines.append(
                         f"    Modified-file review: {entry['preservation_overlaps']} "

@@ -300,7 +300,7 @@ class CompleteCoverageGuiTests(unittest.TestCase):
         self.assertFalse(result["live_update_authorized"])
         text=self.page.safety_details.toPlainText()
         self.assertIn("COMPLETE DESTINATION MAPPING & PRESERVATION COVERAGE",text)
-        self.assertIn("FULL list means mapped INSTALL TARGETS only",text)
+        self.assertIn("FULL list means mapped INSTALL TARGETS",text)
         self.assertIn("LIVE UPDATE DISABLED",text)
         self.assertIn("PRESERVATION-AWARE UPDATE MANIFEST PREVIEW",text)
         self.assertEqual(before,(self.page.install_review_button.text(),

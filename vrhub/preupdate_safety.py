@@ -12,7 +12,7 @@ import re
 from pathlib import Path, PurePosixPath
 from threading import Event
 
-from . import hub, bepinex, installed_integrity, install_review, profile_safety, download_planner
+from . import hub, bepinex, installed_integrity, install_review, profile_safety, download_planner, cyberpunk_archive_mapping
 
 MAX_ITEMS = 2500
 MAX_TOTAL_BACKUP_BYTES = 2 * 1024 * 1024 * 1024
@@ -227,7 +227,18 @@ def _prospective(recipe, component, row, cancel):
                        if (isinstance(entry, dict) and
                            entry.get("file") == str(path) and entry.get("tags"))]
             expected = matches[0].get("sha256") if len(matches) == 1 else None
-        if not isinstance(expected, str) or candidate_sha != expected:
+        # Cyberpunk single-candidate scans do not normally retain a known
+        # Nexus SHA. Bind this review to the checked scan's file size and a
+        # *fresh* stable digest without calling that proof of source identity.
+        single_unpinned_cyberpunk = (
+            recipe.get("id") == "cyberpunk-2077"
+            and row.get("status") == "Possible archive — inspect first"
+            and expected is None and row.get("matches") == 1
+            and type(row.get("size")) is int
+            and row["size"] == before.st_size
+        )
+        if (not single_unpinned_cyberpunk and
+                (not isinstance(expected, str) or candidate_sha != expected)):
             return (), "Candidate digest no longer matches recorded scan; rescan."
         install_review._zip_preflight(path)
         selected = ()
@@ -245,12 +256,32 @@ def _prospective(recipe, component, row, cancel):
                 entries = profile_safety._archive_entries(z)
                 selected = tuple(sorted(rel for _, rel in entries))
                 mapping = "Mapped as profile-relative ZIP entries; current files still need protection."
+        elif recipe.get("id") == "cyberpunk-2077" and recipe.get("method") == "gameroot":
+            # Nexus component identity is filename-based, not source proof.
+            # Single-candidate scans may lack SHA metadata: only accept the
+            # stable, freshly hashed ZIP when exact scan size and uniqueness
+            # are established. This is NOT an authenticated Nexus release.
+            if row.get("status") != "Possible archive — inspect first":
+                return (), "Cyberpunk candidate is not a uniquely reviewed ZIP."
+            if (not isinstance(row.get("matches"), int) or row["matches"] < 1
+                    or type(row.get("size")) is not int
+                    or row["size"] != before.st_size):
+                return (), "Cyberpunk archive scan size or candidate identity is stale."
+            selected, _ = cyberpunk_archive_mapping.map_checked_zip(
+                recipe, component, path)
+            mapping = (
+                "Mapped by strict Cyberpunk game-root ZIP parser; "
+                "all regular members accounted for, source version unverified.")
         if selected:
             # A ZIP changed between SHA validation and reading its central
             # directory is never accepted as a stable target map.
             if profile_safety._digest(path) != candidate_sha:
                 return (), "Candidate digest changed during mapping; rescan."
             return selected, mapping
+    except cyberpunk_archive_mapping.MappingBlocked as exc:
+        # This exception carries only a bounded, developer-authored category;
+        # never include raw filenames from a hostile ZIP in the report.
+        return (), "Cyberpunk ZIP review blocked: " + str(exc)
     except (OSError, RuntimeError, ValueError, install_review.PlanRejected):
         # Do not surface raw path content or untrusted archive metadata in GUI.
         return (), "Archive metadata could not be safely inspected for a replacement map."
@@ -321,7 +352,22 @@ def review(recipe, scan, state, decisions, integrity=None, *, cancel=None):
         proposed = ()
         note = "No current candidate ZIP or archive plan."
         current = by_archive.get(cid)
-        if (not warning and readiness.get("code") == "candidate"):
+        # W: a single unambiguous Cyberpunk ZIP may be inspected for its
+        # target layout even when the UPDATE-readiness gate is blocked by
+        # missing installed-version or Nexus release proof. Mapping is never
+        # permission to install: the existing readiness remains unchanged.
+        cyberpunk_layout_only = (
+            recipe.get("id") == "cyberpunk-2077"
+            and recipe.get("method") == "gameroot"
+            and isinstance(current, dict)
+            and current.get("status") == "Possible archive — inspect first"
+            and current.get("matches") == 1
+            and current.get("ambiguous") is not True
+            and current.get("candidate_incomplete") is not True
+            and current.get("release_review") is not True
+        )
+        if not warning and (readiness.get("code") == "candidate"
+                            or cyberpunk_layout_only):
             proposed, note = _prospective(recipe, comp, current, cancel)
             safe_map = bool(proposed)
         # Dev5D3-V: preserve the complete bounded, already-mapped *relative*
@@ -332,6 +378,8 @@ def review(recipe, scan, state, decisions, integrity=None, *, cancel=None):
                 safe_map and note == "Mapped by existing pinned-package archive parser.")
             else "uevr_profile" if (
                 safe_map and note.startswith("Mapped as profile-relative ZIP entries;"))
+            else "cyberpunk_gameroot" if (
+                safe_map and note.startswith("Mapped by strict Cyberpunk game-root ZIP parser;"))
             else None
         )
         target_list = tuple(str(p) for p in proposed) if (

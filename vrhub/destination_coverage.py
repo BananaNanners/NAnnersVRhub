@@ -83,12 +83,17 @@ def assess(recipe, safety, preservation, *, validated_manifest=None):
         parser = row.get("full_target_provenance")
         if not isinstance(paths, list) or len(paths) > MAX_TARGETS:
             raise ValueError("Full target inventory missing or unbounded.")
-        if parser is not None and parser not in ("pinned_package", "uevr_profile"):
+        if parser is not None and parser not in (
+                "pinned_package", "uevr_profile", "cyberpunk_gameroot"):
             raise ValueError("Unrecognized target mapper.")
         supported = (
             parser == "pinned_package" and bool(recipe.get("packages"))
             or parser == "uevr_profile" and recipe.get("method") == "uevr"
             and cid == "profile"
+            or parser == "cyberpunk_gameroot"
+            and recipe.get("id") == "cyberpunk-2077"
+            and recipe.get("method") == "gameroot"
+            and cid.isdecimal()
         )
         if parser is not None and not supported:
             raise ValueError("Wrong mapper for component/recipe.")
@@ -178,7 +183,10 @@ def assess(recipe, safety, preservation, *, validated_manifest=None):
             "untracked_hints":untracked,
             "ownership_hints":tracked_conflicts,
             "scope_complete_at_review":complete,
-            "source_file_accounting_complete":False,
+            # Strict W mapper accounts for every regular ZIP member only.
+            # Other metadata and live file ownership still need independent proof.
+            "source_file_accounting_complete": (
+                complete and parser == "cyberpunk_gameroot"),
             "current_installed_ownership_verified":False,
             "mapping_future_compatible":False,
             "live_update_authorized":False,"next_step":next_step,
