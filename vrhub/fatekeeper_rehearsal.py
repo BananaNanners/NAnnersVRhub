@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import json
 import urllib.request
 import zipfile
 
@@ -28,7 +29,7 @@ def fetch_verified_backend():
 
 
 @contextmanager
-def prepare(archives, installed, *, fetch_backend=fetch_verified_backend):
+def prepare(archives, installed, *, fetch_backend=fetch_verified_backend, hub_records=None):
     """Prepare a disposable transaction from two pinned archives and the patched backend."""
     recipe = hub.load_recipes()["fatekeeper"]
     with TemporaryDirectory(prefix="nanners-fatekeeper-stage-", dir="/tmp") as temp:
@@ -65,6 +66,42 @@ def prepare(archives, installed, *, fetch_backend=fetch_verified_backend):
             for path in directory.rglob("*"):
                 if path.is_file() and not (directory == injector and path.suffix.lower() == ".pdb"):
                     payload[f"{prefix}/{path.relative_to(directory).as_posix()}"] = path.read_bytes()
+        if hub_records is not None:
+            state_name = "hub/state.json"
+            installed = {
+                **installed,
+                state_name: (json.dumps(hub_records, indent=2) + "\n").encode(),
+            }
+            updated = dict(hub_records)
+            for record, folder in (
+                ("fatekeeper", "drive_c/uevr"),
+                ("fatekeeper:profile", "drive_c/users/steamuser/AppData/" + recipe["profile"]["dir"]),
+            ):
+                # Keep the previous record, including recovery metadata, in the
+                # verified transaction backup. Unrelated records stay intact.
+                updated[record] = {
+                    "root": folder,
+                    "files": sorted(name for name in payload if name.startswith(folder + "/")),
+                    "archive_sha256": recipe["archive_pins"]["profile" if ":" in record else "uevr"],
+                }
+            updated["fatekeeper"]["backend_sha256"] = FATEKEEPER_BACKEND_SHA256
+            payload[state_name] = (json.dumps(updated, indent=2) + "\n").encode()
         staged = {name: data for name, data in payload.items() if installed.get(name) != data}
         with transaction.fixture_sandbox(installed, staged, uevr_payload=True) as fixture:
             yield fixture, transaction.build_plan(fixture), payload
+
+
+def rehearse_install(archives, verified_backend):
+    """Run the real staged payload and record rollback in an isolated fixture."""
+    records = {"other-game": {"files": ["untouched"]}}
+    with prepare(archives, {}, fetch_backend=lambda: verified_backend, hub_records=records) as (
+        fixture, plan, payload
+    ):
+        transaction.execute(fixture, plan)
+        for name, data in payload.items():
+            if transaction._read(fixture, "installed", name) != data:
+                raise RuntimeError("Installed fixture did not match the reviewed payload.")
+        transaction.rollback(fixture)
+        restored = transaction._read(fixture, "installed", "hub/state.json")
+        if json.loads(restored) != records or transaction._inventory(fixture) != plan.before:
+            raise RuntimeError("Fixture rollback did not restore the original Hub records.")

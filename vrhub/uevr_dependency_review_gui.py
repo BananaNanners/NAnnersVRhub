@@ -7,22 +7,41 @@ from .install_review import human_file_size as size
 
 
 class BackendVerification(QThread):
-    result = Signal(bool)
+    result = Signal(object)
 
     def run(self):
         from .fatekeeper_rehearsal import fetch_verified_backend
         try:
-            fetch_verified_backend()
+            asset = fetch_verified_backend()
         except (OSError, ValueError, RuntimeError):
+            self.result.emit(None)
+        else:
+            self.result.emit(asset)
+
+
+class InstallRehearsal(QThread):
+    result = Signal(bool)
+
+    def __init__(self, archives, asset, parent):
+        super().__init__(parent)
+        self.archives, self.asset = archives, asset
+
+    def run(self):
+        from .fatekeeper_rehearsal import rehearse_install
+        try:
+            rehearse_install(self.archives, self.asset)
+        except (OSError, RuntimeError, ValueError):
             self.result.emit(False)
         else:
             self.result.emit(True)
 
 
 class DependencyReviewDialog(QDialog):
-    def __init__(self, plan, parent=None):
+    def __init__(self, plan, parent=None, *, disposable_rehearsal=False):
         super().__init__(parent)
         self.plan = plan
+        self.disposable_rehearsal = disposable_rehearsal
+        self.verified_asset = None
         self.setObjectName("uevrDependencyReviewDialog")
         self.setStyleSheet("""
             QDialog#uevrDependencyReviewDialog {background:#0A0D10; color:#E5E8ED;}
@@ -95,6 +114,10 @@ class DependencyReviewDialog(QDialog):
         buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
 
+        if disposable_rehearsal:
+            self.apply_button.setText("Test installation and rollback")
+            self.apply_button.setToolTip("Runs only against a separate disposable prefix.")
+            self.apply_button.clicked.connect(self.run_rehearsal)
         if plan.needs_backend_verification:
             self.backend.setText(plan.backend_status + " Verifying the pinned backend release...")
             worker = BackendVerification(QApplication.instance())
@@ -102,10 +125,33 @@ class DependencyReviewDialog(QDialog):
             worker.finished.connect(worker.deleteLater)
             worker.start()
 
-    def show_backend_result(self, verified):
-        if verified:
+    def show_backend_result(self, asset):
+        if asset is not None:
+            self.verified_asset = asset
+            self.apply_button.setEnabled(self.disposable_rehearsal)
             self.backend.setText(self.plan.backend_status + " Backend SHA-256 verified.")
         else:
             self.backend.setText(
                 "Backend verification failed. Check your connection and reopen Review installation. "
                 "No installation files were changed.")
+
+
+    def run_rehearsal(self):
+        if not self.disposable_rehearsal or self.verified_asset is None:
+            return
+        from pathlib import Path
+
+        self.apply_button.setEnabled(False)
+        self.status.setText("Testing install and rollback in a disposable prefix...")
+        archives = [Path(self.plan.injector_archive), Path(self.plan.profile.archive)]
+        worker = InstallRehearsal(archives, self.verified_asset, QApplication.instance())
+        worker.result.connect(self.show_rehearsal_result)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+
+    def show_rehearsal_result(self, passed):
+        self.status.setText(
+            "Disposable installation and rollback passed. Live installation disabled." if passed else
+            "Disposable installation check failed. Live installation remains disabled."
+        )
+        self.apply_button.setEnabled(True)
