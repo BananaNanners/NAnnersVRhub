@@ -24,3 +24,7 @@ Nightly debug symbols are excluded from staging. The code stages all files in
 the reviewed profile, including plugin DLLs. Historical update/scan cases retain
 an explicit legacy test fixture, and existing user records are never migrated by
 this milestone.
+
+## Hub state rollback verification
+
+Checkpoint 7c2db61 restores exact disposable Hub state bytes, including legacy recovery records, after an interrupted Fatekeeper repair. Real pinned payload verification passed. Focused suite: 14 passed. Full suite: 1,498 passed, 1 skipped. Production installation is still gated. The accepted e536c29 KDE preview remains open.
