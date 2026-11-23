@@ -28,19 +28,59 @@ class PlayerFirstPreview(PayloadEvidencePreview):
         # and only while inspecting advanced diagnostics. No backend changes.
         self.downloads.comparison_toggle.toggled.disconnect(
             self.offline_footer.setVisible)
+        # The inherited X preview appended the rehearsal as an OUTER sibling.
+        # Y moved the diagnostics panel, leaving that sibling elsewhere in
+        # the scroll area. Parent it INSIDE the actual Advanced diagnostics
+        # disclosure so the visible menu action is directly discoverable.
+        self.downloads.layout().removeWidget(self.offline_footer)
+        self.downloads.comparison_panel.layout().insertWidget(
+            1, self.offline_footer)
         self.downloads.comparison_toggle.toggled.connect(
             self._sync_developer_only_rehearsal)
         self.development_tools_action.toggled.connect(
             self._sync_developer_only_rehearsal)
+        self.development_tools_action.toggled.connect(
+            self._announce_development_tools)
         self.game_details_tabs.currentChanged.connect(
             self._sync_developer_only_rehearsal)
+        self.development_tools_action.setToolTip(
+            "Optional preview-only diagnostic rehearsals appear under "
+            "Install / Update → Advanced diagnostics. No game files changed.")
         self.offline_footer.hide()
+
+    def disable_mutations(self):
+        # The inherited preview safety allowlist intentionally disabled this
+        # QAction in older milestones. That also made Tools > Enable
+        # development tools inert for humans, while direct setChecked() in
+        # tests misleadingly worked. Permit ONLY the reversible UI toggle:
+        # the inherited implementation still disables every real installer,
+        # downloader, save editor and live update action.
+        super().disable_mutations()
+        self.development_tools_action.setEnabled(True)
+
+    def _announce_development_tools(self, enabled):
+        self.statusBar().showMessage(
+            "Development tools ON — open Install / Update → "
+            "Advanced diagnostics for TEST FIXTURE ONLY."
+            if enabled else
+            "Development tools OFF — fixture rehearsals hidden.",
+            12000)
 
     def _sync_developer_only_rehearsal(self, *_):
         allowed = (self.development_tools_action.isChecked()
                    and self.game_details_tabs.currentWidget() is self.downloads
                    and self.downloads.comparison_toggle.isChecked())
         self.offline_footer.setVisible(allowed)
+        if allowed:
+            # Opening the disclosure from Tools must bring the actual fixture
+            # control into view rather than leaving it above/below the scroll.
+            from PySide6.QtCore import QTimer
+            # show_details() rebuilds the game panel on QAction toggling.
+            # Scroll AFTER Qt finishes that layout, not during the toggle.
+            QTimer.singleShot(
+                80, lambda: self.game_page_scroll.ensureWidgetVisible(
+                    self.offline_button, 0, 24)
+                if self.offline_footer.isVisible() else None)
 
 
 def main():
@@ -81,10 +121,10 @@ def main():
         "Read-only Nexus key lookup, when available. No key is copied.")
     win.allow_guided_installs = False
     win.downloads.allow_transfers = False
-    win.setWindowTitle("NAnnersVRhub 0.5.5-dev5D3y — PLAYER-FIRST UI PREVIEW (NO GAME WRITES)")
+    win.setWindowTitle("NAnnersVRhub 0.5.5-dev5D3y1 — PLAYER-FIRST ACCEPTANCE FIX (NO GAME WRITES)")
     brand = win.findChild(QLabel, "brandTitle")
     if brand:
-        brand.setText("NAnnersVRhub  0.5.5-dev5D3y · PREVIEW")
+        brand.setText("NAnnersVRhub  0.5.5-dev5D3y1 · PREVIEW")
     win.tabs.setCurrentIndex(1)
 
     def select(rid):
@@ -103,7 +143,7 @@ def main():
     app.processEvents()
     win.disable_mutations()
     if args.show:
-        print("DEV5D3Y DESKTOP READY — Player-first workflow; "
+        print("DEV5D3Y1 DESKTOP READY — Player-first workflow; "
               "technical rehearsal under Tools > Enable development tools; "
               "no game writes.", flush=True)
         return app.exec()
@@ -220,11 +260,59 @@ def main():
     win.downloads.comparison_toggle.setChecked(True)
     app.processEvents()
     checks["advanced_still_no_rehearsal"] = not win.offline_footer.isVisible()
-    win.development_tools_action.setChecked(True)
+    # Use the actual Tools menu QAction trigger, not setChecked(): the
+    # original desktop acceptance failure was in the menu-to-layout path.
+    tools = next((entry.menu() for entry in win.menuBar().actions()
+                  if entry.menu() and entry.menu().title()=="Tools"), None)
+    action = next((item for item in tools.actions()
+                   if item is win.development_tools_action), None) if tools else None
+    checks["development_tools_menu_action_accessible"] = (
+        action is win.development_tools_action
+        and action.isEnabled() and action.isCheckable())
+    if action:
+        action.trigger()
     app.processEvents()
+    from PySide6.QtTest import QTest
+    QTest.qWait(130)
+    app.processEvents()
+    print("DEV5D3Y_MENU_TRACE", {
+        "checked":win.development_tools_action.isChecked(),
+        "action_enabled":win.development_tools_action.isEnabled(),
+        "enabled":win.development_tools_enabled,
+        "footer_visible":win.offline_footer.isVisible(),
+        "button_visible":win.offline_button.isVisible(),
+        "footer_parent_is_panel":win.offline_footer.parent() is win.downloads.comparison_panel,
+        "footer_in_panel_index":win.downloads.comparison_panel.layout().indexOf(win.offline_footer),
+        "panel_visible":win.downloads.comparison_panel.isVisible(),
+        "status_message":win.statusBar().currentMessage(),
+        "menu_action_text":win.development_tools_action.text(),
+    },flush=True)
     checks["dev_tools_explicitly_enable_rehearsal"] = (
-        win.offline_footer.isVisible()
-        and win.offline_button.isVisible())
+        win.development_tools_action.isChecked()
+        and win.offline_footer.isVisible()
+        and win.offline_button.isVisible()
+        and win.offline_footer.parent() is win.downloads.comparison_panel
+        and win.downloads.comparison_panel.layout().indexOf(
+            win.offline_footer)==1)
+    checks["developer_tools_menu_feedback"] = (
+        "Development tools ON" in win.statusBar().currentMessage())
+    top = win.offline_button.mapTo(
+        win.game_page_scroll.viewport(), QPoint(0,0)).y()
+    bottom = top+win.offline_button.height()
+    checks["developer_fixture_visible_in_viewport"] = (
+        top >= 0 and bottom <= win.game_page_scroll.viewport().height())
+    print("DEV5D3Y_DEVELOPER_BUTTON_VIEWPORT",
+          "top",top,"bottom",bottom,
+          "viewport_height",win.game_page_scroll.viewport().height(),
+          flush=True)
+    checks["dev_tools_no_mutation_permissions"] = (
+        not win.allow_guided_installs
+        and not win.downloads.allow_transfers
+        and not win.install_btn.isEnabled()
+        and not win.downloads.download_button.isEnabled()
+        and not win.downloads.download_cancel.isEnabled()
+        and not win.doom_saves_btn.isEnabled()
+        and not win.hub_update_btn.isEnabled())
     checks["dev_tools_fixture_not_run_automatically"] = (
         "not run" in win.offline_status.text())
     win.offline_button.click()
@@ -239,10 +327,13 @@ def main():
         and not page.allow_transfers)
     checks["dev_only_render"] = win.grab().save(
         str(imgs/"developer-only-rehearsal.png"))
-    win.development_tools_action.setChecked(False)
+    if action:
+        action.trigger()
     app.processEvents()
     checks["dev_tools_off_hides_rehearsal"] = (
-        not win.offline_footer.isVisible())
+        not win.development_tools_action.isChecked()
+        and not win.offline_footer.isVisible()
+        and "Development tools OFF" in win.statusBar().currentMessage())
     select("cyberpunk-2077")
     checks["game_switch_discards_fixture_result"] = (
         "not run" in win.offline_status.text()
