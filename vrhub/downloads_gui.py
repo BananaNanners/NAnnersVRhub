@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
-from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit, ownership_triage, preservation_decisions, update_manifest_preview
+from . import download_planner as planner, archive_scans, archive_releases, verified_download, hub, archive_update_comparison, installed_integrity, update_readiness, preupdate_safety, update_integration, unified_update_plan, real_readiness_audit, ownership_triage, preservation_decisions, update_manifest_preview, destination_coverage
 from .table_columns import enable_spreadsheet_columns
 from .archive_checklist_ui import status_icon
 from .install_review import human_file_size
@@ -173,6 +173,13 @@ class PreUpdateSafetyWorker(QThread):
             # before/after plan. A complete manifest exists for fake fixtures.
             result["manifest_preview"] = update_manifest_preview.preview_from_review(
                 self.recipe, result, result["preservation"])
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+            # Audit the bounded FULL recipe install-target lists in this
+            # on-demand result. No live game compatibility or update authority.
+            result["coverage"] = destination_coverage.assess(
+                self.recipe, result, result["preservation"],
+                validated_manifest=result["manifest_preview"])
             if self.cancel_flag.is_set():
                 raise installed_integrity.Cancelled()
         except installed_integrity.Cancelled:
@@ -1350,6 +1357,50 @@ class GuidedDownloadsPage(QWidget):
             lines.append(
                 "  LIVE UPDATE DISABLED: no full real before/after data, "
                 "no fresh backup, no real recovery approval, no executor.")
+        coverage = result.get("coverage")
+        if (isinstance(coverage, dict)
+                and coverage.get("game_id") == result["game_id"]
+                and coverage.get("live_update_authorized") is False
+                and coverage.get("executable_plan") is None):
+            lines.extend((
+                "",
+                "COMPLETE DESTINATION MAPPING & PRESERVATION COVERAGE — READ ONLY",
+                f"{coverage['complete_recipe_target_lists']} of "
+                f"{coverage['total_dependencies']} recipe target lists mapped at review.",
+                "FULL list means mapped INSTALL TARGETS only — not full ZIP-member accounting, "
+                "not current ownership verification, and NOT a safe update.",
+                "No complete real before/after, automatic preservation, backup or "
+                "release compatibility certification exists.",
+            ))
+            names = {
+                "target_list_mapped": "Install-target map captured; update still blocked",
+                "mapping_missing": "No supported complete target map yet",
+                "preservation_review": "Modified-file preservation review required",
+                "conflict_review": "Ownership or destination conflicts require review",
+                "manual": "Manual workflow only",
+            }
+            for entry in coverage["rows"]:
+                count = entry["full_target_count"]
+                lines.append(
+                    f"  {entry['name']}: {names.get(entry['status'], 'Review')} · "
+                    f"mapped: {count if count is not None else 'unknown'} · "
+                    f"source: {entry['mapped_by'] or 'not established'}")
+                if entry.get("preservation_overlaps") or entry.get("unmapped_preservation_issues"):
+                    lines.append(
+                        f"    Modified-file review: {entry['preservation_overlaps']} "
+                        f"candidate overlaps; {entry['unmapped_preservation_issues']} "
+                        "changed file(s) outside listed targets.")
+                conflicts = (entry.get("cross_component_overlaps", 0) +
+                             entry.get("untracked_hints", 0) +
+                             entry.get("ownership_hints", 0))
+                if conflicts:
+                    lines.append(
+                        f"    At least {conflicts} overlap/conflict hint(s); "
+                        "lack of other hints is NOT clearance.")
+                lines.append("    Next: " + entry["next_step"])
+            lines.append(
+                "  LIVE UPDATE DISABLED: installation and deletion require "
+                "fresh backups, current integrity, compatibility, recovery and consent.")
         unified = result.get("unified")
         if (isinstance(unified, dict) and unified.get("game_id") == result["game_id"]
                 and unified.get("authorized") is False

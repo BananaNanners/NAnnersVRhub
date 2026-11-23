@@ -324,6 +324,23 @@ def review(recipe, scan, state, decisions, integrity=None, *, cancel=None):
         if (not warning and readiness.get("code") == "candidate"):
             proposed, note = _prospective(recipe, comp, current, cancel)
             safe_map = bool(proposed)
+        # Dev5D3-V: preserve the complete bounded, already-mapped *relative*
+        # install-target list in this one-shot read-only result. The public
+        # sample remains unchanged; this is never a reusable install plan.
+        provenance = (
+            "pinned_package" if (
+                safe_map and note == "Mapped by existing pinned-package archive parser.")
+            else "uevr_profile" if (
+                safe_map and note.startswith("Mapped as profile-relative ZIP entries;"))
+            else None
+        )
+        target_list = tuple(str(p) for p in proposed) if (
+            safe_map and provenance and len(proposed) <= MAX_ITEMS) else ()
+        if target_list and (
+                len({p.casefold() for p in target_list}) != len(target_list)
+                or any(_rel(p) is None for p in target_list)):
+            target_list = ()
+            provenance = None
         duplicates = _duplicate_owners(recipe, comp, state)
         untracked = (
             _untracked_destinations(recipe, comp, proposed, old)
@@ -351,6 +368,8 @@ def review(recipe, scan, state, decisions, integrity=None, *, cancel=None):
             "current_sample": [str(Path(x).name) for x in old[:MAX_DETAIL]],
             "future_destinations": len(proposed) if safe_map else None,
             "future_sample": list(proposed[:MAX_DETAIL]) if safe_map else [],
+            "full_target_list": list(target_list),
+            "full_target_provenance": provenance,
             "mapping": note, "ownership_conflicts": duplicates,
             "untracked_collisions": untracked,
             "integrity": file_status,
