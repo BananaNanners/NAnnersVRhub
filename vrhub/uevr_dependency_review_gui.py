@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Read-only dialog; deliberately no mutation or confirmation callback."""
+"""Review pinned dependencies and invoke the gated installer."""
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QHBoxLayout
 from .archive_checklist_ui import archive_table
@@ -22,14 +22,13 @@ class BackendVerification(QThread):
 class InstallRehearsal(QThread):
     result = Signal(bool)
 
-    def __init__(self, archives, asset, parent):
+    def __init__(self, action, parent):
         super().__init__(parent)
-        self.archives, self.asset = archives, asset
+        self.action = action
 
     def run(self):
-        from .fatekeeper_rehearsal import rehearse_install
         try:
-            rehearse_install(self.archives, self.asset)
+            self.action()
         except (OSError, RuntimeError, ValueError):
             self.result.emit(False)
         else:
@@ -37,11 +36,15 @@ class InstallRehearsal(QThread):
 
 
 class DependencyReviewDialog(QDialog):
-    def __init__(self, plan, parent=None, *, disposable_rehearsal=False):
+    def __init__(self, plan, parent=None, *, disposable_rehearsal=False,
+                 install_action=None, install_authorized=None):
         super().__init__(parent)
         self.plan = plan
         self.disposable_rehearsal = disposable_rehearsal
         self.verified_asset = None
+        self.install_action = install_action
+        self.install_authorized = install_authorized or (lambda: False)
+        self.install_worker = None
         self.setObjectName("uevrDependencyReviewDialog")
         self.setStyleSheet("""
             QDialog#uevrDependencyReviewDialog {background:#0A0D10; color:#E5E8ED;}
@@ -114,6 +117,10 @@ class DependencyReviewDialog(QDialog):
         buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
 
+        if install_action is not None and not disposable_rehearsal:
+            self.apply_button.setToolTip("Live installation requires separate authorization.")
+            self.apply_button.clicked.connect(self.run_rehearsal)
+            self.apply_button.setEnabled(self.install_authorized() and not plan.needs_backend_verification)
         if disposable_rehearsal:
             self.apply_button.setText("Test installation and rollback")
             self.apply_button.setToolTip("Runs only against a separate disposable prefix.")
@@ -128,7 +135,7 @@ class DependencyReviewDialog(QDialog):
     def show_backend_result(self, asset):
         if asset is not None:
             self.verified_asset = asset
-            self.apply_button.setEnabled(self.disposable_rehearsal)
+            self.apply_button.setEnabled(self.disposable_rehearsal or self.install_authorized())
             self.backend.setText(self.plan.backend_status + " Backend SHA-256 verified.")
         else:
             self.backend.setText(
@@ -136,22 +143,55 @@ class DependencyReviewDialog(QDialog):
                 "No installation files were changed.")
 
 
+    def reject(self):
+        if self.install_worker is None:
+            super().reject()
+
+    def closeEvent(self, event):
+        if self.install_worker is not None:
+            event.ignore()
+        else:
+            super().closeEvent(event)
+
     def run_rehearsal(self):
-        if not self.disposable_rehearsal or self.verified_asset is None:
+        if not self.disposable_rehearsal and not self.install_authorized():
+            return
+        if self.plan.needs_backend_verification and self.verified_asset is None:
             return
         from pathlib import Path
+        from .fatekeeper_rehearsal import rehearse_install
 
         self.apply_button.setEnabled(False)
-        self.status.setText("Testing install and rollback in a disposable prefix...")
-        archives = [Path(self.plan.injector_archive), Path(self.plan.profile.archive)]
-        worker = InstallRehearsal(archives, self.verified_asset, QApplication.instance())
+        self.close_button.setEnabled(False)
+        if self.disposable_rehearsal:
+            archives = [Path(self.plan.injector_archive), Path(self.plan.profile.archive)]
+            if self.install_action is not None:
+                action = lambda: self.install_action(self.verified_asset)
+            else:
+                action = lambda: rehearse_install(archives, self.verified_asset)
+            self.status.setText("Testing install and rollback in a disposable prefix...")
+        else:
+            action = lambda: self.install_action(self.verified_asset)
+            self.status.setText("Installing reviewed Fatekeeper dependencies...")
+        worker = self.install_worker = InstallRehearsal(action, self)
         worker.result.connect(self.show_rehearsal_result)
+        worker.finished.connect(self._finish_install)
         worker.finished.connect(worker.deleteLater)
         worker.start()
 
+    def _finish_install(self):
+        self.install_worker = None
+        self.close_button.setEnabled(True)
+        self.apply_button.setEnabled(self.disposable_rehearsal)
+
     def show_rehearsal_result(self, passed):
-        self.status.setText(
-            "Disposable installation and rollback passed. Live installation disabled." if passed else
-            "Disposable installation check failed. Live installation remains disabled."
-        )
-        self.apply_button.setEnabled(True)
+        if self.disposable_rehearsal:
+            self.status.setText(
+                "Disposable installation and rollback passed. Live installation disabled." if passed else
+                "Disposable installation check failed. Live installation remains disabled."
+            )
+        else:
+            self.status.setText(
+                "Fatekeeper dependencies installed." if passed else
+                "Installation failed. Review the Fatekeeper recovery journal before retrying."
+            )

@@ -42,3 +42,17 @@ e536c29 KDE preview remains open. No UI changes in this checkpoint.
 
 PENDING: connect this plan to a durable production commit and recovery journal,
 then review that workflow in KDE before any authorized live test.
+
+## Dev5D3-FK5 - Live Installer Gate & Acceptance
+
+The player accepted FK4 2d3c88e8f83decf55e5b4b51fbf5c6b50da54828 on KDE.
+FK5 connects the pinned review to the Hub's install and recovery paths.
+The separate live gate denies execution before resolving any live target.
+
+PASS: real pinned assets in disposable fresh and repair installs, rollback
+of files and exact prior Hub state, and gated entry point tests. The focused
+suite passed 22 tests. The complete suite passed 1,506 with one skipped.
+
+PENDING: FK5 KDE acceptance and separate live authorization. Recover any
+active or committed transaction before opening another journal. Prior
+recovery artifacts are retained on retry.

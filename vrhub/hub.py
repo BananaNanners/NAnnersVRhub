@@ -170,6 +170,8 @@ def profile_dir(recipe: dict, steam_roots=None) -> Path:
 
 def install(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
     """Install a mod from a .pak file, or from a .zip containing one (or a UEVR zip)."""
+    if recipe.get("id") == "fatekeeper" and recipe.get("archive_pins"):
+        raise RuntimeError("Use Review installation for the verified Fatekeeper dependency pair.")
     if not get_handler(recipe).install_supported(recipe):
         raise RuntimeError(f"{recipe['name']} is a guided workflow; it has no direct mod-file install step.")
     game = game_path(recipe, steam_roots)
@@ -773,6 +775,13 @@ def install_profile(recipe: dict, zip_file: Path, steam_roots=None, *,
 def uninstall(recipe_id: str, *, profile_confirm: bool = False) -> list[Path]:
     """Remove what we installed under this key (use '<game>:profile' for a profile)."""
     state = _load_state()
+    if recipe_id in {"fatekeeper", "fatekeeper:profile"} and state.get(recipe_id, {}).get(
+            "installer") == "fatekeeper-pair-fk4":
+        if not profile_confirm:
+            raise RuntimeError("Confirm recovery of the complete Fatekeeper dependency pair.")
+        from . import fatekeeper_commit
+        fatekeeper_commit.recover_live()
+        return []
     if recipe_id.endswith(":profile"):
         from . import profile_safety
         return profile_safety.restore(recipe_id, confirmed=profile_confirm)

@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from vrhub import fatekeeper_commit as transaction, hub, profile_safety
 from vrhub.fatekeeper_install import PreparedInstall
@@ -68,3 +69,44 @@ class FatekeeperCommitTests(unittest.TestCase):
     def test_live_or_unrelated_prefix_refused(self):
         with self.assertRaisesRegex(RuntimeError, "Live Fatekeeper"):
             transaction.commit(self.root / "elsewhere", self.prepare(False))
+
+
+    def test_production_entry_points_refuse_before_resolving_paths(self):
+        with patch.object(hub, "_pfx", side_effect=AssertionError("touched live resolver")):
+            with self.assertRaisesRegex(RuntimeError, "Explicit live Fatekeeper authorization"):
+                transaction.install_reviewed(None)
+            with self.assertRaisesRegex(RuntimeError, "Explicit live Fatekeeper authorization"):
+                transaction.recover_live()
+
+    def test_production_entry_points_use_resolved_disposable_paths(self):
+        prepared = self.prepare(True)
+        storage = self.root / "hub"
+        storage.mkdir()
+        state_path = storage / "state.json"
+        self.state.rename(state_path)
+        original = state_path.read_bytes()
+        with (patch.multiple(hub, _pfx=lambda *_: self.prefix, _uevr_dir=lambda *_: self.injector,
+                            profile_dir=lambda *_: self.profile, state_file=lambda: state_path),
+            patch.object(profile_safety, "_assert_game_stopped") as stopped,
+            patch.object(transaction, "live_install_authorized", return_value=True), patch(
+            "vrhub.fatekeeper_install.prepare_reviewed_install", return_value=prepared
+        ) as preflight):
+            self.assertEqual(transaction.install_reviewed("review", verified_backend=b"asset"),
+                             [self.config])
+            preflight.assert_called_once_with("review", None, verified_backend=b"asset")
+            records = hub._load_state(path=state_path)
+            self.assertNotIn(str(self.profile / "custom.ini"), records["fatekeeper:profile"]["files"])
+            self.assertTrue((storage / "fatekeeper-recovery/fk4-journal.json").is_file())
+            hub.uninstall("fatekeeper:profile", profile_confirm=True)
+            self.assertEqual(state_path.read_bytes(), original)
+            self.assertEqual(self.config.read_bytes(), b"old configuration")
+            stopped.assert_called_with("fatekeeper")
+
+    def test_retry_keeps_prior_recovery_artifacts(self):
+        prepared = self.prepare(False)
+        transaction.commit(self.root, prepared)
+        transaction.recover(self.root)
+        transaction.commit(self.root, prepared)
+        history, = self.root.glob("history-*")
+        self.assertTrue((history / "fk4-journal.json").is_file())
+        self.assertTrue((history / "fk4-backup").is_dir())

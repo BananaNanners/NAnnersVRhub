@@ -1621,7 +1621,17 @@ class HubWindow(QMainWindow):
             except (RuntimeError, OSError, ValueError, zipfile.BadZipFile) as exc:
                 QMessageBox.warning(self, "UEVR installation review blocked (nothing changed)", str(exc))
                 return
-            DependencyReviewDialog(plan, self).exec()
+            if r["id"] == "fatekeeper" and r.get("archive_pins"):
+                from . import fatekeeper_commit
+
+                DependencyReviewDialog(
+                    plan, self,
+                    install_action=lambda asset: fatekeeper_commit.install_reviewed(
+                        plan, _roots(), verified_backend=asset),
+                    install_authorized=fatekeeper_commit.live_install_authorized,
+                ).exec()
+            else:
+                DependencyReviewDialog(plan, self).exec()
             return
         if route == "profile":
             if r.get("method") != "uevr" or not r.get("profile") or len(files) > 1:
@@ -1698,6 +1708,21 @@ class HubWindow(QMainWindow):
     def uninstall(self):
         r = self.current()
         if not r:
+            return
+        if r["id"] == "fatekeeper" and r.get("archive_pins"):
+            from . import fatekeeper_commit
+
+            if not fatekeeper_commit.live_install_authorized():
+                QMessageBox.information(
+                    self, "Fatekeeper recovery",
+                    "Live Fatekeeper recovery requires separate authorization.")
+                return
+            if QMessageBox.question(
+                    self, "Restore Fatekeeper dependencies",
+                    "Restore the verified backup of the injector, profile and Hub records?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
+                self._run(lambda: fatekeeper_commit.recover_live(_roots()), "Restored",
+                          lambda _: "Fatekeeper files and Hub records were restored.")
             return
         if r.get("method") == "gameroot":
             try:
