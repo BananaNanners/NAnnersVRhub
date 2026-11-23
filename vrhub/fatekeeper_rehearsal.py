@@ -66,29 +66,37 @@ def prepare(archives, installed, *, fetch_backend=fetch_verified_backend, hub_re
             for path in directory.rglob("*"):
                 if path.is_file() and not (directory == injector and path.suffix.lower() == ".pdb"):
                     payload[f"{prefix}/{path.relative_to(directory).as_posix()}"] = path.read_bytes()
-        if hub_records is not None:
-            state_name = "hub/state.json"
-            installed = {
-                **installed,
-                state_name: (json.dumps(hub_records, indent=2) + "\n").encode(),
-            }
-            updated = dict(hub_records)
-            for record, folder in (
-                ("fatekeeper", "drive_c/uevr"),
-                ("fatekeeper:profile", "drive_c/users/steamuser/AppData/" + recipe["profile"]["dir"]),
-            ):
-                # Keep the previous record, including recovery metadata, in the
-                # verified transaction backup. Unrelated records stay intact.
-                updated[record] = {
-                    "root": folder,
-                    "files": sorted(name for name in payload if name.startswith(folder + "/")),
-                    "archive_sha256": recipe["archive_pins"]["profile" if ":" in record else "uevr"],
-                }
-            updated["fatekeeper"]["backend_sha256"] = FATEKEEPER_BACKEND_SHA256
-            payload[state_name] = (json.dumps(updated, indent=2) + "\n").encode()
         staged = {name: data for name, data in payload.items() if installed.get(name) != data}
-        with transaction.fixture_sandbox(installed, staged, uevr_payload=True) as fixture:
+        with transaction.fixture_sandbox(
+            installed, staged, uevr_payload=True, state=hub_records,
+        ) as fixture:
+            if hub_records is not None:
+                payload["hub/state.json"] = _stage_hub_records(fixture, recipe, payload)
             yield fixture, transaction.build_plan(fixture), payload
+
+
+def _stage_hub_records(fixture, recipe, payload):
+    """Use the actual Hub serializer against explicit disposable state paths."""
+    before = fixture.root / "installed/hub/state.json"
+    after = fixture.root / "incoming/hub/state.json"
+    original = hub._load_state(path=before)
+    updated = dict(original)
+    for key, folder, component in (
+        ("fatekeeper", "drive_c/uevr", "uevr"),
+        ("fatekeeper:profile", "drive_c/users/steamuser/AppData/" + recipe["profile"]["dir"], "profile"),
+    ):
+        # Preserve prior recovery metadata in the verified state backup.
+        root = fixture.root / "installed" / folder
+        updated[key] = {
+            "installer": "fatekeeper-pair-preview",
+            "root": str(root),
+            "files": sorted(str(fixture.root / "installed" / name)
+                            for name in payload if name.startswith(folder + "/")),
+            "archive_sha256": recipe["archive_pins"][component],
+        }
+    updated["fatekeeper"]["backend_sha256"] = FATEKEEPER_BACKEND_SHA256
+    hub._save_state(updated, path=after)
+    return after.read_bytes()
 
 
 def rehearse_install(archives, verified_backend):

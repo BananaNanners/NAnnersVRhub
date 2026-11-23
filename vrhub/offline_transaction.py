@@ -313,9 +313,13 @@ def _journal(fixture):
 
 @contextmanager
 def fixture_sandbox(installed: dict[str, bytes], incoming: dict[str, bytes],
-                    *, managed: tuple[str, ...] | None = None, uevr_payload=False):
+                    *, managed: tuple[str, ...] | None = None, uevr_payload=False, state=None):
     """Create and destroy an explicitly synthetic, private temporary game."""
     bounds = Fixture(Path("/tmp"), "", uevr_payload)
+    if state is not None:
+        if not uevr_payload or "hub/state.json" in installed or "hub/state.json" in incoming:
+            raise TransactionBlocked("Hub state is reserved for the UEVR fixture.")
+        installed = {**installed, "hub/state.json": (json.dumps(state, indent=2) + "\n").encode()}
     _check_names(installed, bounds.file_limit)
     _check_names(incoming, bounds.file_limit)
     if not incoming:

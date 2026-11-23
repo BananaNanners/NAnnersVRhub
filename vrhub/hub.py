@@ -97,14 +97,14 @@ def load_recipes() -> dict[str, dict]:
     return out
 
 
-def _load_state() -> dict:
-    f = state_file()
+def _load_state(*, path: Path | None = None) -> dict:
+    f = state_file() if path is None else path
     return json.loads(f.read_text()) if f.is_file() else {}
 
 
-def _save_state(s: dict) -> None:
+def _save_state(s: dict, *, path: Path | None = None) -> None:
     from .self_install import _atomic
-    _atomic(state_file(), (json.dumps(s, indent=2) + "\n").encode())
+    _atomic(state_file() if path is None else path, (json.dumps(s, indent=2) + "\n").encode())
 
 
 def is_installed(recipe_id: str) -> bool:

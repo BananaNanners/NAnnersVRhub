@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
+import json
 import tempfile
 import unittest
 import zipfile
@@ -76,3 +77,28 @@ class FatekeeperRehearsalTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "archive failed SHA-256"):
             with self.prepare({}):
                 self.fail("Bad archive reached transaction preparation")
+
+
+    def test_interrupted_repair_restores_hub_serialized_records(self):
+        records = {
+            "fatekeeper": {"files": ["old"], "backup": "original-backup"},
+            "fatekeeper:profile": {"installer": "uevr-profile-2", "backup": "profile-backup"},
+            "unrelated": {"files": ["keep"]},
+        }
+        before = {self.backend: b"old", self.config: b"old-profile"}
+        with rehearsal.prepare(self.archives, before, fetch_backend=lambda: self.asset,
+                               hub_records=records) as (fixture, plan, payload):
+            state = fixture.root / "installed/hub/state.json"
+            original = state.read_bytes()
+            expected = json.loads(payload["hub/state.json"])
+            self.assertEqual(expected["unrelated"], records["unrelated"])
+            self.assertTrue(Path(expected["fatekeeper"]["root"]).is_relative_to(fixture.root))
+            with self.assertRaises(transaction.SimulatedCrash):
+                transaction.execute(fixture, plan, fault="after_inventory")
+            self.assertEqual(hub._load_state(path=state), expected)
+            transaction.recover(fixture)
+            self.assertEqual(state.read_bytes(), original)
+            self.assertEqual(hub._load_state(path=state), records)
+            self.assertEqual(transaction._inventory(fixture), plan.before)
+            self.assertEqual(transaction._read(fixture, "installed", self.backend), b"old")
+            self.assertEqual(transaction._read(fixture, "installed", self.config), b"old-profile")
