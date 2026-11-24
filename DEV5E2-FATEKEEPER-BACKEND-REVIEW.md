@@ -248,3 +248,13 @@ not closed or duplicated. Stable Hub and live game destinations not written.
 Player must rescan in the existing preview and review the verified pair and
 Preserve backend action. Live install remains disabled. Player acceptance
 pending; no Dev5E3 or Hogwarts Legacy live update authorized.
+
+## Final player acceptance — 2026-11-24 Pacific
+
+Player explicitly confirmed: "All six Dev5E2 final KDE desktop acceptance checks passed!"
+All six checks accepted: both pinned ZIPs verified, installed pinned backend
+verified, installation review opens, backend action Preserve, two ZIP roles,
+and live installation disabled. Together with the real-release disposable
+transaction validation at ab5ae93828661ce5552ba18958a3fa72c1e37bfe,
+Dev5E2 is accepted. This is not authorization for live writes, release promotion,
+Dev5E3 implementation, or the blocked Hogwarts Legacy v2.1.0 update.
