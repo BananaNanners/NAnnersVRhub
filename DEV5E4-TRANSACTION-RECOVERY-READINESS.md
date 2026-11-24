@@ -1,6 +1,6 @@
 # Dev5E4 — Transaction and recovery readiness
 
-Status: automated validation passed; interactive KDE player acceptance pending. Live Fatekeeper installation and recovery remain disabled. No release or push authorized.
+Status: automated validation and interactive KDE player acceptance passed (2026-11-24). Dev5E4 development milestone accepted. Live Fatekeeper installation and recovery remain disabled. No release or push authorized.
 
 ## Checkpoints and evidence
 
@@ -20,15 +20,19 @@ Status: automated validation passed; interactive KDE player acceptance pending. 
 - Existing full Hub launcher, title-only subclass, Fatekeeper selected on Install / Update; persistent isolated preview state `/home/bananananers/.local/share/nannersvrhub-development-preview/state.json`. Stable state SHA-256 unchanged before and after launch: `e4000197b5a4cf153e59c18058075d2a9dc312bbe2e3ff7519bae51c99370ef5`.
 - Verified startup: pinned backend already installed, two ZIP roles, live gate false. Window left open for player acceptance.
 
-## Player checks (pending)
+## Player checks (accepted 2026-11-24)
 
-1. Full Hub opens normally, existing navigation and theme intact, Fatekeeper selected.
-2. Install / Update shows two ZIP dependencies and the verified backend separately, with no manual DLL copying required.
-3. Existing archive scan and installation review work; exact file decisions and preservation guidance visible; live apply disabled.
-4. Close the review without changes; normal navigation remains responsive.
-5. Compatibility report and Updates retain independent local evidence, not inferred gameplay success.
-6. Existing recovery summary remains readable; no extra player controls introduced; live recovery disabled. Pending-recovery warning is covered by automated fixtures, not injected into the working preview.
-7. Hogwarts Legacy still retains its separate v2.1.0 update restriction; no live write or release promotion.
+Player explicitly reported all seven Dev5E4 desktop acceptance checks passed. The following records the actual checklist presented for acceptance, not a new gameplay test or live-write approval.
+
+1. PASS — Full Hub opens normally and existing navigation works.
+2. PASS — Install / Update displays exactly two ZIP dependencies.
+3. PASS — UEVRBackend.dll shows Verified pinned build installed.
+4. PASS — Archive scanning and Review installation work correctly.
+5. PASS — Installation review displays file decisions and keeps live installation disabled.
+6. PASS — Compatibility and Updates display the correct dependency evidence.
+7. PASS — Existing recovery information is readable, with no unnecessary new controls.
+
+At acceptance PID 16237 remained running and stable state SHA-256 still matched the launch baseline. The prior documentation checkpoint was `b5c0be463291f75e2ec83341bded47440c97c1a5`; runtime checkpoint remains unchanged. Pending recovery is covered by automated fixtures, not injected into the working preview. Hogwarts Legacy remains separately gated; the desktop checklist did not constitute new Hogwarts gameplay or update validation.
 
 ## Limitations and next gate
 
