@@ -56,3 +56,41 @@ profile. Keep the live gate closed.
 
 After the pilot review, the separately tracked Fatekeeper backend dependency can
 be revisited with player approval. Hogwarts live installation remains blocked.
+
+## KDE acceptance — player confirmed
+
+2026-11-24 (Pacific): Player explicitly reported **"Dev5E1 desktop checks passed"**
+for the interactive development preview launched from code checkpoint
+`fe05f671025267b4d996275197c44cc75fdcecaf`. Process PID `11318`,
+command `python3 -m tests.manual_launcher_dev5e1_preview`, was independently
+verified still running. No code changes were made during this acceptance.
+
+- **PASS — player KDE acceptance:** existing Install / Update workflow,
+  `HogwartsLegacy.zip` review, expandable **Show profile file inventory**,
+  and the intended Install / Replace / Preserve review behavior.
+- **PASS — review evidence:** committed 229-row exact manifest, 36 Install /
+  53 Replace / 140 Preserve; all five locally changed files and `log.txt`
+  preserved; `config_AFW.txt` distinct from active `config.txt`.
+- **PASS — prior offline verification:** 49 focused tests, 1,515 full-suite
+  passes and one skip, plus full-profile and Hub-state byte-for-byte rollback
+  across disposable interrupted-update scenarios. These are offline results,
+  **not** a live Hogwarts update.
+- **PASS — preview lifecycle:** previous preview absent at launch, one
+  identified interactive KDE preview at PID `11318`, launched at
+  `fe05f67`; this documentation-only checkpoint does not replace the
+  running preview or change its loaded source.
+- **BLOCKED — live update:** compatibility of the preserved customized
+  profile with new v2.1.0 Lua settings, plugin, input/gesture and attachment
+  behavior is unproven. The upstream clean-profile recommendation remains
+  unresolved. **Keep the live-write gate closed**; no user authorization for
+  installing or changing the real Hogwarts profile is implied by KDE
+  acceptance.
+- **NOT CHANGED:** stable NAnnersVRhub 0.5.4, Fatekeeper, Hogwarts live
+  profile, installed UEVR backend/LuaVR, Heroic runner, Proton prefix,
+  protected Hub state and recovery data.
+
+**Next planned milestone:** revisit Fatekeeper's verified joeyhodge
+`UEVRBackend.dll` as an explicit dependency in the existing Hub dependency
+workflow. Start with read-only source, hash, installation location, and
+ownership checks. Preserve the working VR setup, avoid a redundant extra
+screen, and obtain separate approval before any live replacement.
