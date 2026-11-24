@@ -115,3 +115,27 @@ and blocks installation; the failed ZIP is not parsed.
 
 Focused: 54 passed. Full: 1,511 passed, one skipped. KDE acceptance pending.
 Return directly to FK6B gameplay and -51 investigation after acceptance.
+
+### FK6B corrective acceptance and OpenXR diagnosis
+
+Player accepted the FK6B1 corrective KDE preview at
+19f4d79c08de2cc5a20de7e6874c480514be47d7. The approved code is unchanged.
+
+Read-only evidence: WiVRn host selection resolves to openxr_wivrn.json.
+The prefix registry routes through wineopenxr64.json and its wineopenxr.dll
+exists. The installed UEVR openxr_loader.dll matches the pinned Nightly ZIP.
+UEVR log.txt records OpenXR instance failure -51 at 21:15:23 Pacific on
+2026-11-23 and Lua state initialization immediately afterward. Steam tracked
+the game. Stored launch options include the OpenXR runtime import flag, but
+the failed game and injector environments were not captured. Proton log
+unavailable at the standard home location. The October success establishes
+historical gameplay with the Steam/Proton workflow, not exact launch parity.
+
+The supervisor reaps exiting direct children. Its duplicate guard can
+block relaunch while a Wine helper keeps an old launcher alive. No process
+or configuration was changed in this diagnosis.
+
+Next test is player-initiated with existing settings. Sample the actual
+game and injector process environment allowlist, loader mappings and fresh
+logs, then observe cleanup on normal exit. Current headset gameplay,
+input and exact cause of -51 remain pending.
