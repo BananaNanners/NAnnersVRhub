@@ -120,7 +120,7 @@ class PlayerFirstPreview(PayloadEvidencePreview):
                 if self.offline_footer.isVisible() else None)
 
 
-def main():
+def main(*, bind_host_openxr=True):
     p = argparse.ArgumentParser()
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--show", action="store_true")
@@ -146,7 +146,7 @@ def main():
             or not os.environ.get("VRHUB_NEXUS_KEY_FILE")):
         raise SystemExit("Private preview state + key path required.")
 
-    if args.show:
+    if args.show and bind_host_openxr:
         _bind_host_openxr_runtime_for_preview()
     suppress_preview_name_cache_updates()
     HubUpdateController.startup = lambda self: None

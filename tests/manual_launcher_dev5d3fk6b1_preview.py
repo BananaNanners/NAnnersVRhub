@@ -24,7 +24,7 @@ class FullHubPreview(base.PlayerFirstPreview):
         QTimer.singleShot(0, self.identify_preview)
 
     def identify_preview(self):
-        self.setWindowTitle("NAnnersVRhub Dev5D3-FK6B1 - Full Hub Preview")
+        self.setWindowTitle("NAnnersVRhub Dev5D3-FK6B1 Corrective - Full Hub Preview")
         brand = self.findChild(QLabel, "brandTitle")
         if brand:
             brand.setText("NAnnersVRhub - FK6B1 Preview")
@@ -41,7 +41,7 @@ def main():
         os.environ[key] = str(shared / folder)
     base.PlayerFirstPreview = FullHubPreview
     sys.argv = [sys.argv[0], "--show"]
-    return base.main()
+    return base.main(bind_host_openxr=False)
 
 
 if __name__ == "__main__":

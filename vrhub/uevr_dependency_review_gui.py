@@ -66,9 +66,17 @@ class DependencyReviewDialog(QDialog):
         self.status = QLabel("PREVIEW ONLY — LIVE INSTALLATION DISABLED")
         self.status.setStyleSheet("color:#FFD21A;font-weight:800")
         layout.addWidget(self.status)
+        if plan.verification_failed:
+            self.status.setText("INSTALLATION BLOCKED - DEPENDENCY CHECKSUM FAILED")
+
+        def archive_label(path, role):
+            if path in plan.failed_archives:
+                return role + " (checksum failed)"
+            return role
+
         self.archives = archive_table([
-            (plan.injector_archive, "Mod / injector", plan.injector_sha256),
-            (plan.profile.archive, "VR profile", plan.profile.archive_sha256)], self)
+            (plan.injector_archive, archive_label(plan.injector_archive, "Mod / injector"), plan.injector_sha256),
+            (plan.profile.archive, archive_label(plan.profile.archive, "VR profile"), plan.profile.archive_sha256)], self)
         layout.addWidget(self.archives)
         def label(text):
             widget = QLabel(text)
@@ -77,16 +85,21 @@ class DependencyReviewDialog(QDialog):
             widget.setTextInteractionFlags(Qt.TextSelectableByMouse)
             layout.addWidget(widget)
             return widget
+        def archive_summary(files, archive_bytes):
+            if plan.verification_failed:
+                return "Archive contents pending checksum verification"
+            return f"Archive: {files} files / {size(archive_bytes)}"
+
         self.injector = label(
             f"Injector destination: {plan.injector_destination}"+chr(10)+
-            f"Archive: {len(plan.injector_files)} files / {size(plan.injector_bytes)}; existing: "
+            archive_summary(len(plan.injector_files), plan.injector_bytes) + "; existing: "
             f"{plan.existing_files} files, {plan.existing_dirs} directories / {size(plan.existing_bytes)}"+chr(10)+
             f"Release evidence: {', '.join(plan.release_tags[0]) or 'Not established'}")
         if plan.backend_status:
             self.backend = label(plan.backend_status)
         self.profile = label(
             f"Profile destination: {plan.profile.destination}"+chr(10)+
-            f"Archive: {plan.profile.profile_files} files / {size(plan.profile.profile_bytes)}; existing: "
+            archive_summary(plan.profile.profile_files, plan.profile.profile_bytes) + "; existing: "
             f"{plan.profile.existing_files} files, {plan.profile.existing_dirs} directories / {size(plan.profile.existing_bytes)}"+chr(10)+
             f"Release evidence: {', '.join(plan.release_tags[1]) or 'Not established'}")
         self.has_changes = True
@@ -120,6 +133,9 @@ class DependencyReviewDialog(QDialog):
         else:
             self.inventory.setPlainText(chr(10).join(("INJECTOR", *plan.injector_files,
                                                        "", "PROFILE", *plan.profile.file_names)))
+        if plan.verification_failed:
+            self.inventory_toggle.hide()
+            label("Archive SHA-256 values in the table are the required pins. Download the approved release and rescan.")
         self.inventory.hide()
         layout.addWidget(self.inventory)
         self.inventory_toggle.toggled.connect(self.inventory.setVisible)
@@ -137,6 +153,8 @@ class DependencyReviewDialog(QDialog):
         buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
 
+        if plan.verification_failed:
+            return
         if install_action is not None and not disposable_rehearsal:
             self.apply_button.setToolTip("Live installation requires separate authorization.")
             self.apply_button.clicked.connect(self.run_rehearsal)
@@ -174,6 +192,8 @@ class DependencyReviewDialog(QDialog):
             super().closeEvent(event)
 
     def run_rehearsal(self):
+        if self.plan.verification_failed:
+            return
         if not self.disposable_rehearsal and (not self.has_changes or not self.install_authorized()):
             return
         if self.plan.needs_backend_verification and self.verified_asset is None:

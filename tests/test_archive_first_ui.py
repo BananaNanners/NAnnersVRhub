@@ -62,7 +62,8 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertIn("Later", self.page.table.item(14,1).text())
 
     def test_fatekeeper_bad_pin_opens_blocked_installation_review(self):
-        from vrhub import pinned_release_review
+        from vrhub import uevr_dependency_review
+        from vrhub.uevr_dependency_review_gui import DependencyReviewDialog
 
         recipe = hub.load_recipes()["fatekeeper"]
         (self.folder / "uevr.zip").write_bytes(b"different injector")
@@ -75,12 +76,23 @@ class ArchiveChecklistTests(unittest.TestCase):
         requests = []
         self.page.install_review_requested.connect(requests.append)
         self.page.install_review_button.click()
-        review = pinned_release_review.build_uevr_hash_review(recipe, requests[0]["rows"])
-        self.assertIn("nightly-01133", review[0][1])
-        self.assertIn("praydog/UEVR-nightly", review[0][3])
-        dialog = pinned_release_review.ReviewDialog(review, checksum_failure=True)
+        prefix = self.root / "prefix"
+        prefix.mkdir()
+        with mock.patch.multiple(hub, _pfx=lambda *_: prefix,
+                                 _uevr_dir=lambda *_: prefix / "uevr",
+                                 profile_dir=lambda *_: prefix / "profile"):
+            plan = uevr_dependency_review.build_blocked_plan(recipe, requests[0]["rows"])
+        self.assertEqual(plan.failed_archives, (str(self.folder / "uevr.zip"),))
+        self.assertIn("nightly-01133", plan.blockers[0])
+        self.assertIn("praydog/UEVR-nightly", plan.blockers[0])
+        install = mock.Mock()
+        dialog = DependencyReviewDialog(plan, install_action=install, install_authorized=lambda: True)
         self.addCleanup(dialog.close)
+        self.assertIn("CHECKSUM FAILED", dialog.status.text())
+        self.assertIn(str(prefix / "profile"), dialog.profile.text())
         self.assertFalse(dialog.apply_button.isEnabled())
+        dialog.run_rehearsal()
+        install.assert_not_called()
 
     def test_pinned_check_marks_and_complete_existing_batch_request(self):
         recipe = self.pinned_recipe()

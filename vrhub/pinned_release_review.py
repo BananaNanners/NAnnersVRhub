@@ -62,7 +62,7 @@ def build_uevr_hash_review(recipe, rows):
 
 
 class ReviewDialog(QDialog):
-    def __init__(self, plan, parent=None, *, checksum_failure=False):
+    def __init__(self, plan, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Dependency release review — installation blocked")
         self.resize(880, 420)
@@ -76,24 +76,13 @@ class ReviewDialog(QDialog):
             if warning:
                 label.setStyleSheet("color:#FFD21A;font-weight:700")
             layout.addWidget(label)
-        if checksum_failure:
-            self.setWindowTitle("Review installation - checksum verification failed")
-            add("INSTALLATION BLOCKED - CHECKSUM VERIFICATION FAILED", True)
-            for path, version, asset, source, digest, pin in plan:
-                add(f"Affected archive: {path}", True)
-                add(f"Required: {asset} - {version}")
-                add(f"Approved source: {source}")
-                add(f"Archive SHA-256: {digest}")
-                add(f"Required SHA-256: {pin}")
-            add("Download the required archive from the approved source, then rescan.")
-        else:
-            add("INSTALLATION BLOCKED — NEW RELEASE REQUIRES RECIPE REVIEW", True)
-            for path, version, digest, pin, review in plan:
-                add(f"{Path(path).name} — {version}", review)
-                add(f"SHA-256: {digest}")
-                if review:
-                    add(f"Current recipe pin: {pin}")
-            add("Official release identity is not installation authorization. A separately reviewed recipe and compatibility validation are required before installation. No game, backup or mod files are changed.")
+        add("INSTALLATION BLOCKED — NEW RELEASE REQUIRES RECIPE REVIEW", True)
+        for path, version, digest, pin, review in plan:
+            add(f"{Path(path).name} — {version}", review)
+            add(f"SHA-256: {digest}")
+            if review:
+                add(f"Current recipe pin: {pin}")
+        add("Official release identity is not installation authorization. A separately reviewed recipe and compatibility validation are required before installation. No game, backup or mod files are changed.")
         layout.addStretch()
         buttons = QHBoxLayout()
         close = QPushButton("Close")

@@ -87,6 +87,8 @@ class DependencyReview:
     needs_backend_verification: bool = False
     injector_snapshot: dict = field(default_factory=dict, repr=False)
     file_decisions: tuple[tuple[str, str, str], ...] = ()
+    verification_failed: bool = False
+    failed_archives: tuple[str, ...] = ()
 
 
 def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
@@ -199,3 +201,38 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
     return DependencyReview(recipe["name"], str(paths[0]), digest, str(dest), rels,
                             size, len(snapshot["files"]), len(snapshot["dirs"]),
                             snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status, needs_backend_verification, snapshot, decisions)
+
+
+def build_blocked_plan(recipe, rows, steam_roots=None):
+    """Show the normal pair review without parsing the failed archive."""
+    from .pinned_release_review import build_uevr_hash_review
+
+    failures = build_uevr_hash_review(recipe, rows)
+    prefix = hub._pfx(recipe, steam_roots)
+    injector = hub._uevr_dir(recipe, steam_roots)
+    profile_dest = hub.profile_dir(recipe, steam_roots)
+    for dest in (injector, profile_dest):
+        profile_safety._safe_destination(dest, prefix)
+    existing = profile_safety._snapshot(injector)
+    profile_existing = profile_safety._snapshot(profile_dest)
+    records = {row["id"]: row for row in rows}
+    pins = recipe["archive_pins"]
+    profile = profile_safety.ProfilePlan(
+        recipe["id"], recipe["name"], records.get("profile", {}).get("file") or "Not supplied",
+        pins["profile"], str(profile_dest), (), 0, 0,
+        len(profile_existing["files"]), profile_existing["bytes"], len(profile_existing["dirs"]),
+        profile_existing["exists"], ("Dependency verification failed.",), "",
+    )
+    blockers = tuple(
+        f"Checksum failed for {path}. Required: {asset} ({version}). Approved source: {source}"
+        for path, version, asset, source, _, _ in failures
+    )
+    return DependencyReview(
+        recipe["name"], records.get("uevr", {}).get("file") or "Not supplied",
+        pins["uevr"], str(injector), (), 0,
+        len(existing["files"]), len(existing["dirs"]), existing["bytes"], profile,
+        ((recipe["archive_releases"]["uevr"]["fixed_tag"],),
+         (recipe["archive_releases"]["profile"]["fixed_tag"],)),
+        blockers, verification_failed=True,
+        failed_archives=tuple(path for path, *_ in failures),
+    )

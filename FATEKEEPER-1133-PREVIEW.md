@@ -99,3 +99,19 @@ installation, removal and recovery remain gated.
 
 Next: FK6B live gameplay validation on the unchanged Fatekeeper install,
 then FK7 sign-off and E1 controlled real-world update pilot.
+
+### FK6B1 corrective patch
+
+Steam UEVR launches now wait for their direct Protontricks child and block a
+duplicate launch for that game while it is pending. Protontricks 1.14.1 waits
+synchronously on its Wine command; the observed start.exe ntsync wait is
+consistent with the lingering launcher, but the precise Wine hang and the
+separate OpenXR -51 error remain open. No process tree is terminated.
+
+The preview reads the host OpenXR selection on every probe and honors explicit
+runtime overrides. The host probe reported WiVRn selected, running, and a Quest 3
+connected through WiVRn telemetry. A checksum failure uses the normal UEVR review
+and blocks installation; the failed ZIP is not parsed.
+
+Focused: 54 passed. Full: 1,511 passed, one skipped. KDE acceptance pending.
+Return directly to FK6B gameplay and -51 investigation after acceptance.

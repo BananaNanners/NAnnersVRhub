@@ -13,6 +13,7 @@ import re
 import shlex
 import shutil
 import subprocess
+from threading import Thread
 import time
 import tomllib
 import zipfile
@@ -1205,5 +1206,10 @@ def launch_injector(recipe: dict, steam_roots=None):
     if not tool:
         raise RuntimeError("protontricks-launch not found. Install protontricks "
                            "(e.g. `sudo pacman -S protontricks`, or `pipx install protontricks`).")
-    return subprocess.Popen([tool, "--no-bwrap", "--appid", str(recipe["steam_appid"]),
-                             "--no-background-wineserver", str(exe)], **launch_environment.subprocess_kwargs())
+    child = subprocess.Popen(
+        [tool, "--no-bwrap", "--appid", str(recipe["steam_appid"]),
+         "--no-background-wineserver", str(exe)], **launch_environment.subprocess_kwargs())
+    # Closing the injector window does not imply Wine or Protontricks exited.
+    # Wait only for the direct child; do not signal any part of the prefix.
+    Thread(target=child.wait, name="uevr-protontricks-wait", daemon=True).start()
+    return child

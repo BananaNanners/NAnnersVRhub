@@ -6,12 +6,14 @@ import os
 import platform
 from pathlib import Path
 
+from . import launch_environment
+
 
 def runtime_candidates() -> list[Path]:
     """Follow loader precedence; a broken explicit override cannot fall back."""
     if os.environ.get("XR_RUNTIME_JSON"):
         return [Path(os.environ["XR_RUNTIME_JSON"])]
-    cfg = Path(os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config"))
+    cfg = Path(launch_environment.host_config_home() or str(Path.home() / ".config"))
     dirs = [cfg, *[Path(p) for p in (os.environ.get("XDG_CONFIG_DIRS") or "/etc/xdg").split(":") if p], Path("/etc")]
     arch = {"AMD64": "x86_64", "arm64": "aarch64"}.get(platform.machine(), platform.machine())
     return [base / "openxr/1" / name for base in dict.fromkeys(dirs)

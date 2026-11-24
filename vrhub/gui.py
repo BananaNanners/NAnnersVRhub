@@ -701,6 +701,7 @@ class HubWindow(QMainWindow):
             "and any legacy/manual-recovery blockers before installation.")
         self.unprofile_btn = QPushButton("Remove profile")
         self.copy_btn = QPushButton("Copy launch options")
+        self._steam_injectors = {}
         self.inject_btn = QPushButton("Run UEVR injector")
         self.copy_btn.setObjectName("overviewSecondaryLaunch")
         self.inject_btn.setObjectName("overviewSecondaryLaunch")
@@ -1614,14 +1615,15 @@ class HubWindow(QMainWindow):
             kharvox_archive_review.ReviewDialog(plan, self).exec()
             return
         if route == "uevr-hash-review":
-            from . import pinned_release_review
+            from . import uevr_dependency_review
+            from .uevr_dependency_review_gui import DependencyReviewDialog
 
             try:
-                plan = pinned_release_review.build_uevr_hash_review(r, request.get("rows"))
+                plan = uevr_dependency_review.build_blocked_plan(r, request.get("rows"), _roots())
             except (RuntimeError, OSError, ValueError) as exc:
                 QMessageBox.warning(self, "UEVR installation review", str(exc))
                 return
-            pinned_release_review.ReviewDialog(plan, self, checksum_failure=True).exec()
+            DependencyReviewDialog(plan, self).exec()
             return
         if route == "uevr-pair":
             from . import uevr_dependency_review
@@ -1822,7 +1824,12 @@ class HubWindow(QMainWindow):
                     dialog = HeroicInjectorDialog(r, self, error=str(exc))
                 dialog.exec()
                 return
-            hub.launch_injector(r, _roots())
+            previous = self._steam_injectors.get(r["id"])
+            if previous is not None and previous.poll() is None:
+                self.statusBar().showMessage(
+                    "The previous injector launch is still running, even if its window is closed.", 10000)
+                return
+            self._steam_injectors[r["id"]] = hub.launch_injector(r, _roots())
         except (RuntimeError, OSError) as e:
             QMessageBox.warning(self, "Could not start injector", str(e))
 
