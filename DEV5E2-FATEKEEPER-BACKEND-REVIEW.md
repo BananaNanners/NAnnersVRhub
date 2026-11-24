@@ -180,3 +180,39 @@ Review installation action, both original ZIP roles remain, and the review
 explains automatic verified-backend installation without manual file moves.
 Keep the live button disabled. A missing-backend preview can be validated
 using isolated fixtures; do not remove the player's real working DLL.
+
+## Corrective KDE preview — technical checks passed, player pending
+
+2026-11-24 Pacific. Corrective code checkpoint:
+`5247e56136afc68351dc8d46ceaa6b810b4bf6bf`
+on `dev/0.5.5-fatekeeper-backend`.
+
+- Previous Dev5E2 preview PID `16461` was verified by KWin process ID,
+  exact caption and closeability, and closed normally using a targeted
+  KWin window-close request. No force kill or unrelated window was used.
+- First corrective preview PID `23321` opened at `d76f50c`, but the
+  screenshot showed **Updates** selected after startup; it was also
+  normally closed via a caption- and PID-guarded KWin close.
+- Corrected full Hub preview **PID `23740`** starts from `5247e56` with
+  `python3 -m tests.manual_launcher_dev5e2_install_preview`. It opens
+  Fatekeeper → **Install / Update**, confirmed by startup log and
+  desktop screenshot. The backend verification is displayed above the
+  original two archive rows, without a third ZIP or new button.
+- The actual installed backend was reported **Verified pinned build**
+  during the read-only preview. The missing/changed/prefix-unavailable
+  cases were verified using disposable fixture paths; the player's DLL
+  was never removed, damaged or replaced.
+- Saved Fatekeeper archive scan currently reads **rescan required**.
+  This is a separate stale archive snapshot; no reviewed live
+  installation is implied, and the player should rescan before
+  attempting an archive review.
+- Exactly one current development preview verified; source worktree
+  was clean. The installed stable Hub, Fatekeeper/Hogwarts profiles,
+  game prefixes, Steam, and journaled recovery data remain untouched.
+  `live_install_authorized()` still returns `False`.
+
+**Player desktop acceptance: PENDING.** Review the one open full Hub
+preview, checking the green tested backend status on Install / Update,
+the two archive rows, the lack of an extra manual DLL step, and
+the continued disabled live installer. A real new-user installation
+requires separate approval and is **not** claimed as complete.
