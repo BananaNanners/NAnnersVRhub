@@ -11,6 +11,35 @@ from pathlib import Path
 import stat
 
 
+
+def install_update_guidance(result):
+    """Player-facing Fatekeeper setup guidance; checking never installs anything."""
+    status = result.get("status")
+    if status == "verified":
+        return (
+            "UEVRBackend.dll: Verified pinned build installed. The Hub will preserve "
+            "this DLL during the reviewed two-ZIP installation; no separate download."
+        )
+    if status == "not_installed":
+        return (
+            "UEVRBackend.dll: Missing. After the two ZIPs are verified, the Hub can "
+            "automatically obtain and SHA-256-verify the tested joeyhodge DLL and "
+            "install it in Fatekeeper's Proton prefix during an approved, backed-up "
+            "installation. No manual DLL copying or third ZIP is needed."
+        )
+    if "Cannot locate the Fatekeeper Proton prefix" in result.get("detail", ""):
+        return (
+            "UEVRBackend.dll: Not yet checked — Fatekeeper's Proton prefix is "
+            "unavailable. Launch Fatekeeper once from Steam to create the prefix, "
+            "then scan the two ZIP archives and review installation."
+        )
+    return (
+        "UEVRBackend.dll: Needs review. The installed backend is not verified as "
+        "the gameplay-tested build. Review exact replacements and backup coverage "
+        "before approving a change; it will not be silently overwritten."
+    )
+
+
 def check_backend(recipe, *, steam_roots=None):
     """Report pinned-build identity from the actual installed DLL, not Hub timestamps."""
     if recipe.get("id") != "fatekeeper":

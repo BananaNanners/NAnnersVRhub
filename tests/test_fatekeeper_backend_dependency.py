@@ -115,6 +115,54 @@ class FatekeeperBackendDependencyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             fatekeeper_backend_status.check_backend({"id": "hogwarts-legacy"})
 
+    def test_install_update_explains_automatic_backend_install_without_third_zip(self):
+        from PySide6.QtWidgets import QApplication
+        from vrhub import archive_scans
+        from vrhub.downloads_gui import GuidedDownloadsPage
+        app = QApplication.instance() or QApplication([])
+        with (patch.object(download_planner, "preferences_file",
+                           return_value=self.root / "prefs.json"),
+              patch.object(download_planner, "default_library",
+                           return_value=self.root),
+              patch.object(archive_scans, "snapshot_file",
+                           return_value=self.root / "scans.json")):
+            page = GuidedDownloadsPage()
+            try:
+                page.set_recipe(self.recipe)
+                self.assertIn("Missing", page.backend_install_status.text())
+                self.assertIn("automatically obtain", page.backend_install_status.text())
+                self.assertIn("No manual DLL copying", page.backend_install_status.text())
+                self.assertEqual(page.table.rowCount(), 2)  # only the ZIPs
+
+                self.file.write_bytes(self.good)
+                page.set_recipe(self.recipe)
+                self.assertIn("Verified pinned build installed",
+                              page.backend_install_status.text())
+                self.assertIn("preserve", page.backend_install_status.text())
+                self.assertEqual(page.table.rowCount(), 2)
+
+                self.file.write_bytes(b"modified")
+                page.set_recipe(self.recipe)
+                self.assertIn("Needs review", page.backend_install_status.text())
+                self.assertIn("will not be silently overwritten",
+                              page.backend_install_status.text())
+
+                page.set_recipe(hub.load_recipes()["hogwarts-legacy"])
+                self.assertTrue(page.backend_install_status.isHidden())
+                self.assertFalse(page.backend_install_status.text())
+            finally:
+                page.close()
+                page.deleteLater()
+                app.processEvents()
+
+    def test_install_update_guidance_explains_prefix_prerequisite(self):
+        from vrhub.fatekeeper_backend_status import install_update_guidance
+        message = install_update_guidance({
+            "status": "unknown", "detail": "Cannot locate the Fatekeeper Proton prefix: game unavailable."
+        })
+        self.assertIn("Launch Fatekeeper once from Steam", message)
+        self.assertIn("then scan the two ZIP archives", message)
+
     def test_row_is_read_only_and_never_offers_an_archive_install(self):
         self.file.write_bytes(self.good)
         from PySide6.QtWidgets import QApplication

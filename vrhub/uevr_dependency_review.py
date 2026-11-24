@@ -187,11 +187,19 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
     if pins:
         backend_status = (
             "Verified Nightly 1133 and Fatekeeper profile v1.0.4. "
-            "Installation requires the verified joeyhodge backend. Debug symbols are omitted."
+            "The reviewed installation includes the gameplay-tested joeyhodge "
+            "UEVRBackend.dll automatically; download only the two ZIPs. "
+            "The Hub checks the backend SHA-256 before any authorized installation. "
+            "Debug symbols are omitted."
         )
         if snapshot["files"].get("UEVRBackend.dll", {}).get("sha256") == FATEKEEPER_BACKEND_SHA256:
-            backend_status += " The installed backend already matches."
+            backend_status += " Installed backend already matches and will be preserved."
         else:
+            backend_status += (
+                " The backend is missing or different: the Hub will obtain the "
+                "verified DLL for this reviewed transaction, with exact file "
+                "decisions, backup and rollback. No manual DLL copying is needed."
+            )
             needs_backend_verification = True
     blockers = list(profile.blocked)
     if snapshot["exists"] or recipe["id"] in hub.state():

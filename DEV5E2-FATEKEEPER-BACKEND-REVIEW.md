@@ -127,3 +127,56 @@ with Backend type and Open source, while `uevr.zip` and
 `SLASHER-Win64-Shipping.zip` remain separate. The summary must say
 **1 tested build verified** rather than **1 up to date**. No live backend
 installation is enabled.
+
+## Corrective pass — backend installation needs to work for new players
+
+**Player feedback, 2026-11-24:** The Updates status was visible and truthful,
+but a new player with no backend would only see a source link and would not
+know where to put the DLL. The requirement is **Install / Update must handle
+the backend together with the two ZIPs**, without manual file copying.
+
+**Product fit:** Aligned. Preserve the established two-archive installation
+and safe journaled workflow. Do not add a third ZIP, download selector, screen
+or new install button.
+
+Corrective work:
+- Fatekeeper's existing **Install / Update** page now displays read-only
+  status for the actual backend: verified/preserved, missing/automatically
+  supplied in a reviewed transaction, unknown prefix/Steam first-launch
+  prerequisite, or modified/needs explicit review. The backend is outside
+  the two-archive checklist, not a third required player download.
+- The existing **Review installation** dialog explains that the Hub obtains
+  and SHA-256-verifies the pinned joeyhodge DLL when missing or different,
+  and displays the exact injector-file decision and backup/rollback context.
+- The previous verified-download and staging implementation is **reused**.
+  No new download implementation, UI route or live-writer was created.
+- Offline new-player regression demonstrates an existing injector/profile
+  missing only its backend: the reviewed plan contains just the DLL Install
+  action, its bytes are verified, the fixture transaction installs it, and
+  rollback restores the exact original files and Hub state. The matching
+  backend preservation tests and interrupted-repair tests remain.
+- Upstream GitHub release metadata confirms the pinned asset name
+  \`UEVRBackend.dll\` and 15,203,840-byte size at
+  \`100526UE58_6RefreshUpdate\`. The SHA pin is checked locally; the
+  upstream asset metadata is **not** itself a SHA-256 authority.
+
+Tests after refinement: **20 focused tests passed**, and **1,529 full-suite
+tests run (1,528 passed, one skipped)**; source compilation and
+\`git diff --check\` passed. Offline staging/rollback evidence is not live
+installation or Quest 3 gameplay acceptance.
+
+**Preservation and gate:** The installed Fatekeeper DLL and player profile,
+Hogwarts Legacy, stable Hub, launcher settings, Proton, ownership records,
+and recovery directories were not modified. \`live_install_authorized()\`
+remains unconditionally false. This corrective pass prepares a real
+player-facing path but does **not** grant installation permissions or claim
+that a new player can already complete live installation under the closed
+gate.
+
+**KDE acceptance PENDING:** Open a single full Hub Dev5E2 corrective
+preview from the implementation checkpoint; inspect Fatekeeper →
+Install / Update. Confirm the backend status is visible near the existing
+Review installation action, both original ZIP roles remain, and the review
+explains automatic verified-backend installation without manual file moves.
+Keep the live button disabled. A missing-backend preview can be validated
+using isolated fixtures; do not remove the player's real working DLL.

@@ -614,6 +614,14 @@ class GuidedDownloadsPage(QWidget):
         self.guidance.setObjectName("downloadsExplanation")
         self.guidance.setWordWrap(True)
         outer.insertWidget(outer.indexOf(self.review_actions), self.guidance)
+        # A required backend is not a third ZIP. Display its actual installed
+        # state beside the existing install action, not in the archive table.
+        self.backend_install_status = QLabel("")
+        self.backend_install_status.setObjectName("fatekeeperBackendInstallStatus")
+        self.backend_install_status.setWordWrap(True)
+        self.backend_install_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.backend_install_status.hide()
+        outer.insertWidget(outer.indexOf(self.table), self.backend_install_status)
         # Dev5D3-Y: move the ORIGINAL guarded primary action above the long
         # dependency table. Do not add a duplicate button or a second route.
         # The scan controls, backup warnings and next-step guidance now sit
@@ -691,6 +699,7 @@ class GuidedDownloadsPage(QWidget):
             if self.safety_worker is not None:
                 self.safety_worker.cancel()
         self.recipe = recipe
+        self._update_backend_install_status()
         self._invalidate_safety_review()
         self.safety_button.setEnabled(bool(recipe))
         # A verification result is never reused across game switches,
@@ -818,6 +827,22 @@ class GuidedDownloadsPage(QWidget):
             self._display_unsanned(recipe, error)
         else:
             self._show_plan(self._last_plan)
+
+    def _update_backend_install_status(self):
+        """Read-only Fatekeeper backend identity in existing Install / Update."""
+        recipe = self.recipe or {}
+        if recipe.get("id") != "fatekeeper":
+            self.backend_install_status.clear()
+            self.backend_install_status.hide()
+            return
+        from .fatekeeper_backend_status import check_backend, install_update_guidance
+        result = check_backend(recipe)
+        self.backend_install_status.setText(install_update_guidance(result))
+        self.backend_install_status.setToolTip(result.get("detail", ""))
+        color = "#4FE39A" if result["status"] == "verified" else "#FFD21A"
+        self.backend_install_status.setStyleSheet(
+            f"color: {color}; font-weight: 700; padding: 5px 0;")
+        self.backend_install_status.show()
 
     def _show_backup_safety(self, recipe):
         if not recipe or recipe.get("method") != "gameroot":

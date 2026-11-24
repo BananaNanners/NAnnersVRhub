@@ -138,6 +138,48 @@ class FatekeeperRehearsalTests(unittest.TestCase):
                 fatekeeper_install.prepare_reviewed_install(plan)
 
 
+    def test_existing_setup_missing_only_backend_can_review_install_and_rollback(self):
+        """A player never needs to manually copy the missing joeyhodge DLL."""
+        from vrhub import fatekeeper_commit
+
+        root = Path(self.enterContext(tempfile.TemporaryDirectory(
+            prefix="nanners-fk4-", dir="/tmp")))
+        prefix, injector, profile, state = fatekeeper_commit._roots(root)
+        injector.mkdir(parents=True)
+        profile.mkdir(parents=True)
+        (injector / "UEVRInjector.exe").write_bytes(b"injector")
+        (profile / "config.txt").write_bytes(b"profile")
+        (profile / "plugins").mkdir()
+        (profile / "plugins/test.dll").write_bytes(b"plugin")
+        (profile / "custom-user.ini").write_bytes(b"user customization")
+        state.write_bytes(b'{"unrelated":{"files":["preserve"]}}' + bytes([10]))
+        original_records = state.read_bytes()
+        with patch.multiple(hub, _pfx=lambda *_: prefix,
+                            _uevr_dir=lambda *_: injector,
+                            profile_dir=lambda *_: profile,
+                            state_file=lambda: state):
+            plan = review.build_plan(hub.load_recipes()["fatekeeper"], self.archives)
+            self.assertTrue(plan.needs_backend_verification)
+            self.assertIn(("Install", "Injector", "UEVRBackend.dll"),
+                          plan.file_decisions)
+            self.assertIn("No manual DLL copying", plan.backend_status)
+            prepared = fatekeeper_install.prepare_reviewed_install(
+                plan, verified_backend=self.asset)
+            target = str(injector / "UEVRBackend.dll")
+            self.assertEqual(prepared.writes, {target: self.asset})
+            self.assertFalse((injector / "UEVRBackend.dll").exists())
+            fatekeeper_commit.commit(root, prepared)
+            self.assertEqual(Path(target).read_bytes(), self.asset)
+            self.assertEqual((profile / "custom-user.ini").read_bytes(),
+                             b"user customization")
+            fatekeeper_commit.recover(root)
+            self.assertFalse(Path(target).exists())
+            self.assertEqual(state.read_bytes(), original_records)
+            self.assertEqual((profile / "custom-user.ini").read_bytes(),
+                             b"user customization")
+            self.assertEqual((injector / "UEVRInjector.exe").read_bytes(),
+                             b"injector")
+
     def test_smart_preservation_fresh_repair_recovery_and_noop(self):
         from vrhub import fatekeeper_commit
 
