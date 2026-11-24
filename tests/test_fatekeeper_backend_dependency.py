@@ -133,6 +133,10 @@ class FatekeeperBackendDependencyTests(unittest.TestCase):
             self.assertEqual(page.sections["update"].table.rowCount(), 0)
             self.assertEqual(len(grouped["not_installed"]), 2)
             self.assertIn("3 dependencies checked", page.summary.text())
+            self.assertIn("1 tested build verified", page.summary.text())
+            self.assertIn("0 up to date", page.summary.text())
+            self.assertIn("Verified pinned builds (1)",
+                          page.sections["current"].disclosure.text())
         finally:
             page.close()
             page.deleteLater()

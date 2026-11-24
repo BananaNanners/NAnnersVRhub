@@ -163,6 +163,7 @@ class UpdateSection(QWidget):
         super().__init__(parent)
         self.setObjectName("modUpdatesSection")
         self.group_key = group_key
+        self.group_title = GROUP_TITLES[group_key]
         self.collapsed = bool(collapsed)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -188,9 +189,15 @@ class UpdateSection(QWidget):
     def _update_heading(self):
         arrow = "▾" if self.disclosure.isChecked() else "▸"
         self.disclosure.setText(
-            f"{arrow}  {GROUP_TITLES[self.group_key]} ({self.table.rowCount()})")
+            f"{arrow}  {self.group_title} ({self.table.rowCount()})")
 
     def set_records(self, rows):
+        verified = sum(r.get("status") == "Verified pinned build" for r in rows)
+        self.group_title = (
+            "Verified pinned builds" if self.group_key == "current" and verified == len(rows) and verified else
+            "Verified / up to date" if self.group_key == "current" and verified else
+            GROUP_TITLES[self.group_key]
+        )
         self.table.set_records(rows)
         self.setVisible(bool(rows))
         self._update_heading()
@@ -287,7 +294,9 @@ class ModUpdatesPage(QWidget):
         else:
             review = len(grouping["review"])
             pending = len(grouping["update"])
-            current = len(grouping["current"])
+            verified = sum(r.get("status") == "Verified pinned build"
+                           for r in grouping["current"])
+            current = len(grouping["current"]) - verified
             later = len(grouping["later"])
             missing = len(grouping["not_installed"])
             self.summary.setText(
@@ -295,7 +304,9 @@ class ModUpdatesPage(QWidget):
                 + (f"{sum(r.get('newer_release') is True for r in items if r.get('status') == 'unknown')} newer releases to review  •  "
                    if any(r.get("newer_release") is True and r.get("status") == "unknown" for r in items) else "")
                 + f"{current} up to date  •  "
-                f"{review} need review  •  {later} install later  •  "
+                + (f"{verified} tested build{'s' if verified != 1 else ''} verified  •  "
+                   if verified else "")
+                + f"{review} need review  •  {later} install later  •  "
                 f"{missing} not installed")
         github_limited = sum(
             raw.get("status") == "error" and
