@@ -30,6 +30,7 @@ GROUP_TITLES = {
 STATUS_LABELS = {
     "update": "Update available",
     "current": "Current",
+    "verified": "Verified pinned build",
     "unknown": "Review version",
     "error": "Check failed",
     "manual": "Check manually",
@@ -48,7 +49,7 @@ def grouped_updates(recipe, items):
         status = raw.get("status", "unknown")
         if status == "update":
             group = "update"
-        elif status == "current":
+        elif status in {"current", "verified"}:
             group = "current"
         elif status == "not_installed":
             group = "later" if raw.get("mod_id") in phase2 else "not_installed"

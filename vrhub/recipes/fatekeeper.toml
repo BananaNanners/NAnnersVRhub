@@ -68,6 +68,15 @@ manual = "https://github.com/jbusfield/FK_UEVR/releases/tag/v1.0.4"
 available_version = "v1.0.4"
 tracks = ["fatekeeper:profile"]
 
+# A verified, separately tracked DLL; it is NOT a third ZIP download.
+# Read-only status is computed from the installed file's size and SHA-256.
+[[updates]]
+name = "UEVRBackend.dll (joeyhodge)"
+dependency_type = "Backend"
+manual = "https://github.com/joeyhodge/UEVR/releases/tag/100526UE58_6RefreshUpdate"
+available_version = "100526UE58_6RefreshUpdate"
+verified_backend = true
+
 [requirements]
 openxr = "wivrn"
 proton_prefix = true

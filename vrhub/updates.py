@@ -246,6 +246,18 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
             page = u.get("manual", "")
         item = {"name": u["name"], "page": page,
                 "dependency_type": u.get("dependency_type", "Mod")}
+        if recipe.get("id") == "fatekeeper" and u.get("verified_backend") is True:
+            # This DLL is validated independently of the two ZIPs; it is not an
+            # inferred GitHub update or a writable/owned Hub installation.
+            from .fatekeeper_backend_status import check_backend
+            version = str(u["available_version"])
+            result = check_backend(recipe)
+            item.update(result, latest_version=f"Tested pin: {version}")
+            if result["status"] == "verified":
+                item["installed_version"] = version
+            out.append(item)
+            continue
+
         # A fixed packaged dependency is not the latest upstream project.
         # Display its published bundle version, never infer installed identity
         # from a legacy installation timestamp.
