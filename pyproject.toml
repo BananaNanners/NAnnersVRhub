@@ -25,7 +25,7 @@ build-backend = "setuptools.build_meta"
 packages = ["vrhub"]
 
 [tool.setuptools.package-data]
-vrhub = ["assets/*.png", "recipes/*.toml", "controls/*.toml", "licenses/*.txt"]
+vrhub = ["assets/*.png", "recipes/*.toml", "recipes/hogwarts-profile-v2.0.6.json", "controls/*.toml", "licenses/*.txt"]
 
 [tool.setuptools.exclude-package-data]
 vrhub = ["**/__pycache__/*", "**/*.pyc", "**/*.pyo"]

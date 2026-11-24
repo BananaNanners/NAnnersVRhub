@@ -1,0 +1,230 @@
+Action	Profile path	Reason
+Preserve	cache/sdk_discovery.json	Locally modified
+Preserve	cameras.txt	Already matches v2.1.0
+Preserve	config.txt	Locally modified
+Install	config_AFW.txt	New v2.1.0 file
+Preserve	cvars_data.txt	Already matches v2.1.0
+Replace	data/accessories_parameters.json	Matches the official v2.0.6 baseline
+Replace	data/attachments_parameters.json	Matches the official v2.0.6 baseline
+Preserve	data/collision_parameters.json	Already matches v2.1.0
+Preserve	data/config__flicker_fixer.json	Already matches v2.1.0
+Preserve	data/config_default.json	Locally modified
+Replace	data/config_dev_utils.json	Matches the official v2.0.6 baseline
+Replace	data/dev/attachments_config_dev.json	Matches the official v2.0.6 baseline
+Preserve	data/dev/collision_config_dev.json	Already matches v2.1.0
+Replace	data/dev/gesture_config_dev.json	Matches the official v2.0.6 baseline
+Replace	data/dev/gesture_trainer_config.json	Matches the official v2.0.6 baseline
+Preserve	data/dev/gesture_trainer_parameters.json	Already matches v2.1.0
+Replace	data/dev/ik_config_dev.json	Matches the official v2.0.6 baseline
+Replace	data/dev/input_config_dev.json	Matches the official v2.0.6 baseline
+Preserve	data/dev/montage_config_dev.json	Already matches v2.1.0
+Replace	data/dev/particles_config_dev.json	Matches the official v2.0.6 baseline
+Preserve	data/dev/pawn_config_dev.json	Already matches v2.1.0
+Preserve	data/dev/reticule_config_dev.json	Already matches v2.1.0
+Preserve	data/dev/ui_config_dev.json	Already matches v2.1.0
+Replace	data/dev/widgetcomponent_config_dev.json	Matches the official v2.0.6 baseline
+Replace	data/gesture_parameters.json	Matches the official v2.0.6 baseline
+Replace	data/gunstock_config.json	Matches the official v2.0.6 baseline
+Replace	data/gunstock_parameters.json	Matches the official v2.0.6 baseline
+Replace	data/hands_creator_config.json	Matches the official v2.0.6 baseline
+Replace	data/hands_parameters.json	Matches the official v2.0.6 baseline
+Preserve	data/hogwarts_config.json	Already matches v2.1.0
+Preserve	data/hogwarts_legacy_config.json	Locally modified
+Replace	data/ik_parameters.json	Matches the official v2.0.6 baseline
+Preserve	data/images/Accio.png	Already matches v2.1.0
+Preserve	data/images/Alohomora.png	Already matches v2.1.0
+Preserve	data/images/ArrestoMomentum.png	Already matches v2.1.0
+Preserve	data/images/AvadaKedavra.png	Already matches v2.1.0
+Preserve	data/images/Bombarda.png	Already matches v2.1.0
+Preserve	data/images/Confringo.png	Already matches v2.1.0
+Preserve	data/images/Conjuration.png	Already matches v2.1.0
+Preserve	data/images/Crucio.png	Already matches v2.1.0
+Preserve	data/images/Depulso.png	Already matches v2.1.0
+Preserve	data/images/Descendo.png	Already matches v2.1.0
+Preserve	data/images/Diffindo.png	Already matches v2.1.0
+Preserve	data/images/Disillusionment.png	Already matches v2.1.0
+Preserve	data/images/Expelliarmus.png	Already matches v2.1.0
+Preserve	data/images/Flipendo.png	Already matches v2.1.0
+Preserve	data/images/Glacius.png	Already matches v2.1.0
+Preserve	data/images/Imperius.png	Already matches v2.1.0
+Preserve	data/images/Incendio.png	Already matches v2.1.0
+Preserve	data/images/Levioso.png	Already matches v2.1.0
+Preserve	data/images/Lumos.png	Already matches v2.1.0
+Preserve	data/images/Nutritio.png	Already matches v2.1.0
+Preserve	data/images/Oppugno.png	Already matches v2.1.0
+Preserve	data/images/Petrificus.png	Already matches v2.1.0
+Preserve	data/images/Placato.png	Already matches v2.1.0
+Preserve	data/images/Reparo.png	Already matches v2.1.0
+Preserve	data/images/Revelio.png	Already matches v2.1.0
+Preserve	data/images/Sanctuarium.png	Already matches v2.1.0
+Preserve	data/images/Tormentum.png	Already matches v2.1.0
+Preserve	data/images/Transformation.png	Already matches v2.1.0
+Preserve	data/images/TransformationOverland.png	Already matches v2.1.0
+Preserve	data/images/Vanishment.png	Already matches v2.1.0
+Preserve	data/images/Viaspecto.png	Already matches v2.1.0
+Preserve	data/images/Wingardium.png	Already matches v2.1.0
+Preserve	data/images/glyph-16.png	Already matches v2.1.0
+Preserve	data/images/glyph-20.png	Already matches v2.1.0
+Preserve	data/images/glyph-26.png	Already matches v2.1.0
+Preserve	data/images/glyph-27.png	Already matches v2.1.0
+Preserve	data/images/glyph-30.png	Already matches v2.1.0
+Preserve	data/images/glyph-36.png	Already matches v2.1.0
+Replace	data/input_parameters.json	Matches the official v2.0.6 baseline
+Preserve	data/interaction_config_dev.json	Already matches v2.1.0
+Preserve	data/montage_parameters.json	Already matches v2.1.0
+Replace	data/particles_parameters.json	Matches the official v2.0.6 baseline
+Preserve	data/pawn_parameters.json	Already matches v2.1.0
+Preserve	data/remap_config_dev.json	Already matches v2.1.0
+Preserve	data/remap_parameters.json	Already matches v2.1.0
+Preserve	data/reticule_parameters.json	Already matches v2.1.0
+Install	data/tutorial/1.png	New v2.1.0 file
+Install	data/tutorial/10.png	New v2.1.0 file
+Install	data/tutorial/11.png	New v2.1.0 file
+Install	data/tutorial/2.png	New v2.1.0 file
+Install	data/tutorial/3.png	New v2.1.0 file
+Install	data/tutorial/4.png	New v2.1.0 file
+Install	data/tutorial/5.png	New v2.1.0 file
+Install	data/tutorial/6.png	New v2.1.0 file
+Install	data/tutorial/7.png	New v2.1.0 file
+Install	data/tutorial/8.png	New v2.1.0 file
+Install	data/tutorial/9.png	New v2.1.0 file
+Install	data/tutorial/buttons/btn_A.png	New v2.1.0 file
+Install	data/tutorial/buttons/btn_B.png	New v2.1.0 file
+Install	data/tutorial/buttons/btn_LB.png	New v2.1.0 file
+Install	data/tutorial/buttons/btn_LT.png	New v2.1.0 file
+Install	data/tutorial/buttons/btn_RB.png	New v2.1.0 file
+Install	data/tutorial/buttons/btn_RT.png	New v2.1.0 file
+Install	data/tutorial/buttons/btn_X.png	New v2.1.0 file
+Install	data/tutorial/buttons/btn_Y.png	New v2.1.0 file
+Install	data/tutorial/buttons/status_failure.png	New v2.1.0 file
+Install	data/tutorial/buttons/status_success.png	New v2.1.0 file
+Install	data/tutorial/intro.png	New v2.1.0 file
+Replace	data/ui_parameters.json	Matches the official v2.0.6 baseline
+Preserve	data/widgetcomponent_parameters.json	Already matches v2.1.0
+Preserve	data/widgetcomponent_user_parameters.json	Already matches v2.1.0
+Preserve	imgui.ini	Locally modified
+Preserve	log.txt	Existing player log
+Preserve	plugins/gesture/model.onnx	Already matches v2.1.0
+Preserve	plugins/gesture_recognizer.dll	Already matches v2.1.0
+Preserve	plugins/ort/onnxruntime.dll	Already matches v2.1.0
+Preserve	plugins/ort/onnxruntime_providers_shared.dll	Already matches v2.1.0
+Replace	plugins/uevr_utils.dll	Matches the official v2.0.6 baseline
+Preserve	plugins/voice/embedding_model.onnx	Already matches v2.1.0
+Preserve	plugins/voice/melspectrogram.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Accio.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Alohomora.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/ArrestoMomentum.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/AvadaKedavra.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Bombarda.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Confringo.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Conjuration.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Crucio.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Depulso.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Descendo.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Diffindo.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Disillusionment.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Expelliarmus.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Flipendo.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Glacius.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Imperius.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Incendio.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Levioso.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Lumos.onnx	Already matches v2.1.0
+Install	plugins/voice/models/Navigato.onnx	New v2.1.0 file
+Preserve	plugins/voice/models/Nutritio.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Oppugno.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Petrificus.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Placato.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Reparo.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Revelio.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Sanctuarium.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Tormentum.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Transformation.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/TransformationOverland.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/UpBroom.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/UpGraphorn.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/UpHippogriff.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Vanishment.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Viaspecto.onnx	Already matches v2.1.0
+Preserve	plugins/voice/models/Wingardium.onnx	Already matches v2.1.0
+Replace	plugins/voice_recognizer.dll	Matches the official v2.0.6 baseline
+Install	scripts/helpers/audio.lua	New v2.1.0 file
+Install	scripts/helpers/boats.lua	New v2.1.0 file
+Install	scripts/helpers/frame_profiler.lua	New v2.1.0 file
+Install	scripts/helpers/grip_priority.lua	New v2.1.0 file
+Install	scripts/helpers/holster.lua	New v2.1.0 file
+Replace	scripts/helpers/interactions.lua	Matches the official v2.0.6 baseline
+Install	scripts/helpers/ladder.lua	New v2.1.0 file
+Replace	scripts/helpers/locomotion.lua	Matches the official v2.0.6 baseline
+Replace	scripts/helpers/mounts.lua	Matches the official v2.0.6 baseline
+Install	scripts/helpers/palette.lua	New v2.1.0 file
+Install	scripts/helpers/skin.lua	New v2.1.0 file
+Replace	scripts/helpers/spells.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/.vscode/settings.json	Already matches v2.1.0
+Replace	scripts/libs/accessories.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/animation.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/attachments.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/body_yaw.lua	Already matches v2.1.0
+Preserve	scripts/libs/collision.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/accessories_config_dev.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/collision_config_dev.lua	Already matches v2.1.0
+Replace	scripts/libs/config/gesture_config.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/config/gesture_config_dev.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/config/gesture_trainer.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/hands_config.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/ik_config_dev.lua	Already matches v2.1.0
+Replace	scripts/libs/config/input_config.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/config/input_config_dev.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/config/particles_config_dev.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/pawn_config_dev.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/reticule_config.lua	Already matches v2.1.0
+Replace	scripts/libs/config/reticule_dev_config.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/config/ui_config.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/ui_config_dev.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/widgetcomponent_config.lua	Already matches v2.1.0
+Preserve	scripts/libs/config/widgetcomponent_config_dev.lua	Already matches v2.1.0
+Preserve	scripts/libs/configui.lua	Already matches v2.1.0
+Preserve	scripts/libs/controllers.lua	Already matches v2.1.0
+Preserve	scripts/libs/core/lerp.lua	Already matches v2.1.0
+Replace	scripts/libs/core/math_lib.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/core/params.lua	Already matches v2.1.0
+Replace	scripts/libs/core/plugin.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/core/tarray.lua	Already matches v2.1.0
+Replace	scripts/libs/core/uevr_lib.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/deprecated/input.lua	Already matches v2.1.0
+Preserve	scripts/libs/deprecated/pawn.lua	Already matches v2.1.0
+Preserve	scripts/libs/deprecated/reticule.lua	Already matches v2.1.0
+Preserve	scripts/libs/deprecated/ui.lua	Already matches v2.1.0
+Replace	scripts/libs/enums/input.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/enums/unreal.lua	Already matches v2.1.0
+Preserve	scripts/libs/flicker_fixer.lua	Already matches v2.1.0
+Replace	scripts/libs/gestures.lua	Matches the official v2.0.6 baseline
+Install	scripts/libs/grabbable.lua	New v2.1.0 file
+Install	scripts/libs/grip.lua	New v2.1.0 file
+Preserve	scripts/libs/gunstock.lua	Already matches v2.1.0
+Replace	scripts/libs/hands.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/hands_animation.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/ik.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/input.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/interaction.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/keyboard.lua	Already matches v2.1.0
+Replace	scripts/libs/laser.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/linetracer.lua	Already matches v2.1.0
+Preserve	scripts/libs/montage.lua	Already matches v2.1.0
+Replace	scripts/libs/mouse.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/particles.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/pawn.lua	Already matches v2.1.0
+Preserve	scripts/libs/physics.lua	Already matches v2.1.0
+Install	scripts/libs/prompts.lua	New v2.1.0 file
+Preserve	scripts/libs/remap.lua	Already matches v2.1.0
+Replace	scripts/libs/reticule.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/scope.lua	Already matches v2.1.0
+Install	scripts/libs/tutorial.lua	New v2.1.0 file
+Preserve	scripts/libs/uevr_debug.lua	Already matches v2.1.0
+Replace	scripts/libs/uevr_dev.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/uevr_utils.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/ui.lua	Matches the official v2.0.6 baseline
+Preserve	scripts/libs/unit_test.lua	Already matches v2.1.0
+Replace	scripts/libs/widget.lua	Matches the official v2.0.6 baseline
+Replace	scripts/libs/widgetcomponent.lua	Matches the official v2.0.6 baseline
+Replace	scripts/main.lua	Matches the official v2.0.6 baseline

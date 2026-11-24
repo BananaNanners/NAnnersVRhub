@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Carlos Garcia (BananaNanners) and NAnnersVRhub contributors
 # SPDX-License-Identifier: GPL-3.0-only
 """UEVR profile read-only review with explicit guarded confirmation."""
+from collections import Counter
+
 from PySide6.QtWidgets import (
     QCheckBox, QDialog, QHBoxLayout, QLabel, QPushButton, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QAbstractItemView, QHeaderView, QSizePolicy
@@ -13,7 +15,7 @@ from .archive_checklist_ui import archive_table
 
 
 class ProfileReviewDialog(QDialog):
-    def __init__(self, plan: ProfilePlan, parent=None, *, allow_install=True):
+    def __init__(self, plan: ProfilePlan, parent=None, *, allow_install=True, decisions=()):
         super().__init__(parent)
         self.plan = plan
         self.confirmed_by_user = False
@@ -46,6 +48,7 @@ class ProfileReviewDialog(QDialog):
         title.setObjectName("uevrProfileReviewTitle")
         layout.addWidget(title)
         self.status = QLabel(
+            "BLOCKED — PROFILE COMPATIBILITY REVIEW REQUIRED" if decisions else
             "BLOCKED — MANUAL RECOVERY REVIEW REQUIRED" if plan.blocked else
             ("READ-ONLY PREVIEW — INSTALLATION IS DISABLED"
              if not self.allow_install else
@@ -63,6 +66,11 @@ class ProfileReviewDialog(QDialog):
             f"Current profile: {plan.existing_files} files, {plan.existing_dirs} directories / "
             f"{human_file_size(plan.existing_bytes)}"
         )
+        if decisions:
+            counts = Counter(action for action, _, _ in decisions)
+            overview.setText(overview.text() + "\nHogwarts Legacy v2.1.0  |  " +
+                             "  /  ".join(f"{action} {counts[action]}"
+                                          for action in ("Install", "Replace", "Preserve")))
         overview.setObjectName("uevrProfileReviewOverview")
         overview.setToolTip(
             f"Exact selected archive contents: {plan.profile_bytes:,} bytes\n"
@@ -87,18 +95,23 @@ class ProfileReviewDialog(QDialog):
             warning.setStyleSheet("color:#FFD21A; font-weight:700")
             layout.addWidget(warning)
         self.archives = archive_table(
-            [(plan.archive, "Matching game profile", plan.archive_sha256)], self)
+            [(plan.archive, "Official Hogwarts Legacy v2.1.0" if decisions else "Matching game profile", plan.archive_sha256)], self)
         layout.addWidget(self.archives)
-        self.table = QTableWidget(len(plan.file_names), 1)
+        rows = decisions or tuple((name,) for name in plan.file_names)
+        headers = ("Action", "Profile file", "Reason") if decisions else (
+            "Archive file to place inside the reviewed profile directory",)
+        self.table = QTableWidget(len(rows), len(headers))
         self.table.setObjectName("uevrProfileArchiveFiles")
-        self.table.setHorizontalHeaderLabels(["Archive file to place inside the reviewed profile directory"])
+        self.table.setHorizontalHeaderLabels(headers)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for index, name in enumerate(plan.file_names):
-            self.table.setItem(index, 0, QTableWidgetItem(name))
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(len(headers) - 1, QHeaderView.Stretch)
+        for index, row in enumerate(rows):
+            for column, value in enumerate(row):
+                self.table.setItem(index, column, QTableWidgetItem(value))
         self.manifest_toggle = QPushButton(
-            f"Show profile file inventory ({len(plan.file_names)})")
+            f"Show profile file inventory ({len(rows)})")
         self.manifest_toggle.setObjectName("profileManifestDisclosure")
         self.manifest_toggle.setCheckable(True)
         layout.addWidget(self.manifest_toggle)
@@ -127,7 +140,7 @@ class ProfileReviewDialog(QDialog):
     def _toggle_manifest(self, expanded):
         self.table.setVisible(expanded)
         self.manifest_toggle.setText(
-            f"{'Hide' if expanded else 'Show'} profile file inventory ({len(self.plan.file_names)})")
+            f"{'Hide' if expanded else 'Show'} profile file inventory ({self.table.rowCount()})")
         self._update()
 
     def _update(self):

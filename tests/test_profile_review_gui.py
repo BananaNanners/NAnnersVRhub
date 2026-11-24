@@ -84,6 +84,21 @@ class UEVRReviewGuiTests(unittest.TestCase):
         dialog._confirmed()
         self.assertFalse(dialog.confirmed_by_user)
 
+    def test_blocked_update_shows_all_decisions_and_keeps_apply_disabled(self):
+        rows = (("Install", "config_AFW.txt", "Optional"),
+                ("Preserve", "config.txt", "Locally modified"),
+                ("Replace", "scripts/main.lua", "Official baseline"))
+        dialog = ProfileReviewDialog(self.plan(("Clean profile required for compatibility review.",)),
+                                     decisions=rows)
+        self.addCleanup(dialog.close)
+        dialog.ack.setChecked(True)
+        dialog.manifest_toggle.setChecked(True)
+        self.assertFalse(dialog.apply_btn.isEnabled())
+        self.assertEqual(dialog.table.rowCount(), 3)
+        self.assertEqual(dialog.table.item(1, 0).text(), "Preserve")
+        self.assertEqual(dialog.table.item(1, 1).text(), "config.txt")
+        self.assertIn("(3)", dialog.manifest_toggle.text())
+
     def test_exact_destination_archive_and_backup_policy_visible(self):
         plan = self.plan()
         dialog = ProfileReviewDialog(plan, allow_install=False)

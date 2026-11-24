@@ -1630,6 +1630,10 @@ class HubWindow(QMainWindow):
             from .uevr_dependency_review_gui import DependencyReviewDialog
             if r.get("id") not in uevr_dependency_review.SUPPORTED or len(files) != 2:
                 return
+            from . import hogwarts_update_pilot
+            if hogwarts_update_pilot.applies(r, files[1]):
+                self.review_profile_archive(r, files[1])
+                return
             try:
                 plan = uevr_dependency_review.build_plan(r, files, _roots(), evidence=request.get("evidence"))
             except (RuntimeError, OSError, ValueError, zipfile.BadZipFile) as exc:
@@ -1710,13 +1714,18 @@ class HubWindow(QMainWindow):
         current = self.current()
         if not current or current["id"] != recipe["id"] or not current.get("profile"):
             return
+        from . import hogwarts_update_pilot
+        decisions = ()
         try:
-            plan = hub.review_profile_install(recipe, zip_file, _roots())
+            if hogwarts_update_pilot.applies(recipe, zip_file):
+                plan, decisions = hogwarts_update_pilot.build_review(recipe, zip_file, _roots())
+            else:
+                plan = hub.review_profile_install(recipe, zip_file, _roots())
         except (RuntimeError, OSError, ValueError, zipfile.BadZipFile) as exc:
             QMessageBox.warning(self, "UEVR profile review blocked", str(exc))
             return
         # Dev5C3 live profile replacement remains mechanically disabled.
-        dialog = ProfileReviewDialog(plan, self, allow_install=False)
+        dialog = ProfileReviewDialog(plan, self, allow_install=False, decisions=decisions)
         dialog.exec()
 
     def uninstall(self):
