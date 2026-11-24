@@ -1071,7 +1071,7 @@ class HubWindow(QMainWindow):
         self.hub_update_btn.setText(text)
 
     def refresh_system_live(self):
-        if self.auto_live.isChecked() and self.tabs.currentIndex() == 0 and self.scan_report:
+        if self.auto_live.isChecked() and self.scan_report:
             self.scan_setup(live_only=True)
 
     def scan_setup(self, _checked=False, *, live_only=False):
@@ -1107,8 +1107,10 @@ class HubWindow(QMainWindow):
             if live["runtime_selected"] else
             f"{report['status']}  •  OpenXR selection unavailable"
             f"  •  Live status: {local_time(live['sampled_at'])}")
-        self.runtime_label.setText(f"●  {selection}")
-        self.runtime_label.setStyleSheet(f"color: {GREEN if live['runtime_selected'] else RED};")
+        activity = live.get("activity", "UNKNOWN")
+        self.runtime_label.setText(f"●  {activity}")
+        self.runtime_label.setToolTip(f"OpenXR: {selection}. Runtime activity is observed, not a gameplay test.")
+        self.runtime_label.setStyleSheet(f"color: {MUTED if activity in ('Idle', 'UNKNOWN') else GREEN};")
         scrollbar = self.system_details.verticalScrollBar()
         position = scrollbar.value()
         self.system_details.setHtml(system_scan.report_html(report))
@@ -1118,6 +1120,9 @@ class HubWindow(QMainWindow):
 
     def scan_failed(self, message):
         self.scan_report = None
+        self.runtime_label.setText("●  UNKNOWN")
+        self.runtime_label.setToolTip("Runtime activity could not be sampled.")
+        self.runtime_label.setStyleSheet(f"color: {MUTED};")
         self.runtime_state.setText("Runtime: UNKNOWN")
         self.server_state.setText("Server: UNKNOWN")
         self.headset_state.setText("Headset: UNKNOWN")
@@ -1199,10 +1204,9 @@ class HubWindow(QMainWindow):
         # previous local preflight success across a new state refresh.
         self.preflight_results.clear()
         keep = self.table.currentRow()
-        path, lib = runtime.active_runtime()
-        ok = bool(path and lib)
-        self.runtime_label.setText(f"●  {runtime.runtime_name(path, lib)} SELECTED" if ok else "●  OpenXR NOT CONFIGURED")
-        self.runtime_label.setStyleSheet(f"color: {GREEN if ok else RED};")
+        if self.scan_report is None:
+            self.runtime_label.setText("●  Checking runtime…")
+            self.runtime_label.setStyleSheet(f"color: {MUTED};")
         self.rows = hub.game_rows(_roots())
         self.table.setRowCount(len(self.rows))
         for i, row in enumerate(self.rows):

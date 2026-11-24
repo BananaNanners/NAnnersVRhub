@@ -23,6 +23,8 @@ FATEKEEPER_LOCAL_PROFILE_FILES = frozenset({
     "cache/sdk_discovery.json",
     "data/dev/attachments_config_dev.json",
     "config.txt",
+    "imgui.ini",
+    "data/config_default.json",
 })
 
 

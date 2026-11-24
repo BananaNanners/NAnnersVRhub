@@ -82,6 +82,37 @@ class RuntimeSwitchReadOnlyTests(unittest.TestCase):
             self.assertFalse(back["live"]["controllers_verified"])
             self.assertEqual(self.selector.readlink(),self.steam)
 
+    def test_activity_follows_servers_without_switching_selected_manifest(self):
+        from unittest.mock import patch
+        with patch.object(system_scan, "_process_names", return_value=set()) as processes:
+            report = system_scan.scan()
+            self.assertEqual(report["live"]["activity"], "Idle")
+            processes.return_value = {"wivrn-server"}
+            report = system_scan.refresh_live(report)
+            self.assertEqual(report["runtime"], "SteamVR")
+            self.assertEqual(report["live"]["activity"], "WiVRn CONNECTED")
+            self.assertIsNone(report["live"]["headset_connected"])
+            processes.return_value = {"wivrn-server", "vrserver"}
+            self.assertEqual(system_scan.refresh_live(report)["live"]["activity"], "WiVRn + SteamVR")
+            processes.return_value = {"vrserver"}
+            self.assertEqual(system_scan.refresh_live(report)["live"]["activity"], "SteamVR RUNNING")
+            processes.return_value = set()
+            self.assertEqual(system_scan.refresh_live(report)["live"]["activity"], "Idle")
+            processes.return_value = None
+            self.assertEqual(system_scan.refresh_live(report)["live"]["activity"], "UNKNOWN")
+        self.assertEqual(self.selector.readlink(), self.steam)
+
+    def test_wivrn_disconnected_server_is_idle_but_unknown_is_not(self):
+        self.select(self.wivrn)
+        with (mock.patch.object(system_scan, "_process_names", return_value={"wivrn-server"}),
+              mock.patch.object(system_scan.wivrn_status, "read_status") as query):
+            query.return_value = dict(connected=False, system_name="", source="fixture", detail="fixture")
+            report = system_scan.scan()
+            self.assertEqual(report["live"]["activity"], "Idle")
+            self.assertTrue(report["live"]["server_running"])
+            query.return_value["connected"] = None
+            self.assertEqual(system_scan.refresh_live(report)["live"]["activity"], "WiVRn RUNNING")
+
     def test_same_library_but_new_manifest_target_forces_rescan(self):
         second=self.root/"Alternate/steamvr.json"
         second.parent.mkdir()
@@ -140,6 +171,9 @@ class RuntimeSwitchDashboardQtTests(unittest.TestCase):
             sample["live"]=dict(sample["live"], runtime_selected=True,
                                 server_running=False,headset_connected=None)
             win.show_system_report(sample)
+            sample["live"]["activity"] = "Idle"
+            win.show_system_report(sample)
+            self.assertEqual(win.runtime_label.text(), "●  Idle")
             self.assertIn("SteamVR SELECTED",win.runtime_state.text())
             self.assertEqual(win.server_state.text(),"Server: NOT OBSERVED")
             self.assertEqual(win.headset_state.text(),"Headset: UNKNOWN")
@@ -147,9 +181,14 @@ class RuntimeSwitchDashboardQtTests(unittest.TestCase):
             self.assertIn("0.5.5-dev5D3y3",__import__("vrhub.system_scan",fromlist=["report_text"]).report_text(win.scan_report))
             other=copy.deepcopy(sample)
             other["runtime"]="WiVRn"
-            other["live"].update(server_running=True,headset_connected=True)
+            other["live"].update(server_running=True,headset_connected=True,activity="WiVRn CONNECTED")
             win.show_system_report(other)
             self.assertIn("WiVRn SELECTED",win.runtime_state.text())
+            self.assertEqual(win.runtime_label.text(), "●  WiVRn CONNECTED")
+            win.tabs.setCurrentIndex(1)
+            with mock.patch.object(win, "scan_setup") as refresh:
+                win.refresh_system_live()
+                refresh.assert_called_once_with(live_only=True)
             self.assertEqual(win.server_state.text(),"Server: RUNNING")
             self.assertEqual(win.headset_state.text(),"Headset: CONNECTED")
             self.assertFalse(win.save_scan_btn.isEnabled())

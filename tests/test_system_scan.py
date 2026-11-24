@@ -235,6 +235,7 @@ class SystemScanTests(unittest.TestCase):
     def test_other_selected_runtime_does_not_use_wivrn_connection_evidence(self):
         self.manifest.write_text(json.dumps({'file_format_version': '1.0.0',
                                             'runtime': {'library_path': 'libsteamxr.so'}}))
+        self.process_lookup.return_value = {"vrserver"}
         with mock.patch.object(system_scan.wivrn_status, 'read_status') as query:
             report = system_scan.scan()
         query.assert_not_called()

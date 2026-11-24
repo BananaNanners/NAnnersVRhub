@@ -101,6 +101,33 @@ def _live_snapshot(name: str, selected: bool) -> tuple[dict, list[dict]]:
         headset = wivrn_status.read_status()
         if headset["connected"] is not None:
             running = True  # A typed reply is evidence that the WiVRn service is running.
+    # Activity is distinct from the selected OpenXR manifest. Observe both
+    # supported servers, but never infer SteamVR headset connectivity.
+    steam_running = bool(names & {"vrserver", "vrcompositor"}) if names is not None else None
+    wivrn_running = bool(names & {"wivrn-server"}) if names is not None else None
+    other = None
+    if selected and name == "WiVRn":
+        wivrn_running = running
+    elif wivrn_running:
+        # A running non-selected WiVRn server may have a headset. Query only
+        # an observed service, with D-Bus activation disabled.
+        other = wivrn_status.read_status()
+    wivrn_connected = headset["connected"] if selected and name == "WiVRn" else (
+        other["connected"] if wivrn_running and other is not None else None)
+    if wivrn_connected is True:
+        activity = "WiVRn CONNECTED"
+        if steam_running:
+            activity = "WiVRn + SteamVR"
+    elif steam_running:
+        activity = "SteamVR RUNNING"
+    elif wivrn_running and wivrn_connected is None:
+        activity = "WiVRn RUNNING"
+    elif running and name not in {"SteamVR", "WiVRn"}:
+        activity = name + " RUNNING"
+    elif steam_running is False and (wivrn_running is False or wivrn_connected is False) and name in {"SteamVR", "WiVRn", "Not configured"}:
+        activity = "Idle"
+    else:
+        activity = "UNKNOWN"
     sampled_at = datetime.now(timezone.utc).isoformat()
     detail = f"{name} server running (WiVRn D-Bus status replied)." if headset["connected"] is not None else (
         f"{name} server process observed." if running else
@@ -131,6 +158,7 @@ def _live_snapshot(name: str, selected: bool) -> tuple[dict, list[dict]]:
         "UNVERIFIED: connection telemetry does not report live controller poses or input.",
         "Confirm both controllers in the headset and check input in a VR app.")
     return dict(sampled_at=sampled_at, runtime_selected=selected, runtime=name, server_running=running,
+                activity=activity,
                 headset_connected=connected, headset_name=headset["system_name"],
                 headset_source=headset["source"], headset_connection_verified=connected is not None,
                 controllers_verified=False), rows

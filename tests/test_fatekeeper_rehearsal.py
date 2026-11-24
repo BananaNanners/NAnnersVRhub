@@ -248,6 +248,12 @@ class FatekeeperRehearsalTests(unittest.TestCase):
             self.assertEqual((injector / "UEVRBackend.dll").read_bytes(), self.asset)
             for name in review.FATEKEEPER_LOCAL_PROFILE_FILES | {"extra.ini"}:
                 self.assertEqual((profile / name).read_bytes(), b"local data")
+            from vrhub import installed_integrity
+            self.assertTrue({"imgui.ini", "data/config_default.json"}.issubset(review.FATEKEEPER_LOCAL_PROFILE_FILES))
+            records = hub.state()
+            self.assertEqual(installed_integrity.verify(recipe, state=records)["status"], "Verified")
+            for name in ("imgui.ini", "data/config_default.json"):
+                self.assertTrue(records["fatekeeper:profile"]["reviewed_dependencies"][name]["customizable"])
             compatible = review.build_plan(recipe, self.archives)
             self.assertTrue(all(action == "Preserve" for action, _, _ in compatible.file_decisions))
             with patch.object(fatekeeper_commit, "live_install_authorized", return_value=True), patch.object(
