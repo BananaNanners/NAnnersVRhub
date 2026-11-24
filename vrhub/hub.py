@@ -175,51 +175,53 @@ def install(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
     """Install a mod from a .pak file, or from a .zip containing one (or a UEVR zip)."""
     if recipe.get("id") == "fatekeeper" and recipe.get("archive_pins"):
         raise RuntimeError("Use Review installation for the verified Fatekeeper dependency pair.")
-    if not get_handler(recipe).install_supported(recipe):
-        raise RuntimeError(f"{recipe['name']} is a guided workflow; it has no direct mod-file install step.")
-    game = game_path(recipe, steam_roots)
-    if not game:
-        raise RuntimeError(f"{recipe['name']}: game installation was not found. Review its setup guide and storefront settings.")
-    if not mod_file.is_file():
-        raise RuntimeError(f"File not found: {mod_file}")
-    if recipe.get("method") == "uevr":
-        return _install_uevr(recipe, mod_file, steam_roots)
-    if recipe.get("method") == "gameroot":
-        return _install_gameroot(recipe, [mod_file], steam_roots)
-    if recipe.get("method") in {"bepinex", "ervr"}:
-        from . import bepinex
-        return bepinex.install(recipe, [mod_file], steam_roots)
-    if recipe["files"][0]["kind"] == "pak":
-        from . import pak
-        return pak.install(recipe, mod_file, game)
-    rule = recipe["files"][0]
-    ext = f".{rule['kind']}"
-    dest_dir = game / rule["dest"]
-    if not dest_dir.is_dir():
-        raise RuntimeError(f"Game folder layout unexpected, missing: {dest_dir}")
+    from . import state_transaction
+    with state_transaction.locked(state_file()):
+        if not get_handler(recipe).install_supported(recipe):
+            raise RuntimeError(f"{recipe['name']} is a guided workflow; it has no direct mod-file install step.")
+        game = game_path(recipe, steam_roots)
+        if not game:
+            raise RuntimeError(f"{recipe['name']}: game installation was not found. Review its setup guide and storefront settings.")
+        if not mod_file.is_file():
+            raise RuntimeError(f"File not found: {mod_file}")
+        if recipe.get("method") == "uevr":
+            return _install_uevr(recipe, mod_file, steam_roots)
+        if recipe.get("method") == "gameroot":
+            return _install_gameroot(recipe, [mod_file], steam_roots)
+        if recipe.get("method") in {"bepinex", "ervr"}:
+            from . import bepinex
+            return bepinex.install(recipe, [mod_file], steam_roots)
+        if recipe["files"][0]["kind"] == "pak":
+            from . import pak
+            return pak.install(recipe, mod_file, game)
+        rule = recipe["files"][0]
+        ext = f".{rule['kind']}"
+        dest_dir = game / rule["dest"]
+        if not dest_dir.is_dir():
+            raise RuntimeError(f"Game folder layout unexpected, missing: {dest_dir}")
 
-    written: list[Path] = []
-    if mod_file.suffix.lower() == ".zip":
-        with zipfile.ZipFile(mod_file) as z:
-            members = [m for m in z.namelist() if m.lower().endswith(ext)]
-            if not members:
-                raise RuntimeError(f"No {ext} file found inside {mod_file.name}")
-            for m in members:
-                dest = dest_dir / Path(m).name  # basename only: no path tricks
-                with z.open(m) as src, open(dest, "wb") as out:
-                    shutil.copyfileobj(src, out)
-                written.append(dest)
-    elif mod_file.suffix.lower() == ext:
-        dest = dest_dir / mod_file.name
-        shutil.copy2(mod_file, dest)
-        written.append(dest)
-    else:
-        raise RuntimeError(f"Expected a {ext} or .zip file, got: {mod_file.name}")
+        written: list[Path] = []
+        if mod_file.suffix.lower() == ".zip":
+            with zipfile.ZipFile(mod_file) as z:
+                members = [m for m in z.namelist() if m.lower().endswith(ext)]
+                if not members:
+                    raise RuntimeError(f"No {ext} file found inside {mod_file.name}")
+                for m in members:
+                    dest = dest_dir / Path(m).name  # basename only: no path tricks
+                    with z.open(m) as src, open(dest, "wb") as out:
+                        shutil.copyfileobj(src, out)
+                    written.append(dest)
+        elif mod_file.suffix.lower() == ext:
+            dest = dest_dir / mod_file.name
+            shutil.copy2(mod_file, dest)
+            written.append(dest)
+        else:
+            raise RuntimeError(f"Expected a {ext} or .zip file, got: {mod_file.name}")
 
-    state = _load_state()
-    state[recipe["id"]] = {"files": [str(w) for w in written], "installed_at": int(time.time())}
-    _save_state(state)
-    return written
+        state = _load_state()
+        state[recipe["id"]] = {"files": [str(w) for w in written], "installed_at": int(time.time())}
+        _save_state(state)
+        return written
 
 
 def _install_uevr(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
@@ -325,12 +327,14 @@ def _validate_component_plan(comp: dict | None, plan: list[tuple[Path, Path]], a
 @contextmanager
 def _gameroot_lock():
     """Serialize game-root state changes and backup commit/recovery."""
-    path = state_file().parent / "gameroot-install.lock"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
-        yield
+    from . import state_transaction
+    with state_transaction.locked(state_file()):
+        path = state_file().parent / "gameroot-install.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX)
+            yield
 
 
 def _file_digest(path: Path) -> str:
@@ -777,64 +781,67 @@ def install_profile(recipe: dict, zip_file: Path, steam_roots=None, *,
 
 def uninstall(recipe_id: str, *, profile_confirm: bool = False) -> list[Path]:
     """Remove what we installed under this key (use '<game>:profile' for a profile)."""
-    state = _load_state()
-    if recipe_id in {"fatekeeper", "fatekeeper:profile"} and state.get(recipe_id, {}).get(
-            "installer") == "fatekeeper-pair-fk4":
-        if not profile_confirm:
-            raise RuntimeError("Confirm recovery of the complete Fatekeeper dependency pair.")
+    from . import state_transaction
+    with state_transaction.locked(state_file()):
+        state = _load_state()
         from . import fatekeeper_commit
-        fatekeeper_commit.recover_live()
-        return []
-    if recipe_id.endswith(":profile"):
-        from . import profile_safety
-        return profile_safety.restore(recipe_id, confirmed=profile_confirm)
-    if state.get(recipe_id, {}).get("installer") == "gameroot-2":
-        return _uninstall_gameroot(recipe_id)
-    if state.get(recipe_id, {}).get("installer") == "pak-1":
-        from . import pak
-        return pak.uninstall(recipe_id)
-    if state.get(recipe_id, {}).get("installer") in {"submersed-vr-1", "vhvr-1", "ervr-1"}:
-        from . import bepinex
-        return bepinex.uninstall(recipe_id)
-    if (isinstance(state.get(recipe_id), dict)
-            and state[recipe_id].get("keep")
-            and state[recipe_id].get("installer") != "gameroot-2"):
-        raise RuntimeError(
-            "Legacy game-root installation has no verified retained originals. "
-            "Automatic removal is blocked; preserve the game and review manually.")
-    entry = state.pop(recipe_id, {})
-    removed = []
-    for p in entry.get("files", []):
-        Path(p).unlink(missing_ok=True)
-        removed.append(Path(p))
-    keep = entry.get("keep")  # game folder: remove folders we emptied, but never this one or above
-    if keep:
-        keep_p = Path(keep)
-        for p in removed:
-            for parent in Path(p).parents:
-                if parent == keep_p or not parent.is_relative_to(keep_p):
-                    break
-                try:
-                    parent.rmdir()
-                except OSError:
-                    break
-    root = entry.get("root")
-    if root and Path(root).is_dir():  # remove empty folders inside our own folder only
-        for d in sorted(Path(root).rglob("*"), key=lambda x: len(x.parts), reverse=True):
-            if d.is_dir():
-                try:
-                    d.rmdir()
-                except OSError:
-                    pass
-        try:
-            Path(root).rmdir()
-        except OSError:
-            pass
-    backup = entry.get("backup")
-    if root and backup and Path(backup).is_dir():  # put back what the profile replaced
-        shutil.copytree(backup, root, dirs_exist_ok=True)
-    _save_state(state)
-    return removed
+        if recipe_id in {"fatekeeper", "fatekeeper:profile"} and (state.get(recipe_id, {}).get(
+                "installer") == "fatekeeper-pair-fk4" or fatekeeper_commit.recovery_notice()):
+            if not profile_confirm:
+                raise RuntimeError("Confirm recovery of the complete Fatekeeper dependency pair.")
+            from . import fatekeeper_commit
+            fatekeeper_commit.recover_live()
+            return []
+        if recipe_id.endswith(":profile"):
+            from . import profile_safety
+            return profile_safety.restore(recipe_id, confirmed=profile_confirm)
+        if state.get(recipe_id, {}).get("installer") == "gameroot-2":
+            return _uninstall_gameroot(recipe_id)
+        if state.get(recipe_id, {}).get("installer") == "pak-1":
+            from . import pak
+            return pak.uninstall(recipe_id)
+        if state.get(recipe_id, {}).get("installer") in {"submersed-vr-1", "vhvr-1", "ervr-1"}:
+            from . import bepinex
+            return bepinex.uninstall(recipe_id)
+        if (isinstance(state.get(recipe_id), dict)
+                and state[recipe_id].get("keep")
+                and state[recipe_id].get("installer") != "gameroot-2"):
+            raise RuntimeError(
+                "Legacy game-root installation has no verified retained originals. "
+                "Automatic removal is blocked; preserve the game and review manually.")
+        entry = state.pop(recipe_id, {})
+        removed = []
+        for p in entry.get("files", []):
+            Path(p).unlink(missing_ok=True)
+            removed.append(Path(p))
+        keep = entry.get("keep")  # game folder: remove folders we emptied, but never this one or above
+        if keep:
+            keep_p = Path(keep)
+            for p in removed:
+                for parent in Path(p).parents:
+                    if parent == keep_p or not parent.is_relative_to(keep_p):
+                        break
+                    try:
+                        parent.rmdir()
+                    except OSError:
+                        break
+        root = entry.get("root")
+        if root and Path(root).is_dir():  # remove empty folders inside our own folder only
+            for d in sorted(Path(root).rglob("*"), key=lambda x: len(x.parts), reverse=True):
+                if d.is_dir():
+                    try:
+                        d.rmdir()
+                    except OSError:
+                        pass
+            try:
+                Path(root).rmdir()
+            except OSError:
+                pass
+        backup = entry.get("backup")
+        if root and backup and Path(backup).is_dir():  # put back what the profile replaced
+            shutil.copytree(backup, root, dirs_exist_ok=True)
+        _save_state(state)
+        return removed
 
 
 def launch_options(recipe: dict) -> str:
@@ -983,9 +990,11 @@ def refresh_component_names(recipe: dict, key=None, fetch=None, max_age: int = 8
         except (OSError, ValueError, KeyError, TypeError):
             continue  # offline or a bad reply: keep whatever name we had
     if found:
-        st = _load_state()  # reload so we don't clobber an install that happened meanwhile
-        st.setdefault("_names", {}).update(found)
-        _save_state(st)
+        from . import state_transaction
+        with state_transaction.locked(state_file()):
+            st = _load_state()
+            st.setdefault("_names", {}).update(found)
+            _save_state(st)
     return len(found)
 
 
@@ -1015,15 +1024,17 @@ def mark_current(recipe: dict) -> list[str]:
     """
     if recipe.get("track_component_updates"):
         return []
-    st = _load_state()
-    keys = {k for u in recipe.get("updates", []) for k in u.get("tracks", [])} or {recipe["id"]}
-    marked = []
-    for k in sorted(keys):
-        if k in st:
-            st[k]["installed_at"] = int(time.time())
-            marked.append(k)
-    _save_state(st)
-    return marked
+    from . import state_transaction
+    with state_transaction.locked(state_file()):
+        st = _load_state()
+        keys = {k for u in recipe.get("updates", []) for k in u.get("tracks", [])} or {recipe["id"]}
+        marked = []
+        for k in sorted(keys):
+            if k in st:
+                st[k]["installed_at"] = int(time.time())
+                marked.append(k)
+        _save_state(st)
+        return marked
 
 
 def diagnostics(recipe: dict, steam_roots=None) -> str:

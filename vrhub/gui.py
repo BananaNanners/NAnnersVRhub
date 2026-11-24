@@ -1353,6 +1353,8 @@ class HubWindow(QMainWindow):
         profile = records.get(recipe["id"] + ":profile")
         if installed is None:
             mod_status = "No Hub-managed mod installation record."
+        elif installed.get("installer") == "fatekeeper-pair-fk4":
+            mod_status = "Recorded Fatekeeper transaction; latest recovery journal requires revalidation."
         elif installed.get("installer") == "gameroot-2":
             mod_status = "Recorded game-root install with retained originals; revalidation required."
         else:
@@ -1361,12 +1363,18 @@ class HubWindow(QMainWindow):
             profile_status = "No UEVR profile step for this game."
         elif profile is None:
             profile_status = "No Hub-managed UEVR profile record."
+        elif profile.get("installer") == "fatekeeper-pair-fk4":
+            profile_status = "Recorded paired Fatekeeper profile; recovery covers the latest reviewed transaction."
         elif profile.get("installer") == "uevr-profile-2":
             profile_status = "Recorded profile backup; full SHA-256 recheck required before restore."
         else:
             profile_status = "Legacy UEVR profile record: automatic restoration blocked."
+        notice = ""
+        if recipe["id"] == "fatekeeper":
+            from .fatekeeper_commit import recovery_notice
+            notice = recovery_notice()
         self.rollback_summary.setText(
-            f"{recipe['name']}\nMods: {mod_status}\nProfile: {profile_status}")
+            f"{recipe['name']}\nMods: {mod_status}\nProfile: {profile_status}" + ("\n" + notice if notice else ""))
 
     def refresh_compatibility(self):
         self.compat_report = None
@@ -1508,8 +1516,30 @@ class HubWindow(QMainWindow):
         self.worker.finished.connect(self.close_when_idle)
         self.worker.start()
 
+    def _refresh_fatekeeper_update_rows(self, recipe):
+        # All three pinned Fatekeeper update targets are local-only. Refuse
+        # network calls here even if a future recipe adds an online target.
+        def offline(*args):
+            raise OSError("Use Check updates for online release information")
+        self.update_results.pop("fatekeeper", None)
+        try:
+            self.update_results["fatekeeper"] = updates.check_recipe(
+                recipe, hub.state(), fetch=offline, nexus_fetch=offline, nexus_key=None)
+        except (OSError, RuntimeError, ValueError):
+            pass  # Never retain pre-transaction evidence on a failed refresh.
+
+    def _refresh_fatekeeper_installation(self, recipe):
+        self._refresh_fatekeeper_update_rows(recipe)
+        self.refresh()
+
     def _updates_done(self, results):
         self.update_results = results or {}
+        # An earlier worker may finish after a dependency transaction. Re-read
+        # local pinned evidence instead of publishing a stale backend status.
+        recipe = next((row["recipe"] for row in self.rows
+                       if row["recipe"]["id"] == "fatekeeper"), None)
+        if recipe and recipe.get("archive_pins") and "fatekeeper" in self.update_results:
+            self._refresh_fatekeeper_update_rows(recipe)
         self.mod_updates.set_checking(False)
         self.refresh()
 
@@ -1641,13 +1671,23 @@ class HubWindow(QMainWindow):
                 return
             if r["id"] == "fatekeeper" and r.get("archive_pins"):
                 from . import fatekeeper_commit
+                notice = fatekeeper_commit.recovery_notice()
+                if notice:
+                    QMessageBox.warning(self, "Fatekeeper recovery required", notice)
+                    return
 
-                DependencyReviewDialog(
+                dialog = DependencyReviewDialog(
                     plan, self,
                     install_action=lambda asset: fatekeeper_commit.install_reviewed(
                         plan, _roots(), verified_backend=asset),
                     install_authorized=fatekeeper_commit.live_install_authorized,
-                ).exec()
+                )
+                dialog.exec()
+                if dialog.install_attempted:
+                    # Failed transactions can leave a recovery journal or
+                    # partial changes. Refresh after either outcome, not on
+                    # ordinary review cancellation or disposable rehearsal.
+                    self._refresh_fatekeeper_installation(r)
             else:
                 DependencyReviewDialog(plan, self).exec()
             return

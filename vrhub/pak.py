@@ -20,11 +20,13 @@ def _digest(path):
 @contextmanager
 def _locked():
     from . import hub
-    path = hub.state_file().parent / "pak-install.lock"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with os.fdopen(os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600), "w") as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
-        yield
+    from . import state_transaction
+    with state_transaction.locked(hub.state_file()):
+        path = hub.state_file().parent / "pak-install.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with os.fdopen(os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600), "w") as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX)
+            yield
 
 
 def _target(directory, name):

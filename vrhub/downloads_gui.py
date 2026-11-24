@@ -837,9 +837,11 @@ class GuidedDownloadsPage(QWidget):
             return
         from .fatekeeper_backend_status import check_backend, install_update_guidance
         result = check_backend(recipe)
-        self.backend_install_status.setText(install_update_guidance(result))
-        self.backend_install_status.setToolTip(result.get("detail", ""))
-        color = "#4FE39A" if result["status"] == "verified" else "#FFD21A"
+        from .fatekeeper_commit import recovery_notice
+        notice = recovery_notice()
+        self.backend_install_status.setText("\n".join(filter(None, (install_update_guidance(result), notice))))
+        self.backend_install_status.setToolTip("\n".join(filter(None, (result.get("detail", ""), notice))))
+        color = "#4FE39A" if result["status"] == "verified" and not notice else "#FFD21A"
         self.backend_install_status.setStyleSheet(
             f"color: {color}; font-weight: 700; padding: 5px 0;")
         self.backend_install_status.show()
@@ -1868,6 +1870,10 @@ class GuidedDownloadsPage(QWidget):
         route, label = self._review_action()
         if not recipe:
             return "idle", "Review installation"
+        if recipe.get("id") == "fatekeeper" and recipe.get("archive_pins"):
+            from .fatekeeper_commit import recovery_notice
+            if recovery_notice():
+                return "recovery-blocked", "Recovery required"
         if recipe.get("handler") == "kharvox-gog":
             label = "Review installation"
             if len(rows) != 1 or self._needs_rescan(rows[0]):
@@ -1935,6 +1941,10 @@ class GuidedDownloadsPage(QWidget):
         recipe = self.recipe or {}
         method = recipe.get("method", "file")
         rows = (self._last_plan or {}).get("rows", [])
+        if recipe.get("id") == "fatekeeper" and recipe.get("archive_pins"):
+            from .fatekeeper_commit import recovery_notice
+            if recovery_notice():
+                return None
         if (not recipe or self._saved_error or (self._last_plan or {}).get("warning")
                 or not self._last_folder
                 or (recipe.get("id") in self._saved and not rows)
@@ -1990,7 +2000,10 @@ class GuidedDownloadsPage(QWidget):
         row = self._selected_row_record()
         route, label = self._primary_action()
         plan = self._last_plan or {}
-        if (self._last_plan or {}).get("warning"):
+        if route == "recovery-blocked":
+            from .fatekeeper_commit import recovery_notice
+            message = recovery_notice() or "Recovery review required. Refresh the game before retrying."
+        elif (self._last_plan or {}).get("warning"):
             message = "Scan incomplete: " + str(self._last_plan["warning"])
         elif route == "pinned-release-review":
             message = "Newer official release matched, but the recipe pin is not approved. Review only; installation remains blocked."
@@ -2050,7 +2063,7 @@ class GuidedDownloadsPage(QWidget):
         # The existing top scan control is the primary action for scan states.
         # Do not display a second identical button.
         self.install_review_button.setVisible(route not in ("scan", "idle"))
-        self.install_review_button.setEnabled(not busy and route not in ("blocked", "select", "scan", "idle", "kharvox-wait"))
+        self.install_review_button.setEnabled(not busy and route not in ("blocked", "recovery-blocked", "select", "scan", "idle", "kharvox-wait"))
         self.install_review_button.setText(label)
         manual = self._manual_review_route()
         self.manual_review_button.setVisible(bool(manual))
@@ -2064,6 +2077,7 @@ class GuidedDownloadsPage(QWidget):
             if route in ("kharvox-review", "kharvox-wait") else
             "Review the selected profile ZIP, exact destination and full-directory backup. Nothing changes without confirmation."
             if route == "profile" else
+            "Resolve the Fatekeeper recovery journal before installation." if route == "recovery-blocked" else
             "Review selected archives and backup policy. Nothing changes without confirmation."
             if route != "blocked" else "Verification blocked. Obtain the correct archive and rescan.")
         self._update_workflow_guidance()
@@ -2127,7 +2141,7 @@ class GuidedDownloadsPage(QWidget):
             return
         rid = self.recipe["id"]
         route, _ = self._primary_action()
-        if route in ("blocked", "scan", "idle", "select", "kharvox-wait"):
+        if route in ("blocked", "recovery-blocked", "scan", "idle", "select", "kharvox-wait"):
             return
         if route == "kharvox-review":
             self._request_kharvox_review(rid)

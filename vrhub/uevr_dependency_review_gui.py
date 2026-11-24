@@ -47,6 +47,7 @@ class DependencyReviewDialog(QDialog):
         self.install_action = install_action
         self.install_authorized = install_authorized or (lambda: False)
         self.install_worker = None
+        self.install_attempted = False
         self.setObjectName("uevrDependencyReviewDialog")
         self.setStyleSheet("""
             QDialog#uevrDependencyReviewDialog {background:#0A0D10; color:#E5E8ED;}
@@ -65,6 +66,7 @@ class DependencyReviewDialog(QDialog):
         layout.addWidget(title)
         self.status = QLabel("PREVIEW ONLY — LIVE INSTALLATION DISABLED")
         self.status.setStyleSheet("color:#FFD21A;font-weight:800")
+        self.status.setWordWrap(True)
         layout.addWidget(self.status)
         if plan.verification_failed:
             self.status.setText("INSTALLATION BLOCKED - DEPENDENCY CHECKSUM FAILED")
@@ -192,7 +194,7 @@ class DependencyReviewDialog(QDialog):
             super().closeEvent(event)
 
     def run_rehearsal(self):
-        if self.plan.verification_failed:
+        if self.plan.verification_failed or self.install_worker is not None or (self.install_attempted and not self.disposable_rehearsal):
             return
         if not self.disposable_rehearsal and (not self.has_changes or not self.install_authorized()):
             return
@@ -212,6 +214,7 @@ class DependencyReviewDialog(QDialog):
             self.status.setText("Testing install and rollback in a disposable prefix...")
         else:
             action = lambda: self.install_action(self.verified_asset)
+            self.install_attempted = True
             self.status.setText("Installing reviewed Fatekeeper dependencies...")
         worker = self.install_worker = InstallRehearsal(action, self)
         worker.result.connect(self.show_rehearsal_result)
@@ -232,6 +235,6 @@ class DependencyReviewDialog(QDialog):
             )
         else:
             self.status.setText(
-                "Fatekeeper dependencies installed." if passed else
-                "Installation failed. Review the Fatekeeper recovery journal before retrying."
+                "Reviewed Fatekeeper installation completed. Local checks will refresh when you close this review; gameplay is not verified." if passed else
+                "Installation did not complete. Close this review and check recovery status before retrying."
             )

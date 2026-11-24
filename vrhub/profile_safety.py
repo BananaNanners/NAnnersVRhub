@@ -199,21 +199,23 @@ def build_plan(recipe: dict, zip_file: Path, steam_roots=None) -> ProfilePlan:
 @contextmanager
 def _lock():
     from . import hub
-    directory = hub.state_file().parent
-    if directory.is_symlink():
-        raise RuntimeError("Hub state directory is a symbolic link.")
-    directory.mkdir(parents=True, exist_ok=True)
-    lockpath = directory / ".uevr-profile-install.lock"
-    if lockpath.is_symlink():
-        raise RuntimeError("UEVR profile lock is a symbolic link.")
-    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(lockpath, flags, 0o600)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        yield
-    finally:
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        os.close(fd)
+    from . import state_transaction
+    with state_transaction.locked(hub.state_file()):
+        directory = hub.state_file().parent
+        if directory.is_symlink():
+            raise RuntimeError("Hub state directory is a symbolic link.")
+        directory.mkdir(parents=True, exist_ok=True)
+        lockpath = directory / ".uevr-profile-install.lock"
+        if lockpath.is_symlink():
+            raise RuntimeError("UEVR profile lock is a symbolic link.")
+        flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(lockpath, flags, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
 
 
 def _verified_copy(src: Path, dst: Path, expected: dict) -> None:
@@ -301,10 +303,16 @@ def _assert_game_stopped(game_id: str, *, proc: Path | None = None) -> None:
             continue
         except (PermissionError, OSError) as exc:
             raise RuntimeError("Cannot verify that the target game is stopped.") from exc
-        executable = Path(os.fsdecode(raw[0])).name.casefold() if raw and raw[0] else ""
-        args = {Path(os.fsdecode(item)).name.casefold() for item in raw if item}
-        if comm in markers or executable in markers or markers.intersection(args):
+        # Wine command lines may contain Windows separators, and Linux comm
+        # truncates executable names to 15 bytes. Refuse either representation.
+        args = {os.fsdecode(item).replace("\\", "/").rsplit("/", 1)[-1].casefold()
+                for item in raw if item}
+        if comm in markers or comm in {name[:15] for name in markers} or markers.intersection(args):
             raise RuntimeError("Target UEVR game is running; close it before changing the profile.")
+        if game_id == "fatekeeper":
+            injectors = {"uevrinjector.exe", "uevrinjector"}
+            if comm in injectors or comm in {name[:15] for name in injectors} or injectors.intersection(args):
+                raise RuntimeError("UEVR injector is running; close it before changing Fatekeeper dependencies.")
 
 
 def install(recipe: dict, zip_file: Path, steam_roots=None, *,

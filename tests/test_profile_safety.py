@@ -302,6 +302,24 @@ class ProfileSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "running"):
             self.real_process_guard("hogwarts-legacy", proc=proc)
 
+    def test_fatekeeper_guard_detects_windows_paths_and_truncated_comm(self):
+        proc = self.base / "proc"
+        pid = proc / "1234"
+        pid.mkdir(parents=True)
+        for comm, cmd, label in (
+                ("wine-preloader", r"C:\Games\SLASHER-Win64-Shipping.exe", "game"),
+                ("slasher-win64-s", "wine", "game"),
+                ("wine-preloader", r"C:\uevr\UEVRInjector.exe", "injector"),
+                ("UEVRInjector.ex", "wine", "injector")):
+            with self.subTest(comm=comm, cmd=cmd):
+                (pid / "comm").write_text(comm)
+                (pid / "cmdline").write_bytes(cmd.encode() + b"\0")
+                with self.assertRaisesRegex(RuntimeError, label + " is running"):
+                    self.real_process_guard("fatekeeper", proc=proc)
+        (pid / "comm").write_text("wine-preloader")
+        (pid / "cmdline").write_bytes(b"unrelated.exe\0")
+        self.real_process_guard("fatekeeper", proc=proc)
+
     def test_game_running_guard_allows_verified_empty_process_list(self):
         proc = self.base / "proc"
         proc.mkdir()

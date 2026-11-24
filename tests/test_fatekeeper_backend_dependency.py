@@ -155,6 +155,31 @@ class FatekeeperBackendDependencyTests(unittest.TestCase):
                 page.deleteLater()
                 app.processEvents()
 
+    def test_pending_recovery_blocks_existing_install_action(self):
+        from PySide6.QtWidgets import QApplication
+        from vrhub.downloads_gui import GuidedDownloadsPage
+        from vrhub import archive_scans
+        app = QApplication.instance() or QApplication([])
+        self.file.write_bytes(self.good)
+        state = self.root / "state.json"
+        journal = self.root / "fatekeeper-recovery/fk4-journal.json"
+        journal.parent.mkdir()
+        journal.write_text('{"schema":2,"phase":"applying"}')
+        with (patch.object(hub,"state_file",return_value=state),
+              patch.object(download_planner,"preferences_file",return_value=self.root/"prefs.json"),
+              patch.object(download_planner,"default_library",return_value=self.root),
+              patch.object(archive_scans,"snapshot_file",return_value=self.root/"scans.json")):
+            page=GuidedDownloadsPage()
+            try:
+                page.set_recipe(self.recipe)
+                self.assertIn("recovery pending",page.backend_install_status.text())
+                self.assertEqual(page._primary_action(),("recovery-blocked","Recovery required"))
+                self.assertFalse(page.install_review_button.isEnabled())
+                self.assertIsNone(page._manual_review_route())
+                self.assertEqual(page.table.rowCount(),2)
+            finally:
+                page.close(); page.deleteLater(); app.processEvents()
+
     def test_install_update_guidance_explains_prefix_prerequisite(self):
         from vrhub.fatekeeper_backend_status import install_update_guidance
         message = install_update_guidance({

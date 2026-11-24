@@ -221,6 +221,38 @@ class HubGuidedInstallTests(unittest.TestCase):
             self.assertFalse(dialog.call_args.kwargs["allow_install"])
             install.assert_not_called()
 
+    def test_fatekeeper_completion_refresh_only_after_attempt(self):
+        from vrhub import uevr_dependency_review, hogwarts_update_pilot, fatekeeper_commit
+        from vrhub.uevr_dependency_review_gui import DependencyReviewDialog
+        recipe = hub.load_recipes()["fatekeeper"]
+        for attempted in (False, True):
+            with self.subTest(attempted=attempted), mock.patch.object(self.window, "current", return_value=recipe), mock.patch.object(
+                hogwarts_update_pilot, "applies", return_value=False), mock.patch.object(
+                uevr_dependency_review, "build_plan"), mock.patch(
+                "vrhub.uevr_dependency_review_gui.DependencyReviewDialog") as dialog, mock.patch.object(
+                self.window, "_refresh_fatekeeper_installation") as refresh, mock.patch.object(fatekeeper_commit,"install_reviewed") as install:
+                dialog.return_value.install_attempted = attempted
+                self.window.review_requested_install({"game_id":"fatekeeper","route":"uevr-pair","archives":["a.zip","b.zip"]})
+                if attempted: refresh.assert_called_once_with(recipe)
+                else: refresh.assert_not_called()
+                install.assert_not_called()
+                self.assertFalse(dialog.call_args.kwargs["install_authorized"]())
+
+    def test_local_completion_replaces_stale_update_rows_without_network(self):
+        from vrhub import updates, fatekeeper_backend_status
+        recipe = hub.load_recipes()["fatekeeper"]
+        self.window.update_results = {"fatekeeper":[{"status":"not_installed"}],"other":[{"status":"current"}]}
+        with mock.patch.object(hub,"state",return_value={"fatekeeper":{},"fatekeeper:profile":{}}), mock.patch.object(
+            fatekeeper_backend_status,"check_backend",return_value={"status":"verified","detail":"fixture bytes verified"}), mock.patch.object(
+            updates,"fetch_latest",side_effect=AssertionError("network")), mock.patch.object(
+            self.window,"refresh") as refresh:
+            self.window._refresh_fatekeeper_installation(recipe)
+            refresh.assert_called_once()
+            self.assertEqual([r["status"] for r in self.window.update_results["fatekeeper"]],["unknown","unknown","verified"])
+            self.assertEqual(self.window.update_results["other"],[{"status":"current"}])
+            self.window._updates_done({"fatekeeper":[{"status":"not_installed"}]})
+            self.assertEqual(self.window.update_results["fatekeeper"][-1]["status"],"verified")
+
     def test_wrong_game_or_wrong_route_cannot_review(self):
         with mock.patch.object(self.window, "_pick") as picker, mock.patch.object(
                 self.window, "review_profile_archive") as profile:

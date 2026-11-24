@@ -125,6 +125,36 @@ class DependencyReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "evidence changed"):
             self.plan(evidence=evidence)
 
+    def test_completion_attempt_and_worker_lifecycle(self):
+        from dataclasses import replace
+        from PySide6.QtTest import QTest
+        plan = replace(self.plan(), needs_backend_verification=False)
+        for failure in (False, True):
+            with self.subTest(failure=failure):
+                action = mock.Mock(side_effect=RuntimeError("test failure") if failure else None)
+                dialog = DependencyReviewDialog(plan, install_action=action, install_authorized=lambda: True)
+                try:
+                    self.assertFalse(dialog.install_attempted)
+                    dialog.run_rehearsal()
+                    dialog.run_rehearsal()
+                    self.assertTrue(dialog.install_attempted)
+                    for _ in range(200):
+                        if dialog.install_worker is None: break
+                        QTest.qWait(10)
+                    self.assertIsNone(dialog.install_worker)
+                    self.assertTrue(dialog.close_button.isEnabled())
+                    self.assertFalse(dialog.apply_button.isEnabled())
+                    self.assertIn("did not complete" if failure else "gameplay is not verified", dialog.status.text())
+                    dialog.run_rehearsal()
+                    action.assert_called_once()
+                finally:
+                    dialog.close()
+        action = mock.Mock()
+        dialog = DependencyReviewDialog(plan, install_action=action)
+        dialog.run_rehearsal(); dialog.reject()
+        self.assertFalse(dialog.install_attempted)
+        action.assert_not_called()
+
     def test_dialog_cannot_apply(self):
         dialog = DependencyReviewDialog(self.plan())
         self.addCleanup(dialog.close)
