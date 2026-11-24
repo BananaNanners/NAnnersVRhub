@@ -44,7 +44,32 @@ installation or gameplay testing occurred. Hogwarts v2.1.0 remains blocked.
 Generic update/recovery adapters are not newly authorized by this milestone.
 The compatibility inventory check establishes presence only; on-demand
 integrity checks the recorded immutable subset. A no-op transaction does not
-adopt an existing manual installation. The current preview still needs to be
-identified and safely replaced or reused as appropriate under AGENTS.md.
+adopt an existing manual installation. No release promotion or push authorized.
 
-Player desktop acceptance: PENDING. No release promotion or push authorized.
+## KDE desktop acceptance — player confirmed
+
+2026-11-24 Pacific: Player explicitly reported: "All seven Dev5E3 KDE desktop
+acceptance checks passed! 👊"
+
+- Previous Dev5E2 preview PID 23740 was identified by KWin caption, process,
+  worktree and recorded launch checkpoint. A normal targeted KWin close request
+  closed the single nonmodal window, and process exit was verified before launch.
+- Dev5E3 preview was launched from clean code checkpoint
+  `00584e4a11b02cf3c3fe191b51cbf13f7af126c3`, using the existing full Hub
+  isolated preview entry point with a Dev5E3 title-only wrapper. KWin confirmed
+  exactly one active development window, PID 37379, caption
+  `NAnnersVRhub Dev5E3 - Complete Installation Readiness`.
+- Startup confirmed Fatekeeper, Install / Update, verified pinned backend,
+  two archive roles and gated live writes. The accepted preview process and
+  worktree were rechecked after the player response; it remains open.
+- All seven player checks passed: normal startup, pinned backend status,
+  two ZIP dependencies, installation review after scanning, compatibility
+  report, existing Updates dependency presentation, and disabled live install.
+- This acceptance is for the interactive preview and the prior disposable
+  validation, not a live new-player installation or gameplay test. The real
+  Fatekeeper/Hogwarts installs and stable Hub remain outside the milestone's
+  write scope. This documentation-only acceptance commit does not change the
+  running code checkpoint.
+
+Dev5E3 accepted. Any live-write authorization, release promotion, or further
+implementation remains a separate decision.
