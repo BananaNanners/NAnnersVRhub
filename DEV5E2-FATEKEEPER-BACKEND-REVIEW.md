@@ -85,3 +85,45 @@ repair, real game mutation or release promotion is approved. Installed
 matching bytes are treated as verified, not as a Hub-managed ownership
 record. An actual backend version change requires separate compatibility
 evidence, verified backups, rollback and user approval.
+
+## KDE preview checkpoint — technical verification complete, player pending
+
+2026-11-24 Pacific. Dev5E2 implementation checkpoint:
+`972240723f1384fc87a2e3ed80218e93b428d76f`.
+The older Dev5E1 preview PID `11318` (launched from the approved
+`fe05f67` code) had a blocked, read-only Hogwarts profile review dialog
+open. Both the dialog and then its parent preview were closed through
+**normal KWin window-close requests**, after matching process PID, exact
+window captions, parent worktree and closeability. No force termination
+or production Hub action was used.
+
+A first Dev5E2 GUI preview verified the new dependency, then an on-screen
+review caught that the heading **Up to date** would imply latest-upstream
+verification. A corrective commit changed the group heading to
+**Verified pinned builds** and added a separate tested-build summary count.
+Focused UI tests passed after the correction, followed by a repeated full
+suite: **1,526 tests run, 1,525 passed, one skipped**.
+
+The first Dev5E2 preview PID `15748` was normally closed; its successor is
+**PID `16461`**, started from corrected implementation checkpoint
+`9722407` with `python3 -m tests.manual_launcher_dev5e2_preview`.
+A KWin window inventory confirmed **exactly one** development window with
+caption `NAnnersVRhub Dev5E2 - Fatekeeper Backend Dependency`. Startup
+reported `backend: verified`, using the installed DLL's SHA-256, while
+archive roles remain two. The new preview stays open. Because another app
+was in active use, the preview was **not forcibly focused**; review it
+through KDE normally.
+
+- [x] Previous approved preview safely identified and closed.
+- [x] Exactly one current Dev5E2 interactive KDE window, PID `16461`.
+- [x] Correct implementation Git commit; no unrelated worktree changes.
+- [x] Backend status matches the current file; existing ZIP roles unchanged.
+- [x] Stable installation, games, recovery data, and live-install gate preserved.
+- [ ] Player confirms the revised screenshot/UI and accepts Dev5E2.
+
+**Player check:** select Fatekeeper → Updates in the open preview.
+Confirm the UEVRBackend.dll row is under **Verified pinned builds (1)**,
+with Backend type and Open source, while `uevr.zip` and
+`SLASHER-Win64-Shipping.zip` remain separate. The summary must say
+**1 tested build verified** rather than **1 up to date**. No live backend
+installation is enabled.
