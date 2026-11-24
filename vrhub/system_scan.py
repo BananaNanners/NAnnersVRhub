@@ -11,7 +11,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import __version__, runtime, wivrn_status
+from . import __version__, runtime, wivrn_status, steamvr_status
 from .display_time import local_time
 from .steam import STEAM_ROOTS
 
@@ -79,7 +79,7 @@ def _has_adapter(path: Path) -> bool:
 
 
 
-def _live_snapshot(name: str, selected: bool) -> tuple[dict, list[dict]]:
+def _live_snapshot(name: str, selected: bool, path=None, lib="") -> tuple[dict, list[dict]]:
     """Sample connection evidence independently of runtime-selection evidence."""
     rows = []
 
@@ -91,12 +91,9 @@ def _live_snapshot(name: str, selected: bool) -> tuple[dict, list[dict]]:
                 "SteamVR": {"vrserver", "vrcompositor"}}.get(name)
     running = bool(names & expected) if names is not None and expected else None
     headset = dict(connected=None, system_name="", source="unavailable",
-                   detail=("SteamVR selected: the Hub can observe SteamVR server "
-                           "processes but cannot verify headset connection through "
-                           "SteamVR telemetry. Check the headset in SteamVR or in VR."
-                           if selected and name == "SteamVR" else
-                           "Headset connection telemetry is currently available "
-                           "for a selected WiVRn runtime only."))
+                   detail="Headset connection telemetry is unavailable for the selected runtime.")
+    if selected and name == "SteamVR":
+        headset = steamvr_status.read_status(path, lib, server_observed=bool(running))
     if selected and name == "WiVRn":
         headset = wivrn_status.read_status()
         if headset["connected"] is not None:
@@ -129,7 +126,7 @@ def _live_snapshot(name: str, selected: bool) -> tuple[dict, list[dict]]:
     else:
         activity = "UNKNOWN"
     sampled_at = datetime.now(timezone.utc).isoformat()
-    detail = f"{name} server running (WiVRn D-Bus status replied)." if headset["connected"] is not None else (
+    detail = f"{name} server running (connection telemetry replied)." if headset["connected"] is not None else (
         f"{name} server process observed." if running else
         "Selected runtime server process not observed; this does not prove the server is stopped." if running is False else
         "Runtime server process state is unknown.")
@@ -150,9 +147,9 @@ def _live_snapshot(name: str, selected: bool) -> tuple[dict, list[dict]]:
     if headset["system_name"] and connected:
         connection_detail += f" Headset: {headset['system_name']}."
     if connected is not None:
-        connection_detail += " Source: WiVRn D-Bus HeadsetConnected. This does not verify rendering or tracking."
+        connection_detail += f" Source: {headset['source']}. This does not verify rendering or tracking."
     add("headset", "Headset connection", "ok" if connected else "warning" if connected is False else "unknown",
-        connection_detail, "Connect through WiVRn and rescan." if connected is False else
+        connection_detail, f"Connect through {name} and rescan." if connected is False else
         "Check your runtime manager and live status access; no XR session is opened." if connected is None else "")
     add("controllers", "Controller tracking", "unknown",
         "UNVERIFIED: connection telemetry does not report live controller poses or input.",
@@ -178,8 +175,7 @@ def _scope_for_runtime(name: str) -> str:
     if name == "WiVRn":
         evidence = "read-only WiVRn headset connection telemetry"
     elif name == "SteamVR":
-        evidence = ("SteamVR server-process observation only; SteamVR headset "
-                    "connection telemetry is unavailable in this scanner")
+        evidence = ("SteamVR server-process observation and optional OpenVR background headset connection telemetry")
     else:
         evidence = "limited read-only runtime and server-process evidence"
     return ("Host checks plus " + evidence + ". Controller tracking, graphics "
@@ -199,7 +195,7 @@ def refresh_live(report: dict) -> dict:
             or _selection_target(path) != report.get("selection_target")):
         return scan()
     result = copy.deepcopy(report)
-    live, rows = _live_snapshot(report["runtime"], bool(path and lib))
+    live, rows = _live_snapshot(report["runtime"], bool(path and lib), path, lib)
     keys = {"runtime_process", "ipc", "headset", "controllers"}
     result["rows"] = [r for r in result["rows"] if r["id"] not in keys]
     index = next((i for i, r in enumerate(result["rows"]) if r["id"] == "adapter"), len(result["rows"]))
@@ -260,7 +256,7 @@ def scan() -> dict:
             "Check your runtime/graphics packages; sandboxed installations may need a separate check." if not found else "",
             True)
 
-    live, live_rows = _live_snapshot(name, valid)
+    live, live_rows = _live_snapshot(name, valid, path, lib)
     rows.extend(live_rows)
 
     configured, source = _adapter_paths()

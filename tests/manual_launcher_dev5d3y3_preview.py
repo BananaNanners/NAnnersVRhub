@@ -87,11 +87,13 @@ class PlayerFirstPreview(PayloadEvidencePreview):
         self.copy_scan_btn.setEnabled(self.scan_report is not None)
         self.save_scan_btn.setEnabled(False)
 
+    report_version = "0.5.5-dev5D3y3"
+
     def show_system_report(self, report):
         # Make the export distinguish this development preview from the stable
         # 0.5.4 app. Never rewrite or mutate the scanner's underlying report.
         report = dict(report)
-        report["hub_version"] = "0.5.5-dev5D3y3"
+        report["hub_version"] = self.report_version
         super().show_system_report(report)
         self.save_scan_btn.setEnabled(False)
 
