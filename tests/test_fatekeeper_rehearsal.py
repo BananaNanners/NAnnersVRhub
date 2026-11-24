@@ -170,6 +170,31 @@ class FatekeeperRehearsalTests(unittest.TestCase):
             self.assertFalse((injector / "UEVRBackend.dll").exists())
             fatekeeper_commit.commit(root, prepared)
             self.assertEqual(Path(target).read_bytes(), self.asset)
+            from vrhub.compatibility_checks import _fatekeeper_inventory
+            records = hub._load_state(path=state)
+            self.assertEqual(records["fatekeeper"]["files"], [target])
+            self.assertEqual(records["fatekeeper:profile"]["files"], [])
+            self.assertEqual(set(records["fatekeeper:profile"]["reviewed_dependencies"]),
+                             {"config.txt", "plugins/test.dll"})
+            self.assertEqual(_fatekeeper_inventory(records["fatekeeper"], injector)[0], "ok")
+            self.assertEqual(_fatekeeper_inventory(records["fatekeeper:profile"], profile)[0], "ok")
+            from vrhub import installed_integrity, installed_provenance
+            recipe = hub.load_recipes()["fatekeeper"]
+            integrity = installed_integrity.verify(recipe, state=records)
+            self.assertEqual(integrity["status"], "Verified", integrity)
+            self.assertEqual(integrity["checked"], 3)
+            for cid in ("uevr", "profile"):
+                provenance = installed_provenance.evidence(recipe, {"id": cid}, records)
+                self.assertTrue(provenance["identified"], provenance)
+            (profile / "config.txt").write_bytes(b"customized settings")
+            self.assertEqual(installed_integrity.verify(recipe, state=records)["status"], "Verified")
+            (profile / "plugins/test.dll").write_bytes(b"tampered")
+            self.assertEqual(installed_integrity.verify(recipe, state=records)["status"], "Review")
+            (profile / "plugins/test.dll").write_bytes(b"plugin")
+            (profile / "config.txt").write_bytes(b"profile")
+            (profile / "plugins/test.dll").unlink()
+            self.assertEqual(_fatekeeper_inventory(records["fatekeeper:profile"], profile)[0], "error")
+            (profile / "plugins/test.dll").write_bytes(b"plugin")
             self.assertEqual((profile / "custom-user.ini").read_bytes(),
                              b"user customization")
             fatekeeper_commit.recover(root)

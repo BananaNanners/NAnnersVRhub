@@ -102,6 +102,20 @@ class FatekeeperCommitTests(unittest.TestCase):
             self.assertEqual(self.config.read_bytes(), b"old configuration")
             stopped.assert_called_with("fatekeeper")
 
+    def test_repair_retains_prior_same_root_ownership_only(self):
+        from dataclasses import replace
+        prepared = self.prepare(True)
+        records = {"fatekeeper": {"root": str(self.injector), "files": [str(self.backend), str(self.root / "foreign.dll")]},
+                   "fatekeeper:profile": {"root": str(self.root / "foreign"), "files": [str(self.profile / "custom.ini")]}}
+        self.state.write_text(json.dumps(records))
+        original = self.state.read_bytes()
+        transaction.commit(self.root, replace(prepared, state=records))
+        current = hub._load_state(path=self.state)
+        self.assertEqual(current["fatekeeper"]["files"], [str(self.backend)])
+        self.assertEqual(current["fatekeeper:profile"]["files"], [str(self.config)])
+        transaction.recover(self.root)
+        self.assertEqual(self.state.read_bytes(), original)
+
     def test_retry_keeps_prior_recovery_artifacts(self):
         prepared = self.prepare(False)
         transaction.commit(self.root, prepared)

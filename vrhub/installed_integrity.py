@@ -171,6 +171,53 @@ def _manifest_from_gameroot(recipe, game):
     return (base, found), ""
 
 
+
+def _manifest_from_fatekeeper(recipe, state):
+    """Reviewed package bytes, not ownership; use the existing bounded hash reader."""
+    from .uevr_dependency_review import FATEKEEPER_LOCAL_PROFILE_FILES, FATEKEEPER_BACKEND_SHA256
+    try:
+        prefix = _root(hub._pfx(recipe))
+        destinations = {"uevr": hub._uevr_dir(recipe), "profile": hub.profile_dir(recipe)}
+    except (OSError, RuntimeError, ValueError):
+        return None, "Fatekeeper prefix unavailable."
+    if prefix is None:
+        return None, "Fatekeeper prefix unavailable or unsafe."
+    group = {}
+    for cid, folder in destinations.items():
+        record = state.get("fatekeeper" + (":profile" if cid == "profile" else ""))
+        reason = "No complete reviewed dependency evidence for this prefix and pin."
+        if (not isinstance(record, dict) or record.get("installer") != "fatekeeper-pair-fk4"
+                or record.get("root") != str(folder) or not isinstance(folder, Path)
+                or not folder.is_relative_to(prefix) or folder == prefix
+                or record.get("archive_sha256") != recipe.get("archive_pins", {}).get(cid)
+                or not isinstance(record.get("reviewed_dependencies"), dict)):
+            group[cid] = (None, reason)
+            continue
+        manifest = record["reviewed_dependencies"]
+        required = {"UEVRBackend.dll", "UEVRInjector.exe"} if cid == "uevr" else {"config.txt"}
+        if not required.issubset(manifest) or len(manifest) > MAX_FILES:
+            group[cid] = (None, reason)
+            continue
+        subset = {}
+        for name, meta in manifest.items():
+            rel = _relative(name)
+            if (rel is None or not isinstance(meta, dict) or not isinstance(meta.get("sha256"), str)
+                    or not SHA256.fullmatch(meta["sha256"]) or type(meta.get("size")) is not int
+                    or meta["size"] < 0):
+                subset = None
+                break
+            if cid == "uevr" and name == "UEVRBackend.dll" and meta["sha256"] != FATEKEEPER_BACKEND_SHA256:
+                subset = None
+                break
+            # Mutable settings are presence checked separately; do not compare
+            # their bytes with factory defaults or certify them as unmodified.
+            if cid == "profile" and name in FATEKEEPER_LOCAL_PROFILE_FILES:
+                continue
+            subset[(folder.relative_to(prefix) / rel).as_posix()] = (meta["sha256"], meta["size"])
+        group[cid] = (subset or None, reason)
+    return (prefix, group), ""
+
+
 def _manifest_from_profile(recipe, state):
     rec = state.get(recipe["id"] + ":profile")
     if not isinstance(rec, dict) or rec.get("installer") != "uevr-profile-2":
@@ -278,6 +325,9 @@ def verify(recipe, *, state=None, cancel=None):
     elif recipe.get("components"):
         inventory, unavailable = _manifest_from_gameroot(recipe, state.get(rid))
         components = [(str(c["nexus_mod"]), c["name"]) for c in recipe["components"]]
+    elif rid == "fatekeeper" and any(isinstance(state.get(key), dict) and state[key].get("installer") == "fatekeeper-pair-fk4" for key in (rid, rid + ":profile")):
+        inventory, unavailable = _manifest_from_fatekeeper(recipe, state)
+        components = [("profile", "Matching game profile"), ("uevr", "UEVR injector")]
     elif recipe.get("method") == "uevr" and recipe.get("profile"):
         inventory, unavailable = _manifest_from_profile(recipe, state)
         components = [("profile", "Matching game profile"), ("uevr", "UEVR injector")]
@@ -338,7 +388,7 @@ def verify(recipe, *, state=None, cancel=None):
                                      reason=(f"{len(results)} file(s) need attention.")))
                 else:
                     rows.append(_row(cid,name,"Verified",checked=row_count,files=row_count,
-                                     reason="All recorded SHA-256 values matched at scan time."))
+                                     reason=("Reviewed immutable dependency hashes matched; customizable settings excluded." if rid == "fatekeeper" and any(isinstance(state.get(k), dict) and state[k].get("installer") == "fatekeeper-pair-fk4" for k in (rid, rid + ":profile")) else "All recorded SHA-256 values matched at scan time.")))
     except (OSError, Cancelled) as exc:
         if isinstance(exc, Cancelled):
             raise

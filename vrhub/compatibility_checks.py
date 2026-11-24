@@ -73,6 +73,23 @@ def _inventory(entry, base, suffix=None):
     return 'ok', f'All {len(paths)} recorded files are present under {base}; this does not verify DLL loading or file versions.'
 
 
+
+def _fatekeeper_inventory(entry, base):
+    """Reviewed dependency presence is separate from recorded ownership."""
+    if not isinstance(entry, dict) or entry.get("installer") != "fatekeeper-pair-fk4":
+        return _inventory(entry, base)
+    manifest = entry.get("reviewed_dependencies")
+    if entry.get("root") != str(base) or not isinstance(manifest, dict) or not manifest:
+        return "unknown", "No complete reviewed dependency inventory for this prefix."
+    from .installed_integrity import _relative
+    if any(_relative(name) is None for name in manifest):
+        return "unknown", "Invalid reviewed dependency inventory."
+    missing = [name for name in manifest if not _file_under(base / name, base)]
+    if missing:
+        return "error", f"{len(missing)} reviewed dependency files missing or unsafe."
+    return "ok", f"All {len(manifest)} reviewed dependency files present; ownership and file hashes are separate, loading unverified."
+
+
 def rows(recipe, game):
     from . import hub
     checks = recipe.get('compatibility', {}).get('checks')
@@ -114,11 +131,11 @@ def rows(recipe, game):
         if recipe.get('method', 'file') == 'file' and game:
             base = game / recipe['files'][0]['dest']
             suffix = '.' + recipe['files'][0]['kind']
-        status, detail = _inventory(state.get(recipe['id']), base, suffix) if base else ('unknown', 'Game/prefix unavailable.')
+        status, detail = (_fatekeeper_inventory(state.get(recipe['id']), base) if recipe['id'] == 'fatekeeper' else _inventory(state.get(recipe['id']), base, suffix)) if base else ('unknown', 'Game/prefix unavailable.')
         add('Mod install inventory', status, detail)
     if checks.get('tracked_profile'):
         base = profile
-        status, detail = _inventory(state.get(recipe['id'] + ':profile'), base) if base else ('unknown', 'Game/prefix unavailable.')
+        status, detail = (_fatekeeper_inventory(state.get(recipe['id'] + ':profile'), base) if recipe['id'] == 'fatekeeper' else _inventory(state.get(recipe['id'] + ':profile'), base)) if base else ('unknown', 'Game/prefix unavailable.')
         add('UEVR game-profile inventory', status, detail)
     if checks.get('all_components'):
         entry = state.get(recipe['id'], {})

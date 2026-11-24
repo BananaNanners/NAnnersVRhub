@@ -162,12 +162,29 @@ def _commit(destination, prepared, *, interrupt_after_files=False):
         records = dict(prepared.state)
         for key, folder in (("fatekeeper", injector), ("fatekeeper:profile", profile)):
             previous = records.get(key, {})
-            # Fixture records explicitly reference this transaction, and retain
-            # earlier recovery metadata as part of the backed-up state file.
+            snapshot = prepared.injector if folder == injector else prepared.profile
+            owned = {name for name in prepared.writes if Path(name).is_relative_to(folder)}
+            # Retain prior ownership only from the same canonical destination.
+            if isinstance(previous, dict) and previous.get("root") == str(folder):
+                prior_files = previous.get("files", [])
+                if isinstance(prior_files, list):
+                    for name in prior_files:
+                        if not isinstance(name, str) or not name.startswith(str(folder) + "/"):
+                            continue
+                        rel = name[len(str(folder)) + 1:]
+                        if rel in snapshot["files"] and str(folder / rel) == name:
+                            owned.add(name)
+            dependencies = {str(Path(name).relative_to(folder)): meta
+                            for name, meta in prepared.dependencies.items()
+                            if Path(name).is_relative_to(folder)}
+            # Dependency evidence is not ownership. Preserve the old record
+            # and exact original state bytes in the existing recovery journal.
             records[key] = {
                 "installer": "fatekeeper-pair-fk4",
                 "root": str(folder),
-                "files": sorted(name for name in prepared.writes if Path(name).is_relative_to(folder)),
+                "files": sorted(owned),
+                "reviewed_dependencies": dependencies,
+                "archive_sha256": prepared.archive_pins.get("uevr" if folder == injector else "profile"),
                 "journal": str(journal),
                 "previous": previous,
             }

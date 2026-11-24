@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Target-bound preflight for the pinned Fatekeeper pair installer."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
 
@@ -16,6 +16,8 @@ class PreparedInstall:
     profile: dict
     state: dict
     writes: dict[str, bytes]
+    dependencies: dict = field(default_factory=dict)
+    archive_pins: dict = field(default_factory=dict)
 
 
 def prepare_reviewed_install(review, steam_roots=None, *, verified_backend=None):
@@ -57,6 +59,7 @@ def prepare_reviewed_install(review, steam_roots=None, *, verified_backend=None)
         Path("drive_c/users/steamuser/AppData") / recipe["profile"]["dir"]: (profile, profile_before),
     }
     writes = {}
+    dependencies = {}
     for name, data in payload.items():
         relative = Path(name)
         root = next((root for root in expected_roots if relative.is_relative_to(root)), None)
@@ -70,6 +73,10 @@ def prepare_reviewed_install(review, steam_roots=None, *, verified_backend=None)
             component, subpath.as_posix(), current.get("sha256"), sha256(data).hexdigest())
         if (action, component, subpath.as_posix()) not in refreshed.file_decisions:
             raise RuntimeError("Staged Fatekeeper payload differs from the reviewed decisions.")
+        dependencies[str(dest / subpath)] = {"sha256": sha256(data).hexdigest(),
+                                            "size": len(data),
+                                            "customizable": component == "Profile" and
+                                            subpath.as_posix() in uevr_dependency_review.FATEKEEPER_LOCAL_PROFILE_FILES}
         if action != "Preserve":
             writes[str(dest / subpath)] = data
     if len(writes) != sum(action != "Preserve" for action, _, _ in refreshed.file_decisions):
@@ -77,4 +84,4 @@ def prepare_reviewed_install(review, steam_roots=None, *, verified_backend=None)
     if (profile_safety._snapshot(injector) != injector_before or
             profile_safety._snapshot(profile) != profile_before or hub._load_state() != state):
         raise RuntimeError("Fatekeeper files or Hub records changed during preparation.")
-    return PreparedInstall(prefix, injector_before, profile_before, state, writes)
+    return PreparedInstall(prefix, injector_before, profile_before, state, writes, dependencies, dict(recipe["archive_pins"]))

@@ -177,6 +177,19 @@ def evidence(recipe, component, state, row=None, warning=None):
     if not isinstance(state, dict):
         return _result("Unknown", detail="Hub installation state cannot be interpreted.")
     rid = str(component["id"])
+    if recipe["id"] == "fatekeeper" and rid in ("uevr", "profile"):
+        rec = state.get("fatekeeper" + (":profile" if rid == "profile" else ""))
+        if isinstance(rec, dict) and rec.get("installer") == "fatekeeper-pair-fk4":
+            pin = rec.get("archive_sha256")
+            manifest = rec.get("reviewed_dependencies")
+            if not _digest(pin) or pin != recipe.get("archive_pins", {}).get(rid):
+                return _result("Reviewed archive · pin unknown or changed", detail="Recorded source hash does not match the current pin.")
+            if not isinstance(manifest, dict) or not manifest or any(not isinstance(m, dict) or not _digest(m.get("sha256")) for m in manifest.values()):
+                return _result("Reviewed archive · inventory unknown", detail="Reviewed dependency hashes are incomplete.")
+            tag = recipe.get("archive_releases", {}).get(rid, {}).get("fixed_tag")
+            if isinstance(tag, str) and _RELEASE.fullmatch(tag):
+                return _result("Reviewed pin " + tag, tag, "recipe-pinned-hash", "Recorded reviewed ZIP matches the recipe pin. The injector uses the separately pinned joeyhodge backend; current installed bytes, ownership and gameplay are not established by this record.", identified=True)
+            return _result("Reviewed pinned archive", source="recipe-pinned-hash", detail="Reviewed ZIP hash matches the pin; release tag unknown.")
     if recipe.get("packages"):
         return _package_evidence(recipe, component, state.get(recipe["id"]))
     if recipe.get("components") and rid.isdecimal():
