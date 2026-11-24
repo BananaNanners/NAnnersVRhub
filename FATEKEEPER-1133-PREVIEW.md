@@ -139,3 +139,91 @@ Next test is player-initiated with existing settings. Sample the actual
 game and injector process environment allowlist, loader mappings and fresh
 logs, then observe cleanup on normal exit. Current headset gameplay,
 input and exact cause of -51 remain pending.
+
+## Dev5D3-FK7 - Fatekeeper Gameplay Sign-off and Stable Comparison
+
+Recorded 2026-11-23 (Pacific). This is the player-accepted gameplay and
+diagnostic record, **not** authorization to publish a release or to perform
+live dependency installation, repair, rollback, or recovery.
+
+### FK6B live Quest 3 evidence (0.5.5 development preview)
+
+Player-launched Fatekeeper from the accepted full Hub preview, selected
+OpenXR in the UEVR injector, and injected once. The player explicitly confirmed
+successful in-game VR rendering, head tracking, stereo depth, and **both**
+Quest 3 controllers. Fresh UEVR logs showed OpenXR session `FOCUSED` with
+`shouldRender=1`; those logs corroborate an active OpenXR session but do not
+independently measure controller behavior. LuaLoader initialized in the
+earlier failed run, but a fresh LuaLoader-specific success assertion was not
+recorded for the final successful session.
+
+The failed game process had `XR_RUNTIME_JSON` set to
+`/home/bananananers/.config/openxr/1/active_runtime.json`; this path was
+**unavailable inside its Steam Pressure Vessel container**, even though it
+resolved to WiVRn on the Linux host. Inside the game container,
+`/run/host/usr/share/openxr/1/openxr_wivrn.json` and both referenced WiVRn
+libraries were accessible. A player-approved, game-specific Steam launch
+option pointed `XR_RUNTIME_JSON` to that accessible manifest. The subsequent
+preview injection and gameplay passed. This is a **demonstrated effective
+workaround** and strong causal evidence for the OpenXR `-51` failure, not proof
+that the development Hub introduced it or that no other contributing
+condition existed. The Steam options also still contained temporary
+`PROTON_LOG=1` and `WINEDEBUG=+openxr,+vrclient` diagnostic flags; those
+were not changed by the Hub and should be reviewed separately before release.
+
+On normal exit from the successful preview session, Fatekeeper, UEVR,
+Protontricks and its helper all disappeared; the Hub and WiVRn remained up.
+The preview's direct-child reaping/duplicate-launch protection was exercised,
+but a single successful exit **does not prove** the intermittent Wine helper
+hang is fixed.
+
+### Stable 0.5.4 baseline test
+
+The player closed the preview and launched Fatekeeper and the injector from
+installed stable NAnnersVRhub 0.5.4, with the **same corrected Steam launch
+options and shared Fatekeeper/Proton prefix**. The pre-injection inspection
+verified the WiVRn runtime manifest and WineOpenXR mappings from the game's
+container. The player reported stable VR gameplay PASS; the fresh UEVR log
+showed session `FOCUSED` and `shouldRender=1`. The player's stable gameplay
+PASS was given in the context of the same rendering, tracking, stereo depth
+and two-controller check used for the preview.
+
+The first stable exit inspection occurred while the player had inadvertently
+left the UEVR injector open: it is **not** counted as a cleanup failure.
+After the player explicitly closed UEVR, its executable, Fatekeeper, the
+Steam/Proton game processes and wineserver exited. However, Protontricks
+PID `133107` still waited in `wait4` for Wine `start.exe` PID `133109`,
+which remained sleeping in `ntsync_schedule`. This reproduces the hanging
+helper mechanism observed earlier under the preview and establishes that it
+is **not exclusive to 0.5.5**. The exact Wine/Proton cause is unconfirmed.
+
+At the player's explicit request, the two lingering PIDs were verified
+against their identities and start times before targeted cleanup. The
+`start.exe` helper received SIGTERM and exited; Protontricks then exited
+without a separate signal. An initial cleanup attempt safely aborted because
+Protontricks had been reparented after the stable Hub closed; identities were
+reverified before the successful cleanup. A subsequent check confirmed both
+PIDs absent and the Steam client and WiVRn server still running. No unrelated
+applications or game installations were targeted.
+
+### FK7 disposition and remaining work
+
+| Criterion | Disposition |
+| --- | --- |
+| Preview Fatekeeper OpenXR and Quest 3 gameplay | **PASS**, player-confirmed with fresh OpenXR session evidence |
+| Stable 0.5.4 equivalent gameplay under the corrected Steam settings | **PASS**, player-confirmed with fresh OpenXR session evidence |
+| Preview normal-exit process cleanup | **PASS in this observed session**, not a general guarantee |
+| Stable normal-exit process cleanup | **FAIL in this observed session**: stuck Protontricks/Wine helper |
+| Precise source of the intermittent Wine helper hang | **UNRESOLVED**; no broad or automatic process termination approved |
+| Proof of a preview-only OpenXR regression | **NOT ESTABLISHED**; both launch through Steam and use the same game prefix |
+| Changes to live Fatekeeper mods, profile, backend or Hub records | **NONE** during these tests |
+| Live dependency install/repair, recovery or release promotion | **NOT AUTHORIZED**; existing safety gates remain |
+
+**Sign-off:** FK6B live gameplay and stable-comparison evidence are accepted
+for the FK7 record. The Wine/Proton helper hang remains an explicit known
+limitation, including the risk that the preview's duplicate-launch guard
+could block a legitimate relaunch while Protontricks remains alive. No new
+preview feature, extra UI, or gameplay retest is required solely to record
+these results. Any release decision or Dev5E1 live update pilot remains a
+separate approval gate. Preserve the current working Fatekeeper config until
+a separately approved change is justified.
