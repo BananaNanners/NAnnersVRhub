@@ -216,3 +216,35 @@ preview, checking the green tested backend status on Install / Update,
 the two archive rows, the lack of an extra manual DLL step, and
 the continued disabled live installer. A real new-user installation
 requires separate approval and is **not** claimed as complete.
+
+## Final transaction validation — 2026-11-24 Pacific
+
+Player reported five of eight desktop checks and could not confirm transaction
+installation, missing-only repair, or preservation. Read-only archive diagnosis
+found Downloads/uevr.zip mismatched the pinned Nightly 1133 SHA-256, while
+Downloads/Organized/Archive-Library/VR-Mods/UEVR-Generic/uevr.zip matched.
+Copied the verified ZIP without overwriting any file to the existing Fatekeeper
+archive folder, retained the source, verified the copy, and reran a programmatic
+scan of the two configured roots: both archive roles returned Pinned SHA-256
+verified. Profile selected: SLASHER-Win64-Shipping (2).zip. No scanner change.
+
+Fresh isolated test run: 48 focused tests passed; full suite 1529 run,
+1528 passed, one skipped (exit 0). Full log:
+/tmp/nanners-e2-full.lUBBqx/results.log.
+With the actual two pinned ZIPs, a private /tmp/nanners-fk4-* fixture and
+Hub path resolvers patched only to that fixture, the real reviewed preparation
+retrieved the official backend over HTTPS, checked the pinned SHA-256, and
+committed 111 reviewed file decisions. Verified fresh rollback, missing-only
+repair with only the DLL in the write set, repair rollback with exact state
+bytes, and a correct-backend no-op (no network opener, no writes, identical
+SHA-256, inode and mtime). Fixture removed by TemporaryDirectory; live gate
+remained false. These are offline transaction proofs, not gameplay tests.
+
+KWin confirmed one development window PID 23740, caption NAnnersVRhub Dev5E2 -
+Fatekeeper Backend Install / Update. Process cwd and original launch command
+corroborate runtime checkpoint 5247e56136afc68351dc8d46ceaa6b810b4bf6bf;
+all subsequent changes are review documentation only. Existing preview reused,
+not closed or duplicated. Stable Hub and live game destinations not written.
+Player must rescan in the existing preview and review the verified pair and
+Preserve backend action. Live install remains disabled. Player acceptance
+pending; no Dev5E3 or Hogwarts Legacy live update authorized.
