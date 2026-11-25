@@ -575,6 +575,9 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
         prepared = prepare_reviewed_install(review, steam_roots, verified_backend=verified_backend)
         if _live_destination(steam_roots) != destination:
             raise RuntimeError("Fatekeeper paths changed while staging. Reopen the review.")
+        # Refuse interrupted publication residue before provisioning evidence.
+        auth.validate_production_atomic_evidence(destination,
+            (Path(name) for name in set(prepared.writes) | set(prepared.dependencies)))
         # Never create authority for an unreviewed no-op. A pending journal
         # still blocks it, even when no new files are required.
         if not prepared.writes:

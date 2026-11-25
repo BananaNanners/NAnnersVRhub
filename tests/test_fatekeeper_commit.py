@@ -413,6 +413,16 @@ config = profile / "config.txt"
 assert not tx.live_install_authorized()
 original_write = tx._write
 original_record = auth._record_journal
+original_replace = os.replace
+def replace(src, dst, *args, **kwargs):
+    dst = Path(dst)
+    kind = ("authority" if dst.parent.name == "nannersvrhub-transaction-authority" else
+            "journal" if dst == journal else "state" if dst == state else
+            "payload" if dst == config else "backup" if dst.name == "state-new" else "")
+    if kind and interruption == "atomic-" + kind:
+        os._exit(73)
+    return original_replace(src, dst, *args, **kwargs)
+
 def write(path, data, mode=0o600):
     original_write(path, data, mode)
     if interruption == "staging" and path.name == "state-new":
@@ -444,23 +454,24 @@ with (patch("pathlib.Path.home", return_value=root / "home"),
       patch.object(tx, "live_install_authorized", return_value=True),
       patch("vrhub.fatekeeper_install.prepare_reviewed_install", side_effect=prepare),
       patch.object(tx, "_write", side_effect=write),
+      patch.object(os, "replace", side_effect=replace),
       patch.object(auth, "_record_journal", side_effect=record)):
-    if action in {"install", "reject-initial"}:
+    if action in {"install", "reject-initial", "reject-atomic-install"}:
         try:
             tx.install_reviewed("disposable review")
         except RuntimeError as exc:
-            if action != "reject-initial" or "Pending initial production journal transition" not in str(exc):
+            if not ((action == "reject-initial" and "Pending initial production journal transition" in str(exc)) or (action == "reject-atomic-install" and "Interrupted atomic publication evidence" in str(exc))):
                 raise
         else:
-            assert action != "reject-initial", "initial intent was accepted"
+            assert action == "install", "unexpected installation success"
     else:
         try:
             tx.recover_live()
         except RuntimeError as exc:
-            if action != "reject-terminal" or "Pending production journal transition" not in str(exc):
+            if not ((action == "reject-terminal" and "Pending production journal transition" in str(exc)) or (action == "reject-atomic-recover" and "Interrupted atomic publication evidence" in str(exc))):
                 raise
         else:
-            assert action != "reject-terminal", "terminal replay was accepted"
+            assert action == "recover", "unexpected recovery success"
 assert not tx.live_install_authorized()
 """
         result = subprocess.run([sys.executable, "-B", "-c", script,
@@ -474,6 +485,59 @@ assert not tx.live_install_authorized()
         self.assertEqual((self.profile / "custom.ini").read_bytes(), b"player customisation")
         journal = self.state.parent / "fatekeeper-recovery/fk4-journal.json"
         self.assertEqual(json.loads(journal.read_bytes())["phase"], "rolled-back")
+
+    def assert_atomic_residue_preserved(self, kind, action):
+        original = self.production_child_fixture()
+        self.production_child("install", "atomic-" + kind, 73)
+        names = {"authority": ".*.json-*", "journal": ".fk4-journal.json-*",
+                 "state": ".state.json-*", "payload": ".config.txt-*"}
+        residue = list(self.root.rglob(names[kind]))
+        self.assertEqual(len(residue), 1, residue)
+        def inventory():
+            return {str(p.relative_to(self.root)): (p.lstat().st_mode,
+                    p.read_bytes() if p.is_file() else None)
+                    for p in self.root.rglob("*")}
+        before = inventory()
+        self.production_child(action)
+        self.assertEqual(inventory(), before)
+        self.assertEqual(self.state.read_bytes(), original)
+
+    def test_production_atomic_authority_interruption(self):
+        self.assert_atomic_residue_preserved("authority", "reject-atomic-install")
+
+    def test_production_atomic_journal_interruption(self):
+        self.assert_atomic_residue_preserved("journal", "reject-atomic-install")
+
+    def test_production_atomic_payload_interruption(self):
+        self.assert_atomic_residue_preserved("payload", "reject-atomic-recover")
+
+    def test_production_atomic_state_interruption(self):
+        self.assert_atomic_residue_preserved("state", "reject-atomic-recover")
+
+    def test_production_atomic_backup_interruption_retry(self):
+        original = self.production_child_fixture()
+        self.production_child("install", "atomic-backup", 73)
+        residue = list(self.root.rglob(".state-new-*"))
+        self.assertEqual(len(residue), 1)
+        before = residue[0].read_bytes(), residue[0].stat().st_mode
+        self.assertEqual(self.state.read_bytes(), original)
+        self.production_child("install")
+        self.production_child("recover")
+        self.assert_production_child_restored(original)
+        self.assertEqual((residue[0].read_bytes(), residue[0].stat().st_mode), before)
+
+    def test_production_noop_atomic_authority_residue(self):
+        from hashlib import sha256
+        state, journal, authority = self.production_fixture()
+        authority.mkdir(mode=0o700)
+        (authority / ("." + sha256(str(state).encode()).hexdigest() + ".json-abandoned")).write_bytes(b"partial")
+        self.production_noop(state, error="Interrupted atomic publication evidence")
+
+    def test_production_noop_unrelated_authority_residue(self):
+        state, journal, authority = self.production_fixture()
+        authority.mkdir(mode=0o700)
+        (authority / ("." + "f"*64 + ".json-abandoned")).write_bytes(b"other transaction")
+        self.production_noop(state)
 
     def test_production_child_completed_install_recovery(self):
         original = self.production_child_fixture()

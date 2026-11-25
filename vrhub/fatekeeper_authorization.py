@@ -170,6 +170,30 @@ def _production_authority_path(destination):
     return authority
 
 
+def _refuse_atomic_residue(path):
+    """Never adopt or delete an unpublished atomic-write temporary file."""
+    if not path.parent.exists():
+        return
+    prefix = '.' + path.name + '-'
+    if any(entry.name.startswith(prefix) for entry in path.parent.iterdir()):
+        raise RuntimeError('Interrupted atomic publication evidence; manual review required.')
+
+
+def validate_production_atomic_evidence(destination, targets=()):
+    """Check transaction-specific temporary names, not unrelated player files.
+
+    Caller holds the state lock. Do not follow, read, rename or delete residue.
+    Backup staging artifacts are separately handled by begin_production_staging.
+    """
+    authority = _production_authority_path(destination)
+    if authority.exists() or authority.is_symlink():
+        _private_parent(authority)
+    profile_safety._safe_destination(destination.journal_dir, destination.root)
+    ledger = authority / (sha256(str(destination.state).encode()).hexdigest() + '.json')
+    for path in (ledger, destination.journal_dir / 'fk4-journal.json', destination.state, *targets):
+        _refuse_atomic_residue(path)
+
+
 def validate_production_noop(destination):
     """Read-only provenance check, under the shared state transaction lock.
 
@@ -185,6 +209,7 @@ def validate_production_noop(destination):
         parsed = tx._parse_journal(destination, raw)
         if parsed['phase'] not in {'committed', 'rolled-back'}:
             raise RuntimeError('Recover the existing Fatekeeper transaction before retrying.')
+    validate_production_atomic_evidence(destination)
     authority = _production_authority_path(destination)
     if authority.exists() or authority.is_symlink():
         _private_parent(authority)
@@ -257,6 +282,9 @@ def _assert_scope(scope):
 def production_journal(scope):
     """Validate existing provenance before a new install or any recovery."""
     from . import fatekeeper_commit as tx
+    destination = tx.Destination(scope.root, scope.prefix, scope.injector,
+                                 scope.profile, scope.state, scope.journal_dir)
+    validate_production_atomic_evidence(destination)
     raw, _ = tx._read(scope.journal_dir / 'fk4-journal.json')
     record = _ledger(scope)
     digest = tx._digest(raw)
@@ -274,9 +302,8 @@ def production_journal(scope):
     # bytes can establish forward progress. Never authorize the old digest.
     if record['next'] is not None and digest != record['next']:
         raise RuntimeError('Pending production journal transition; manual review required.')
-    destination = tx.Destination(scope.root, scope.prefix, scope.injector,
-                                 scope.profile, scope.state, scope.journal_dir)
     parsed = tx._parse_journal(destination, raw)
+    validate_production_atomic_evidence(destination, (tx._target(destination, row['path']) for row in parsed['rows']))
     return digest, parsed
 
 
