@@ -256,7 +256,9 @@ class FatekeeperRehearsalTests(unittest.TestCase):
                 self.assertTrue(records["fatekeeper:profile"]["reviewed_dependencies"][name]["customizable"])
             compatible = review.build_plan(recipe, self.archives)
             self.assertTrue(all(action == "Preserve" for action, _, _ in compatible.file_decisions))
-            with patch.object(fatekeeper_commit, "live_install_authorized", return_value=True), patch.object(
+            home = root / "fixture-home"
+            (home / ".local/share").mkdir(parents=True)
+            with patch("pathlib.Path.home", return_value=home), patch.object(fatekeeper_commit, "live_install_authorized", return_value=True), patch.object(
                 fatekeeper_commit, "_commit", side_effect=AssertionError("no-op opened a transaction")
             ), patch.object(review.profile_safety, "_assert_game_stopped"):
                 self.assertEqual(fatekeeper_commit.install_reviewed(compatible, verified_backend=self.asset), [])

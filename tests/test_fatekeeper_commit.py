@@ -125,6 +125,113 @@ class FatekeeperCommitTests(unittest.TestCase):
         self.enterContext(patch("vrhub.fatekeeper_install.prepare_reviewed_install", return_value=prepared))
         return state, storage / "fatekeeper-recovery", home / ".local/share/nannersvrhub-transaction-authority"
 
+    def production_noop(self, state, *, error=None):
+        # The real preflight produces an empty write set for verified files.
+        # Test the gated dispatch with a disposable resolver and prepared plan.
+        no = PreparedInstall(self.prefix, profile_safety._snapshot(self.injector),
+                             profile_safety._snapshot(self.profile),
+                             hub._load_state(path=state), {})
+        def inventory():
+            return {str(p.relative_to(self.root)):
+                    (p.lstat().st_mode, p.readlink().as_posix() if p.is_symlink()
+                     else p.read_bytes() if p.is_file() else None)
+                    for p in self.root.rglob('*')
+                    if p.name != '.state.json.transaction.lock'}
+        before = inventory()
+        with patch("vrhub.fatekeeper_install.prepare_reviewed_install", return_value=no), \
+                patch.object(transaction, "_commit", side_effect=AssertionError("no-op wrote payload")), \
+                patch.object(transaction, "_write", side_effect=AssertionError("no-op wrote evidence")):
+            if error:
+                with self.assertRaisesRegex((RuntimeError, OSError), error):
+                    transaction.install_reviewed("review")
+            else:
+                self.assertEqual(transaction.install_reviewed("review"), [])
+        self.assertEqual(inventory(), before)
+
+    def test_production_noop_legacy_creates_no_authority(self):
+        state, journal, authority = self.production_fixture()
+        self.production_noop(state)
+        self.assertFalse(journal.exists())
+        self.assertFalse(authority.exists())
+
+    def test_production_noop_empty_existing_stores(self):
+        state, journal, authority = self.production_fixture()
+        journal.mkdir(mode=0o700)
+        authority.mkdir(mode=0o700)
+        self.production_noop(state)
+
+    def test_production_noop_finalized_commit_and_rollback(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        self.production_noop(state)
+        transaction.recover_live()
+        self.production_noop(state)
+
+    def test_production_noop_missing_finalized_journal(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        (journal / "fk4-journal.json").unlink()
+        self.production_noop(state, error="Missing authorized production journal")
+
+    def test_production_noop_missing_journal_directory(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        journal.rename(journal.with_name("retained-recovery"))
+        self.production_noop(state, error="missing|redirected")
+
+    def test_production_noop_unfinished_staging(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        dest = transaction._live_destination(None)
+        with transaction._locked(dest):
+            scope = auth.production_authority(dest, provision=True)
+            auth.begin_production_staging(scope)
+        self.production_noop(state, error="unfinished staging")
+
+    def test_production_noop_corrupt_ledger_without_journal(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        (journal / "fk4-journal.json").unlink()
+        next(authority.glob("*.json")).write_bytes(b"broken")
+        self.production_noop(state, error="provenance")
+
+    def test_production_noop_missing_ledger_with_journal(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        next(authority.glob("*.json")).unlink()
+        self.production_noop(state, error="provenance")
+
+    def test_production_noop_dangling_authority(self):
+        state, journal, authority = self.production_fixture()
+        authority.symlink_to(authority.with_name("missing"))
+        self.production_noop(state, error="storage")
+
+    def test_production_noop_dangling_ledger(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        (journal / "fk4-journal.json").unlink()
+        ledger = next(authority.glob("*.json"))
+        ledger.unlink()
+        ledger.symlink_to(ledger.with_name("missing"))
+        self.production_noop(state, error="provenance")
+
+    def test_production_noop_orphan_recovery_evidence(self):
+        state, journal, authority = self.production_fixture()
+        journal.mkdir(mode=0o700)
+        (journal / "fk4-backup").mkdir(mode=0o700)
+        self.production_noop(state, error="Unresolved production recovery evidence")
+
+    def test_production_noop_pending_transition(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        dest = transaction._live_destination(None)
+        with transaction._locked(dest):
+            scope = auth.production_authority(dest)
+            record = auth._ledger(scope)
+            auth._save_ledger(scope, record["current"], "0"*64)
+        self.production_noop(state, error="Pending production journal transition")
+
     def test_production_staging_retry_preserves_existing_install(self):
         state, journal, authority = self.production_fixture()
         original = state.read_bytes()

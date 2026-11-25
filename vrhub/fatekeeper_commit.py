@@ -578,12 +578,7 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
         # Never create authority for an unreviewed no-op. A pending journal
         # still blocks it, even when no new files are required.
         if not prepared.writes:
-            raw, _ = _read(destination.journal_dir / "fk4-journal.json")
-            if raw is not None:
-                record = _parse_journal(destination, raw)
-                if record["phase"] not in {"committed", "rolled-back"}:
-                    raise RuntimeError("Recover the existing Fatekeeper transaction before retrying.")
-                auth.production_journal(auth.production_authority(destination))
+            auth.validate_production_noop(destination)
             return []
         with _locked(destination):
             scope = auth.production_authority(destination, provision=True)

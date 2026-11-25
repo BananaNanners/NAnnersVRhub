@@ -157,14 +157,8 @@ class ProductionScope:
     authority_identity: tuple
 
 
-def production_authority(destination, *, provision=False):
-    """Use a fixed private store independent of the journal and prefix.
-
-    Called only inside the gated production path and its state lock.
-    """
-    from . import fatekeeper_commit as tx
-    if not tx.live_install_authorized():
-        raise RuntimeError('Explicit live Fatekeeper authorization is required.')
+def _production_authority_path(destination):
+    """Validate the fixed store location even when it has not been created."""
     authority = Path.home() / '.local/share/nannersvrhub-transaction-authority'
     parent = authority.parent
     if (parent.resolve() != parent or not parent.is_dir()
@@ -173,6 +167,63 @@ def production_authority(destination, *, provision=False):
             or authority.is_relative_to(destination.journal_dir)
             or destination.state.is_relative_to(authority)):
         raise RuntimeError('Unsafe production authority storage.')
+    return authority
+
+
+def validate_production_noop(destination):
+    """Read-only provenance check, under the shared state transaction lock.
+
+    Legacy verified installs may have no journal or ledger. Do not create
+    either store merely to report that no dependency changes are required.
+    Any unresolved evidence is a blocker, not an invitation to repair it.
+    """
+    from . import fatekeeper_commit as tx
+    # Keep the pending-journal diagnostic even for unadopted legacy journals.
+    profile_safety._safe_destination(destination.journal_dir, destination.root)
+    raw, _ = tx._read(destination.journal_dir / 'fk4-journal.json')
+    if raw is not None:
+        parsed = tx._parse_journal(destination, raw)
+        if parsed['phase'] not in {'committed', 'rolled-back'}:
+            raise RuntimeError('Recover the existing Fatekeeper transaction before retrying.')
+    authority = _production_authority_path(destination)
+    if authority.exists() or authority.is_symlink():
+        _private_parent(authority)
+    ledger = authority / (sha256(str(destination.state).encode()).hexdigest() + '.json')
+    # A dangling link must not be interpreted as absence.
+    has_ledger = ledger.exists() or ledger.is_symlink()
+    if raw is None:
+        if has_ledger:
+            # Validate existing provenance without provisioning missing stores.
+            scope = production_authority(destination)
+            production_journal(scope)
+            raise RuntimeError('Missing authorized production journal or unfinished staging; manual review required.')
+        if destination.journal_dir.exists():
+            _directory(destination.journal_dir, destination.root)
+            if stat.S_IMODE(destination.journal_dir.stat().st_mode) != 0o700:
+                raise RuntimeError('Unsafe production recovery storage.')
+            for entry in destination.journal_dir.iterdir():
+                info = entry.lstat()
+                if (entry.name != 'fk4.lock' or not stat.S_ISREG(info.st_mode)
+                        or info.st_uid != os.getuid() or info.st_nlink != 1):
+                    raise RuntimeError('Unresolved production recovery evidence; manual review required.')
+        return
+    scope = production_authority(destination)
+    production_journal(scope)
+    record = _ledger(scope)
+    if record is None or record['staging'] or record['next'] is not None:
+        raise RuntimeError('Pending production journal transition; manual review required.')
+
+
+def production_authority(destination, *, provision=False):
+    """Use a fixed private store independent of the journal and prefix.
+
+    Called only inside the gated production path and its state lock.
+    """
+    from . import fatekeeper_commit as tx
+    if not tx.live_install_authorized():
+        raise RuntimeError('Explicit live Fatekeeper authorization is required.')
+    authority = _production_authority_path(destination)
+    parent = authority.parent
     if provision and not authority.exists() and not authority.is_symlink():
         authority.mkdir(mode=0o700)
         tx._sync(parent)
