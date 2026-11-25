@@ -1,3 +1,11 @@
+## 0.5.5-dev5E5 — Fatekeeper development acceptance (unreleased)
+
+- Preserve five customizable Fatekeeper profile files; recognize current pinned dependency bytes without adopting legacy ownership. Block unsafe legacy removal and independent profile restoration.
+- Monitor runtime activity while browsing Games, add bounded SteamVR headset telemetry and retain WiVRn connection reporting.
+- Reuse existing Install / Update and Compatibility controls for sampled dependency evidence.
+- Actual official payload disposable fresh install and missing-backend repair, both rollback tests, and user-confirmed Quest 3 gameplay on existing installation passed. Full suite: 1581 passed, one skipped, zero failures/errors.
+- Keep live write gate closed; injector shutdown exception, production acceptance, packaging and remaining game tests pending. See DEV5E5-FATEKEEPER-ACCEPTANCE.md. Stable version unchanged.
+
 ## 0.5.4 — Stable release preparation
 
 - Promote the desktop-accepted RC1 to 0.5.4. Record the November 7, 2026 user desktop pass and retain GPL-3.0-only/MIT notices.

@@ -8,6 +8,10 @@ A Linux VR mod hub with runtime/headset diagnostics, per-game compatibility,
 controller references, install inventories, gameplay-test history and managed
 updates. The October 21 rc1 Import/Test/Launch gameplay check passed on the user setup.
 
+## Development status (unreleased 0.5.5)
+
+Fatekeeper controlled dependency installation, recognition of existing files, legacy protection, runtime telemetry and Quest 3 gameplay acceptance are documented in [Dev5E5 acceptance](DEV5E5-FATEKEEPER-ACCEPTANCE.md). The official backend is retrieved automatically in the reviewed disposable installer test. Live installation/recovery remains disabled; production acceptance, injector shutdown assessment, packaging and remaining game tests are pending. The stable download above is unchanged.
+
 ## Screenshots
 
 ![Main game library](docs/images/hub-main.png)
