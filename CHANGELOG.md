@@ -1,7 +1,7 @@
 ## 0.5.5-dev5F2 — Setup guides (unreleased)
 
 - Simplify all nine game guides, correct Skyrim guide placement, and use named source-page links independent of dependency sources.
-- Full regression: 1661 tests reported, OK (skipped=1). KDE guide acceptance pending. See DEV5F2-SETUP-GUIDES.md.
+- Full regression: 1661 tests reported, OK (skipped=1). All ten KDE setup guide acceptance checks passed. See DEV5F2-SETUP-GUIDES.md.
 
 ## 0.5.5-dev5F1 — Player-friendly wording (unreleased)
 

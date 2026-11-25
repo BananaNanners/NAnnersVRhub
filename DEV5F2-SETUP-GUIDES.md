@@ -21,7 +21,7 @@ Baseline: 087e16595a43386f874d2583a513f9737b59e3ca.
 - Direct Nexus access was restricted during source review; MGO description
   was supplied by player. Other Nexus instructions retain existing reviewed
   scope; newer releases are not certified by this milestone. GitHub and
-  other author source pages reviewed; live link navigation pending player review.
+  other author source pages reviewed; player-facing links included in the accepted desktop guide review; direct Nexus verification remains restricted.
   .NET 6 is out of support; replacement runtime needs separate testing.
 - Stable Hub state SHA256 unchanged:
   e4000197b5a4cf153e59c18058075d2a9dc312bbe2e3ff7519bae51c99370ef5.
@@ -29,6 +29,15 @@ Baseline: 087e16595a43386f874d2583a513f9737b59e3ca.
 
 Evidence: /home/bananananers/NAnnersVRhub-recovery/Dev5F2-evidence-Irrs5s
 
-Remaining: interactive KDE guide acceptance, Dev5F3 controller bindings,
+Remaining: Dev5F3 controller bindings,
 Dev5G gameplay and installation acceptance, and outstanding E8 production
 activation safeguards.
+
+## Interactive KDE acceptance — November 25, 2026
+
+Player confirmed all ten desktop setup guide checks passed: Skyrim VR,
+Fatekeeper, Hogwarts Legacy, Cyberpunk 2077, Ready or Not, Subnautica,
+Valheim, Elden Ring, DOOM (2016), and overall guide interface.
+Accepted runtime checkpoint 4d10e8e4e2d6fd650321c7c506c794a899d74103,
+preview PID 106488; previous PID 98921 closed normally. Stable state hash
+unchanged and production gate closed. Development acceptance complete.
