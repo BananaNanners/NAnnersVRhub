@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import re
 from threading import Lock
 from time import monotonic
 from uuid import uuid4
@@ -45,9 +46,25 @@ def _directory(path, root):
     return (str(path), info.st_dev, info.st_ino)
 
 
+def persistent_scope_parent():
+    """Fixed disk-backed development namespace; never use live Hub state."""
+    return Path.home() / '.local/share/nannersvrhub-recovery-development'
+
+
+def _private_parent(path):
+    if (path.resolve() != path or not path.is_dir() or
+            path.stat().st_uid != os.getuid() or
+            stat.S_IMODE(path.stat().st_mode) != 0o700):
+        raise RuntimeError('Unsafe persistent development storage.')
+    return path
+
+
 def resolve_scope(root):
     root = Path(root)
-    if (root.parent != Path('/tmp').resolve() or root.resolve() != root or
+    persistent = root.parent == persistent_scope_parent()
+    if persistent:
+        _private_parent(root.parent)
+    if ((root.parent != Path('/tmp').resolve() and not persistent) or root.resolve() != root or
             not root.name.startswith('nanners-e6-test-') or not root.is_dir() or
             stat.S_IMODE(root.stat().st_mode) != 0o700):
         raise RuntimeError('Authorization requires a private independent test root.')
@@ -85,9 +102,11 @@ def resolve_scope(root):
         raise RuntimeError('Scoped Steam or Hub state resolver mismatch.')
     if hub._uevr_dir(recipe, [steam]) != injector or hub.profile_dir(recipe, [steam]) != profile:
         raise RuntimeError('Scoped dependency destination mismatch.')
-    authority = Path(os.environ.get('VRHUB_SCOPED_AUTHORITY_DIR', ''))
-    if (authority.parent != Path('/tmp').resolve() or
-            not authority.name.startswith('nanners-e6-authority-') or
+    authority = (root.parent / 'authority' if persistent else
+                 Path(os.environ.get('VRHUB_SCOPED_AUTHORITY_DIR', '')))
+    if (((authority.parent != Path('/tmp').resolve() or
+          not authority.name.startswith('nanners-e6-authority-')) if not persistent
+         else authority != root.parent / 'authority') or
             authority.resolve() != authority or not authority.is_dir() or
             stat.S_IMODE(authority.stat().st_mode) != 0o700):
         raise RuntimeError('Independent private scoped authority directory required.')
@@ -150,28 +169,36 @@ def _ledger(scope):
                 info.st_size > 65536):
             raise RuntimeError('Unsafe scoped provenance evidence.')
         try:
-            record = json.loads(stream.read(65537))
+            def unique_pairs(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError('duplicate authority field')
+                    result[key] = value
+                return result
+            record = json.loads(stream.read(65537), object_pairs_hook=unique_pairs)
         except (ValueError, UnicodeError) as exc:
             raise RuntimeError('Corrupted scoped provenance evidence.') from exc
-    import re
     if (not isinstance(record, dict) or
-            set(record) != {'schema', 'scope', 'current', 'next'} or
+            set(record) != {'schema', 'scope', 'current', 'next', 'staging'} or
             record['schema'] != 1 or record['scope'] != _scope_binding(scope) or
             any(value is not None and (not isinstance(value, str) or
                 not re.fullmatch('[0-9a-f]{64}', value))
                 for value in (record['current'], record['next'])) or
-            (record['current'] is None and record['next'] is None)):
+            not isinstance(record['staging'], bool) or
+            (record['current'] is None and record['next'] is None and not record['staging']) or
+            (record['staging'] and record['current'] is not None)):
         raise RuntimeError('Invalid scoped provenance evidence; manual review required.')
     return record
 
 
-def _save_ledger(scope, current, next_digest):
+def _save_ledger(scope, current, next_digest, *, staging=False):
     from . import fatekeeper_commit as tx
     if resolve_scope(scope.root) != scope:
         raise RuntimeError('Scoped authority identity changed.')
     tx._write(_ledger_path(scope), json.dumps({
         'schema': 1, 'scope': _scope_binding(scope),
-        'current': current, 'next': next_digest,
+        'current': current, 'next': next_digest, 'staging': staging,
     }, sort_keys=True).encode())
 
 
@@ -182,9 +209,10 @@ def _record_journal(scope, stage, previous, digest):
         if record is None:
             if previous is not None:
                 raise RuntimeError('Missing authorized transaction provenance.')
-        elif previous is None or previous not in (record['current'], record['next']):
+        elif ((previous is None and not record['staging']) or
+              (previous is not None and previous not in (record['current'], record['next']))):
             raise RuntimeError('Scoped recovery journal changed or lacks provenance.')
-        _save_ledger(scope, previous, digest)
+        _save_ledger(scope, previous, digest, staging=previous is None)
     elif stage == 'after':
         if record is None or record['current'] != previous or record['next'] != digest:
             raise RuntimeError('Scoped provenance transition changed.')
@@ -215,9 +243,42 @@ def _issue(scope, operation, binding, ttl):
 
 
 def assert_fresh(scope):
-    if (scope.injector.exists() or scope.profile.exists() or scope.state.exists() or
-            any(scope.journal_dir.iterdir()) or _ledger(scope) is not None):
+    if scope.injector.exists() or scope.profile.exists() or scope.state.exists():
         raise RuntimeError("Scoped first install requires a fresh dependency and state destination.")
+    record = _ledger(scope)
+    entries = tuple(scope.journal_dir.iterdir())
+    if record is None and not entries:
+        return
+    if (record is None or not record['staging'] or record['current'] is not None or
+            (scope.journal_dir / 'fk4-journal.json').exists()):
+        raise RuntimeError("Scoped first install requires a fresh dependency and state destination.")
+    # The trusted writer marked staging before creating any backup. No
+    # published journal means no payload write could have started. Preserve
+    # all abandoned backup evidence; use a new backup name for every retry.
+    for entry in entries:
+        info = entry.lstat()
+        if entry.name == 'fk4.lock':
+            safe = stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+        elif re.fullmatch(r'fk4-backup(?:-[0-9a-f]{32})?', entry.name):
+            safe = stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o700
+            if safe:
+                for child in entry.iterdir():
+                    meta = child.lstat()
+                    if (not re.fullmatch(r'(?:state-new|\.state-new-[a-zA-Z0-9_]+)', child.name)
+                            or not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.getuid()
+                            or meta.st_nlink != 1 or stat.S_IMODE(meta.st_mode) != 0o600):
+                        safe = False
+                        break
+        else:
+            safe = False
+        if not safe or info.st_uid != os.getuid():
+            raise RuntimeError("Unsafe fresh staging evidence; manual review required.")
+
+
+def begin_staging(scope):
+    """Call only after explicit install approval, under the state lock."""
+    assert_fresh(scope)
+    _save_ledger(scope, None, None, staging=True)
 
 
 def authorize_install(root, review, *, confirmed=False, ttl=120):

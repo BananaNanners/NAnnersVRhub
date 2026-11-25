@@ -563,6 +563,7 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
             auth.assert_fresh(scope)
             if not prepared.writes:
                 raise RuntimeError("Scoped fresh installation has no writes.")
+            auth.begin_staging(scope)
             _commit(destination, prepared, process_guard=guard,
                     journal_published=lambda *args: auth._record_journal(scope, *args))
         return [Path(name) for name in prepared.writes]

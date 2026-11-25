@@ -13,7 +13,19 @@ from vrhub.uevr_dependency_review import DependencyReview
 
 class ScopedAuthorizationTests(unittest.TestCase):
     def setUp(self):
-        self.root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix='nanners-e6-test-', dir='/tmp')))
+        persistent = self._testMethodName.startswith('test_disk_backed_')
+        if persistent:
+            # Use a disposable fake HOME on the real home filesystem, not
+            # the player's released Hub or a persistent shared test store.
+            fake_home = Path(self.enterContext(tempfile.TemporaryDirectory(
+                prefix='nanners-e7-fixture-home-', dir=Path.home())))
+            self.enterContext(patch.dict(os.environ, {'HOME': str(fake_home)}))
+            parent = auth.persistent_scope_parent()
+            parent.mkdir(parents=True, mode=0o700)
+            (parent / 'authority').mkdir(mode=0o700)
+        else:
+            parent = '/tmp'
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix='nanners-e6-test-', dir=parent)))
         self.steam = self.root / 'steam'
         self.prefix = self.steam / 'steamapps/compatdata/2186990/pfx'
         (self.prefix / 'drive_c').mkdir(parents=True)
@@ -22,7 +34,7 @@ class ScopedAuthorizationTests(unittest.TestCase):
         (self.steam / 'steamapps/appmanifest_2186990.acf').write_text('"AppState" { "appid" "2186990" "installdir" "Fatekeeper" }')
         self.state = self.root / 'hub/state.json'
         (self.state.parent / 'fatekeeper-recovery').mkdir(parents=True)
-        self.authority = Path(self.enterContext(tempfile.TemporaryDirectory(prefix='nanners-e6-authority-', dir='/tmp')))
+        self.authority = (parent / 'authority' if persistent else Path(self.enterContext(tempfile.TemporaryDirectory(prefix='nanners-e6-authority-', dir='/tmp'))))
         self.enterContext(patch.dict(os.environ, {'VRHUB_STATE': str(self.state), 'VRHUB_SCOPED_AUTHORITY_DIR': str(self.authority)}))
         self.scope = auth.resolve_scope(self.root)
         profile = ProfilePlan('fatekeeper', 'Fatekeeper', '/tmp/profile.zip', auth.PINS['profile'], str(self.scope.profile), ('config.txt',), 1, 1, 0, 0, 0, False, (), 'fingerprint')
@@ -326,6 +338,8 @@ original_write = tx._write
 original_record = auth._record_journal
 def write(path, data, mode=0o600):
     original_write(path, data, mode)
+    if interruption == 'staging-backup' and path.name == 'state-new':
+        os._exit(73)
     if interruption == 'payload' and path == backend:
         os._exit(73)
     if path == scope.journal_dir / 'fk4-journal.json':
@@ -335,6 +349,8 @@ def write(path, data, mode=0o600):
             os._exit(73)
 def record(scope_arg, stage, previous, digest):
     original_record(scope_arg, stage, previous, digest)
+    if stage == 'before' and previous is None and interruption == 'initial-intent':
+        os._exit(73)
     if stage == 'before' and previous is not None and interruption == 'transition-intent':
         os._exit(73)
 original_unlink = Path.unlink
@@ -408,6 +424,72 @@ assert not tx.live_install_authorized()
         self.assertFalse(self.state.exists())
         self.assertTrue(self.scope.injector.exists())
         self.assert_child_recovered()
+
+    def assert_staging_retry(self, interruption):
+        self.child_transaction('install', interruption)
+        self.assertFalse(self.state.exists())
+        self.assertFalse(self.scope.injector.exists())
+        self.assertFalse(self.scope.profile.exists())
+        self.assertFalse((self.scope.journal_dir / 'fk4-journal.json').exists())
+        original = self.scope.journal_dir / 'fk4-backup/state-new'
+        contents = original.read_bytes()
+        self.child_transaction('install')
+        self.assertEqual(original.read_bytes(), contents)
+        self.assertEqual(len(list(self.scope.journal_dir.glob('fk4-backup*'))), 2)
+        self.assertTrue(self.state.exists())
+        self.assert_child_recovered()
+        self.assertEqual(original.read_bytes(), contents)
+
+    def test_staging_backup_interruption_retry(self):
+        self.assert_staging_retry('staging-backup')
+
+    def test_initial_journal_intent_interruption_retry(self):
+        self.assert_staging_retry('initial-intent')
+
+    def test_unexpected_staging_file_blocks_retry(self):
+        self.child_transaction('install', 'staging-backup')
+        unexpected = self.scope.journal_dir / 'fk4-backup/player-file'
+        unexpected.write_bytes(b'preserve me')
+        with self.assertRaisesRegex(RuntimeError, 'staging evidence'):
+            self.issue()
+        self.assertEqual(unexpected.read_bytes(), b'preserve me')
+
+    def test_staging_symlink_blocks_retry(self):
+        self.child_transaction('install', 'staging-backup')
+        original = self.scope.journal_dir / 'fk4-backup/state-new'
+        original.rename(original.with_name('saved'))
+        original.symlink_to(original.with_name('saved'))
+        with self.assertRaisesRegex(RuntimeError, 'staging evidence'):
+            self.issue()
+
+    def test_disk_backed_independent_recovery(self):
+        self.assertEqual(self.scope.authority, auth.persistent_scope_parent() / 'authority')
+        self.assertFalse(self.root.is_relative_to('/tmp'))
+        with patch.dict(os.environ, {'VRHUB_SCOPED_AUTHORITY_DIR': '/not-used'}):
+            self.child_transaction('install', 'payload')
+            self.assert_child_recovered()
+
+    def test_disk_backed_staging_retry(self):
+        self.assert_staging_retry('initial-intent')
+
+    def test_genuine_committed_journal_replay_after_rollback(self):
+        journal = self.installed_fixture()
+        committed = journal.read_bytes()
+        self.assert_child_recovered()
+        rolled_back = journal.read_bytes()
+        journal.write_bytes(committed)
+        with self.assertRaisesRegex(RuntimeError, 'provenance'):
+            self.recovery_token()
+        self.assertFalse(self.state.exists())
+        self.assertFalse(self.scope.injector.exists())
+        journal.write_bytes(rolled_back)
+
+    def test_duplicate_authority_field_refused(self):
+        self.installed_fixture()
+        path = auth._ledger_path(self.scope)
+        path.write_bytes(path.read_bytes().replace(b'{', b'{"schema":1,', 1))
+        with self.assertRaisesRegex(RuntimeError, 'provenance'):
+            self.recovery_token()
 
     def test_corrupt_authority_evidence_refused(self):
         self.installed_fixture()
