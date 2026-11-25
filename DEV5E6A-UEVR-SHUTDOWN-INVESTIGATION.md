@@ -1,0 +1,28 @@
+# Dev5E6-A — UEVR injector shutdown investigation
+
+November 24, 2026 (PST). Investigation closed for this development stage; known issue remains open. No speculative fix, production authorization, publication, push or tag. Runtime checkpoint `88adbacb847e8e7311d47fd157c060bcc2004df5`; pre-investigation documentation checkpoint `faa05e9fa08c117669aa834b8a94545cfe5c7e94`.
+
+## Original observation
+
+Dev5E5 player-confirmed Quest 3 gameplay passed all eleven checks on the existing installation. Closing the desktop injector logged an unhandled `System.Configuration.SettingsPropertyNotFoundException` for `OpenXRRadio` in `UEVR.MainWindowSettings.set_OpenXRRadio`, called by `MainWindow_Closing`, followed by Wine exception 0xe0434352. This is not evidence of a gameplay crash. Protontricks warned that the current Steam Runtime was not recognized. No root cause established.
+
+## Controlled investigation
+
+- A1/A2: installed Nightly 1133 revision `38c73f314ac61a1b6fabc37fba75c4149d3a8823`; saved preferences contain OpenXRRadio=True. Exact upstream frontend source revision not retrieved.
+- A3a: extracted 15-entry .NET 6 single-file bundle to private temporary storage; managed UEVRInjector.dll SHA-256 `eb1cf810bf7933018b54cc3fd244c257f19029de89f5b673ed7a1cb74729162a`. Metadata/IL inspection confirms five public properties on sealed internal MainWindowSettings, UserScopedSetting and DefaultSettingValue attributes, correct key in setter; closing handler writes OpenXRRadio first, four other settings, then Save. No frontend execution during inspection. Log `/tmp/nanners-e6a3a.OcN8LK/metadata.log`.
+- A4a: actual extracted class under Linux .NET 8.0.33, setter-first/properties-first/getter-first/save-reload all PASS. Log `/tmp/nanners-e6a4.RCzzXn/native.log`.
+- A4b: Windows .NET 6 configuration assembly could not load under native Linux .NET 8 (BadImageFormatException); inconclusive, not original exception.
+- A4c: standalone Wine 11.22, copied Windows .NET 6.0.36 Desktop Runtime, actual extracted class and provider 6.0.0.0, all four modes PASS, exit 0, 9.06s. Log `/tmp/nanners-e6a4c.EA8dg4/wine-probe.log`.
+- A4d/e: original bundled injector with clean preferences then byte-identical copy of original preferences, normal targeted KDE close, both exit 0; 83.68s and 8.42s. Settings created/saved; existing-settings copy retained all five values and original SHA. Mesa/EGL warnings, no original exception. Logs `/tmp/nanners-e6a4c.EA8dg4/bundle-clean.log` and `bundle-existing.log` in same directory. Removed external drive/user-folder symlinks from disposable Wine prefix only; not a complete security sandbox.
+- A4f-1/2: live prefix records CachyOS-11.0-100; installed runner `proton-cachyos-slr`, release `cachyos-11.0-20261015-slr`, Wine 11.0 (CachyOS). Direct Proton fresh disposable prefix under read-only-host Bubblewrap, network disabled, normal close exit 0 in 13.28s. First attempt blocked by read-only socket directory; corrected with private writable socket mapping and normal prefix initialization. FSR4 downloads blocked; game-specific fixes skipped. Log `/tmp/nanners-e6a4f2.NKQdY2/proton-retry.log`.
+- A4f-3: Protontricks 1.14.1, synthetic Steam directory, original app ID 2186990, automatic correct Proton selection, Steam Linux Runtime 4.0, copied preferences, same functional launcher arguments as Hub plus verbose logging. First attempts failed on fixture VDF formatting and writable TMPDIR; corrected. Verified actual process WINEPREFIX, normal KDE close exit 0, 10.74s, preferences saved byte-identically. Same runtime recognition warning, DXVK presentation warnings, no original exception. Log `/tmp/nanners-e6a4f3.7PAOWx/retry2.log`.
+
+## Disposition and limitations
+
+Standalone tests establish that the compiled settings declarations, basic provider initialization, bundled frontend, original preferences and Protontricks launch route can work. They do not rule out intermittent errors, the actual existing prefix state, game injection or post-injection lifecycle behavior. No standalone test injected into a game. Preserve known issue; no evidence justifies changing launcher, backend, Proton policy or settings. Retest actual desktop injector close after fresh-install gameplay; record exit status, exception evidence, preference persistence and return to Idle. If recurrent, evaluate scope/severity and upstream reporting before release; do not certify crash-free shutdown. Production install/recovery remains mechanically disabled. Hogwarts update independently blocked.
+
+## A5/A6 regression and safety
+
+Full isolated suite: 1582 executed, 1581 passed, 1 skipped, zero failures/errors, 29.666s, exit 0. Log `/tmp/nanners-e6a6-full.B4EJ8H/results.log`. No runtime changes. Existing accepted KDE preview reused, exactly one non-minimized window, PID 35782, started Nov 24 16:27:24 PST, running code checkpoint above; worktree corroborated. No new interactive GUI change requiring acceptance. Stable state SHA `e4000197b5a4cf153e59c18058075d2a9dc312bbe2e3ff7519bae51c99370ef5`; injector SHA `f61a9c75f605ff097be5fc60f574d832dedccf975c64bee6465b9d86a12021f2`; backend SHA `b883dd7f0b5e06bff74b42b4fabc66fc7c39c6baff57634d5132abe5b05ed6fc`; original user.config SHA `b1d2d9af726cd2bd28bedf6421a86ee831799365b1db7e92a64fe3975c62c35d`. All matched after investigation. These checks do not certify byte equality of every live prefix file.
+
+Next: Dev5E6-B production installation safety/authorization review; C controlled production path; D fresh-install Quest 3 gameplay and shutdown; E final Fatekeeper acceptance. No production writes authorized by this report. Public release remains blocked.

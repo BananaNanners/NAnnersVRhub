@@ -10,7 +10,7 @@ updates. The October 21 rc1 Import/Test/Launch gameplay check passed on the user
 
 ## Development status (unreleased 0.5.5)
 
-Fatekeeper controlled dependency installation, recognition of existing files, legacy protection, runtime telemetry and Quest 3 gameplay acceptance are documented in [Dev5E5 acceptance](DEV5E5-FATEKEEPER-ACCEPTANCE.md). The official backend is retrieved automatically in the reviewed disposable installer test. Live installation/recovery remains disabled; production acceptance, injector shutdown assessment, packaging and remaining game tests are pending. The stable download above is unchanged.
+Fatekeeper controlled dependency installation, recognition of existing files, legacy protection, runtime telemetry and Quest 3 gameplay acceptance are documented in [Dev5E5 acceptance](DEV5E5-FATEKEEPER-ACCEPTANCE.md). The official backend is retrieved automatically in the reviewed disposable installer test. Live installation/recovery remains disabled; production acceptance, fresh-install gameplay and injector shutdown retest, packaging and remaining game tests are pending. The [Dev5E6-A shutdown investigation](DEV5E6A-UEVR-SHUTDOWN-INVESTIGATION.md) found no independent reproduction; root cause remains unconfirmed and no speculative fix was applied. The stable download above is unchanged.
 
 ## Screenshots
 

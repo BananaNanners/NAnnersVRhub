@@ -1,3 +1,8 @@
+## 0.5.5-dev5E6-A — Injector shutdown investigation (unreleased)
+
+- Actual UEVR settings class, bundled frontend, Wine/.NET 6, CachyOS Proton and Protontricks isolated lifecycle checks passed; original post-gameplay settings exception not reproduced. Root cause unconfirmed; preserve launcher, backend and preferences.
+- Full regression: 1581 passed, one skipped, zero failures/errors. No runtime changes; live write gate closed. Fresh-install gameplay shutdown retest and production acceptance required. See DEV5E6A-UEVR-SHUTDOWN-INVESTIGATION.md.
+
 ## 0.5.5-dev5E5 — Fatekeeper development acceptance (unreleased)
 
 - Preserve five customizable Fatekeeper profile files; recognize current pinned dependency bytes without adopting legacy ownership. Block unsafe legacy removal and independent profile restoration.
