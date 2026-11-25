@@ -7,25 +7,39 @@ manual_download = true
 mod_page = "https://github.com/brandonmousseau/vhvr-mod/releases/tag/v0.11.2"
 
 setup = [
-  "In this game’s Steam Properties -> Compatibility, explicitly force your selected Proton build, wait for the Windows download, launch once and close it. A per-game Steam Linux Runtime choice overrides a global Proton preference. This recipe requires valheim.exe and valheim_Data; it does not install into a native Linux-only copy or a dedicated server.",
-  "Review your game version before installing. VHVR 0.11.0 documents Valheim 1.0.15–1.0.17; the pinned 0.11.2 follow-up does not publish a new compatibility range. Another game version requires review, not a local compatibility claim.",
-  "Download vhvr.zip from the GitHub v0.11.2 release and denikson-BepInExPack_Valheim-5.4.2351.zip from the linked Thunderstore package. Do not choose Source code ZIPs or substitute the older Thunderstore VHVR release.",
-  "Scan local archives and choose Install verified dependencies when BOTH pinned ZIPs are verified. This opens the safety review. The Hub verifies their pinned hashes, strips the loader wrapper, installs its Windows payload and the entire VHVR archive, and maps archive Valheim_Data to game valheim_Data. Original files are backed up outside the game folder.",
-  "Close the game and any external mod manager first. Review existing mods separately; duplicate ValheimVRMod.dll locations block installation. Unrelated mods are retained, not certified compatible. Remove a recorded Hub install before replacing it.",
-  "Connect through WiVRn with host xrizer selected. Copy launch options into Steam Properties -> General and review the winhttp override, runtime import, comp_ipc visibility and VHVR flags. The Hub does not edit Steam or VHVR configuration files.",
+  "In Steam Properties > Compatibility, force your chosen Proton version so Steam installs the Windows game. Launch once and close it. The native Linux game and dedicated server are not supported by this installer.",
+  "VHVR 0.11.0 lists game versions 1.0.15–1.0.17. The supported v0.11.2 follow-up does not specify a new range; other game versions need review.",
+  "Download vhvr.zip (v0.11.2) and denikson-BepInExPack_Valheim-5.4.2351.zip from the linked pages. Do not download source-code ZIPs or substitute older VHVR builds.",
+  "Close external mod managers and the game. Scan local archives and choose Install verified dependencies when both files are verified. Review backups and conflicts; remove an existing Hub installation before replacing it.",
+  "Choose xrizer with WiVRn and copy the Hub launch options into Steam Properties > General. Keep the supplied VR and controller flags unchanged for the initial test.",
 ]
 play = [
-  "Connect the headset before launch. In Steam use Play Valheim with Proton and Direct3D 11; avoid the Vulkan launch choice for this first test. The copied -force-d3d11 selects the game's D3D11 renderer under Proton.",
-  "Keep -flatScreenMode=false in the copied launch options: VHVR's default auto setting checks whether SteamVR is running, which does not establish WiVRn readiness. -ModEnabled=true and -UseVRControls=true request the mod and motion controls; -UseOverlayGui=false requests the controller-compatible GUI. These are upstream command-line options, not a verified gameplay session.",
-  "No separate UEVR injector is used. Load a character/world and test full VR rendering, stereo depth, head tracking, both controllers, movement/turning, inventory, tool use, building and combat. Use the in-game Compendium for the current mod's motion-control guidance.",
-  "Record a live test in the Hub. If the game remains flat or initialization fails, capture Game log diagnostics (BepInEx/LogOutput.log) and the Compatibility report. Presence of files or clean log signatures does not prove successful VR loading.",
+  "Connect the headset before launch. Choose Play Valheim with Proton and Direct3D 11, not Vulkan.",
+  "Keep -flatScreenMode=false in the launch options so VHVR requests VR even without SteamVR running. No UEVR injector is needed.",
+  "Load a character and world. Check tracking, stereo depth, both controllers, movement, inventory, tools, building and combat. See the in-game Compendium for controls.",
+  "Record gameplay results; if the game stays flat, check Game log diagnostics.",
 ]
 good_to_know = [
-  "October 20 user-reported SUCCESS: at least 30 minutes of VR with rendering, tracking, stereo, both controllers and basic building working. Building-piece rotation was not found and remains unconfirmed. Multiplayer, trackers, gestures, bHaptics and longer sessions need separate tests.",
-  "All VHVR release files, including Unity XR subsystem files, assets and controller bindings, are installed. Loader archive documentation/Thunderstore metadata and Linux/macOS startup files are excluded from the Windows/Proton payload. Third-party mods are downloaded separately, not bundled with the Hub.",
-  "Backups live in the Hub data folder. Removal restores replaced files and preserves edited text/config files in its backup. Changed binaries or missing/corrupted backups stop removal for review. Game worlds, characters and Steam Cloud data are not installation targets.",
-  "The release pair was inspected on October 20, 2026. VHVR updates are checked on GitHub; review the loader version on its Thunderstore page manually. New mod builds need recipe review. Keep game saves backed up through your normal Valheim workflow; the Hub does not import, migrate or edit them.",
+  "The October 20 test confirmed at least 30 minutes of VR and basic building. Building-piece rotation, multiplayer and optional features remain unconfirmed.",
+  "Back up worlds and characters separately. Hub removal restores original files and preserves edited text settings; changed binaries or missing backups block removal.",
+  "Newer releases and unrelated mods require review; the Hub does not certify them as compatible.",
 ]
+
+[[guide_links]]
+label = "VHVR 0.11.2"
+url = "https://github.com/brandonmousseau/vhvr-mod/releases/tag/v0.11.2"
+
+[[guide_links]]
+label = "BepInExPack Valheim 5.4.2351"
+url = "https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/v/5.4.2351/"
+
+[[guide_links]]
+label = "VHVR guide"
+url = "https://github.com/brandonmousseau/vhvr-mod"
+
+[[guide_links]]
+label = "VHVR game version requirements"
+url = "https://github.com/brandonmousseau/vhvr-mod/releases/tag/v0.11.0"
 
 [[links]]
 label = "Download VHVR 0.11.2 (vhvr.zip)"

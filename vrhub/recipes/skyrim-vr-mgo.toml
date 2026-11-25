@@ -6,6 +6,39 @@ method = "guide"
 handler = "skyrim-vr"
 manual_download = true
 
+setup = [
+  "Before installing: at least 32 GB RAM, an internal SSD and a Steam copy of Skyrim VR. Keep game, downloads and modlist in separate folders.",
+  "Install and launch clean Skyrim VR once through Steam using Proton.",
+  "Install Mad God's Overhaul using Jackify. Follow the Jackify guide for its Linux dependencies and installation steps.",
+  "Open Mod Organizer 2 (MO2) from your MGO installation. Enable only one OpenComposite variant: Open Composite XR or Open Composite Unleashed for Skyrim VR.",
+  "Keep both VR Performance Kit variants disabled with this OpenComposite setup. Check game readiness in the Hub.",
+]
+
+play = [
+  "Start WiVRn with xrizer selected and connect your headset.",
+  "Launch MGO using its configured MO2 / Play Game (SKSE) shortcut, not SkyrimVR.exe directly.",
+  "Disable Dynamic Resolution and set in-game Super Sampling to its lowest value.",
+  "Start a new game. Wait for the background scripts to finish in the starting room before moving or saving.",
+]
+
+good_to_know = [
+  "Do not run LOOT, mass-enable disabled mods or change the default load order. Do not load vanilla saves. Use Alternate Start to begin a new adventure.",
+  "Jackify handles modlist installation and updates; the Hub checks the VR setup. If automatic folder detection fails, the NANNERS_MGO_DIR override is available.",
+  "Use MGO's bundled OpenComposite, not a system-wide replacement. Keep PC and headset WiVRn versions matched and retest after updates.",
+]
+
+[[guide_links]]
+label = "Mad God's Overhaul"
+url = "https://www.nexusmods.com/skyrimspecialedition/mods/107780?tab=description"
+
+[[guide_links]]
+label = "Jackify"
+url = "https://github.com/Omni-guides/Jackify"
+
+[[guide_links]]
+label = "Jackify installation guide"
+url = "https://github.com/Omni-guides/Jackify/wiki"
+
 [[links]]
 label = "Jackify"
 url = "https://github.com/Omni-guides/Jackify"
@@ -14,25 +47,11 @@ url = "https://github.com/Omni-guides/Jackify"
 label = "MGO Nexus"
 url = "https://www.nexusmods.com/skyrimspecialedition/mods/107780"
 
-setup = [
-  "Install and launch a clean Skyrim VR through Steam/Proton at least once before installing the modlist.",
-  "Install Mad God's Overhaul with Jackify/Wabbajack. NAnnersVRhub does not copy or redistribute the MGO modlist.",
-  "Use one MGO OpenComposite variant in the active MO2 profile: Open Composite XR or Open Composite Unleashed for Skyrim VR.",
-  "Keep both VR Performance Kit variants disabled when using the bundled OpenComposite path.",
-  "NAnnersVRhub auto-detects common MGO install folders; set NANNERS_MGO_DIR only if you want to override the detected location.",
-]
 
-play = [
-  "Start WiVRn and connect the Quest before launching Skyrim VR.",
-  "Leave WiVRn's OpenVR compatibility layer on xrizer for this workflow.",
-  "Launch Skyrim VR through the MGO Mod Organizer/SKSEVR entry configured by your modlist rather than launching SkyrimVR.exe directly.",
-]
 
-good_to_know = [
-  "This first Skyrim VR integration is intentionally a guided/preflight workflow. Jackify/Wabbajack remains the modlist installer and updater.",
-  "Do not substitute a system-wide /opt/opencomposite installation for MGO's bundled OpenComposite in this workflow.",
-  "PC and Quest WiVRn versions should match; re-test the stack after a WiVRn or xrizer update.",
-]
+
+
+
 
 [requirements]
 openxr = "wivrn"

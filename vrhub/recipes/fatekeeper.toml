@@ -8,25 +8,37 @@ guide_links_only = true
 method = "uevr"
 
 setup = [
-  "Install protontricks, then launch Fatekeeper once from Steam (Proton on) so its Proton prefix exists.",
-  "Download Nightly 1133 (uevr.zip) and Fatekeeper VR Profile v1.0.4 (SLASHER-Win64-Shipping.zip). The Hub uses the verified joeyhodge backend during installation.",
-  "Once only: install the .NET 6 Desktop Runtime into the game's prefix with: protontricks-launch --no-bwrap --appid 2186990 --no-background-wineserver <windowsdesktop-runtime-6.0.x-win-x64.exe>",
-  "In Install / Update, scan local archives and choose Review installation to review the injector and profile together.",
-  "Review the two exact prefix destinations and recovery warnings. Existing profile records require recovery review; live UEVR dependency installation and profile replacement remain gated.",
-  "In the game's graphics settings, turn DLSS Frame Generation off.",
+  "Install protontricks and launch Fatekeeper once through Steam using your existing Proton selection.",
+  "Download UEVR Nightly 1133 (uevr.zip) and Fatekeeper VR Profile v1.0.4 (SLASHER-Win64-Shipping.zip) from the linked release pages.",
+  "Install the Windows x64 .NET 6 Desktop Runtime into this game's Windows environment using protontricks-launch --no-bwrap --appid 2186990 --no-background-wineserver followed by the downloaded installer path.",
+  "In Install / Update, scan local archives and choose Review installation. Review both downloads and the backup warnings. Live installation is blocked in this preview.",
+  "During an authorized installation, the Hub obtains and verifies the required JoeyHodge backend if missing. No third ZIP or manual DLL copying is needed.",
+  "Copy the Hub launch options into Steam Properties > General. Turn off DLSS Frame Generation in the game.",
 ]
 
 play = [
-  "Start WiVRn and connect the Quest.",
-  "Launch Fatekeeper from Steam and get into actual gameplay.",
-  "Click 'Run UEVR injector', pick the Fatekeeper process, tick OpenXR, then press Inject.",
-  "Put the headset on. To confirm the profile loaded, press Insert: the Fatekeeper config should appear in UEVR's left panel below 'Script UI'.",
+  "Start WiVRn and connect your headset. Launch Fatekeeper in Steam and load gameplay.",
+  "Click Run UEVR injector, select the Fatekeeper process and OpenXR, then Inject.",
+  "Press Insert to check that the Fatekeeper profile appears below Script UI. Turn off 2D Screen Mode and close the in-game overlay with Insert before judging VR.",
 ]
 
 good_to_know = [
-  "Don't use UEVR's own 'Import Config': under Wine it silently copies only some of the files (no hands, broken eyes).",
-  "The patched UEVR backend and the profile's plugin DLLs run inside the game process.",
+  "Do not use UEVR Import Config under Wine; it can leave profile files missing. Use the Hub's reviewed installation workflow when authorized.",
+  "The tested backend and profile plugins run inside the game. Existing profiles require backup and recovery review before replacement.",
+  "The controller overlay shortcut can also open WayVR's menu. Use Insert instead.",
 ]
+
+[[guide_links]]
+label = "UEVR Nightly 1133"
+url = "https://github.com/praydog/UEVR-nightly/releases/tag/nightly-01133-38c73f314ac61a1b6fabc37fba75c4149d3a8823"
+
+[[guide_links]]
+label = "Fatekeeper VR Profile v1.0.4"
+url = "https://github.com/jbusfield/FK_UEVR/releases/tag/v1.0.4"
+
+[[guide_links]]
+label = "Windows .NET 6 Desktop Runtime"
+url = "https://dotnet.microsoft.com/en-us/download/dotnet/6.0"
 
 [[links]]
 label = "UEVR Nightly 1133"

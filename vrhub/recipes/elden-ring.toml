@@ -7,25 +7,31 @@ manual_download = true
 mod_page = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
 
 setup = [
-  "Launch the flat Steam game once using your selected Proton to create its own prefix. This recipe requires Game/eldenring.exe, PE file version 2.6.2.0 (patch 1.16.2) or 2.7.1.0 (patch 1.17.1). Other builds need review before launch.",
-  "Back up your saves using your normal game-save workflow. Set the game's startup network setting to offline, quit, and put Steam in offline mode. ERVR requires offline / EAC-disabled play; its author does not support multiplayer.",
-  "Download ERVR V0.4.0 from the author's Nexus Files page. Scan local archives and choose Install verified dependencies when the pinned ZIP is verified. This opens the safety review. This recipe accepts the inspected archive digest, including the renamed Nexus download, and installs all ten files directly under Game.",
-  "Existing dxgi.dll, dinput8.dll, ReShade.ini, an untracked ERVR folder or known R.E.A.L. VR files block installation for manual review. Use their original installer to remove them first. Do not overwrite another loader or combine VR frameworks.",
-  "Copy launch options into Steam Properties -> General. Review dxgi/dinput8 native overrides, runtime import and WiVRn IPC exposure. The Hub's adapter replaces only the recognized game-executable argument with Game/eldenring.exe, preserving Steam's selected Proton and prefix.",
-  "Connect through WiVRn before launch. ERVR's Windows OpenXR loader uses Proton's WineOpenXR bridge; host runtime selection alone does not prove that bridge or D3D12 interop works. This Linux route needs a live test.",
+  "Experimental Linux VR setup, not yet gameplay-tested. Launch the Steam game once using Proton. Only patch 1.16.2 or 1.17.1 is accepted by this workflow; other builds need review.",
+  "Back up saves and use offline-only play for this Hub workflow. Set the game's startup network setting to offline, quit, and put Steam in offline mode. Do not use online play or launch with Easy Anti-Cheat enabled.",
+  "Download ERVR 0.4.0 from the author's Nexus Files page. Scan local archives and choose Install verified dependencies when the correct ZIP is verified. Review backups before approval.",
+  "Remove conflicting ReShade, other VR frameworks or existing loader files using their original removal instructions. The Hub blocks conflicting files rather than overwriting them.",
+  "Copy the Hub launch options into Steam Properties > General. Keep your existing Proton selection. Connect WiVRn before launch.",
 ]
 play = [
-  "Keep Steam and the game configured offline. Launch through Steam only after applying the copied options. The adapter stops unrecognized shell/wrapper commands and unsupported/unknown executable versions; it does not rename or patch game/anti-cheat files.",
-  "If a protected/Easy Anti-Cheat launch appears, close it and review the actual Steam options. Offline network settings remain manual; targeting eldenring.exe does not certify network isolation.",
-  "The title screen, menus, cutscenes and loading use a cinema panel by design. Load an offline save and assess full stereo, head tracking, both controllers and movement in gameplay. A flat menu alone is not a failure.",
-  "Start with the archive's settings, then reduce GameResScale or graphics if required. ERVR.ini is editable; there is no in-headset settings menu in this release. Do not change diagnostic/address settings for the initial test.",
-  "Use Log diagnostics for Game/ERVR/ERVR.log and Game/ReShade.log. The author expects an OpenXR backend and ReShade add-on registration; those messages alone are historical loading evidence, not a gameplay pass. Record the actual result with Record live test….",
+  "Keep the game and Steam offline. Launch using the reviewed Steam settings; if a protected launch appears, close the game and review the setup.",
+  "Menus, cutscenes and loading screens may appear as a flat panel by design. Load an offline save to test stereo VR, tracking, movement and both controllers.",
+  "Start with the supplied settings. Reduce GameResScale or graphics if needed. This release uses ERVR.ini rather than an in-headset settings menu.",
+  "Check Game log diagnostics if loading fails and record the actual gameplay result.",
 ]
 good_to_know = [
-  "UNVERIFIED on Linux/WiVRn. The bundled archive was inspected, not executed. The ReShade DLL digest matches the archive's own THIRD_PARTY.md; its upstream provenance was not independently attested. The author's linked GitHub repository returned 404 during review.",
-  "Native OpenXR / D3D12 workflow, not UEVR or OpenComposite. Keep other games' working adapters unchanged. No VR binary is bundled with the Hub.",
-  "The Hub preserves original files and edited text settings in its backup on removal. Changed binaries stop removal. Untracked ERVR logs/cache files remain; graphics settings changed by ERVR itself may need its GraphicsConfig_ervr_backup.xml restored manually. Saves are not install targets.",
+  "The archive was inspected but not gameplay-tested on Linux. The bundled ReShade digest matched its included documentation, not an independently verified upstream copy.",
+  "Do not mix UEVR or OpenComposite with this native OpenXR mod. Multiplayer is outside the Hub's tested scope.",
+  "Hub removal preserves original files and edited text settings; changed binaries block removal. ERVR may leave logs or graphics settings requiring separate restoration. Saves are not install targets.",
 ]
+
+[[guide_links]]
+label = "ERVR author guide and controls"
+url = "https://www.nexusmods.com/eldenring/mods/10711"
+
+[[guide_links]]
+label = "ERVR 0.4.0 downloads"
+url = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
 
 [[links]]
 label = "ERVR author guide and controls"

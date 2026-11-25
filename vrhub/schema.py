@@ -93,6 +93,14 @@ def validate_recipe(recipe: dict, source: str = "recipe") -> dict:
     if links and (not isinstance(links, list) or any(
             not isinstance(x, dict) or not x.get("label") or not x.get("url") for x in links)):
         raise RecipeError(f"{source}: [[links]] entries need label and url")
+    if "guide_links" in recipe:
+        guide_links = recipe["guide_links"]
+        if (not isinstance(guide_links, list) or not guide_links or any(
+                not isinstance(x, dict) or not isinstance(x.get("label"), str)
+                or not x["label"].strip() or not isinstance(x.get("url"), str)
+                or not x["url"].startswith("https://") for x in guide_links)):
+            raise RecipeError(f"{source}: [[guide_links]] entries need label and HTTPS URL")
+
 
     handler_config = recipe.get("handler_config", {})
     if not isinstance(handler_config, dict):

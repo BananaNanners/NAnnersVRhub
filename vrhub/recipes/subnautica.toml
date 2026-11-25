@@ -7,26 +7,34 @@ manual_download = true
 mod_page = "https://github.com/Okabintaro/SubmersedVR/releases/tag/0.2.1"
 
 setup = [
-  "Use Steam's default Subnautica branch, not legacy/experimental. Select your existing working Proton build, start the plain game once, then close it before installing mods.",
-  "Download SubmersedVR_0.2.1.zip and Tobey.s.BepInEx.Pack.for.Subnautica.zip from the two pinned author release pages below. Do not choose Source code ZIPs, Below Zero files, or a generic BepInEx build.",
-  "Scan local archives and choose Install verified dependencies when BOTH pinned ZIPs are verified. This opens the safety review. The Hub checks their release hashes, installs the complete Windows payloads and controller bindings, and backs up overwritten files outside the game directory. It does not bundle the mods.",
-  "An already recorded Hub install must be removed before replacement. The older BepInEx/patchers/Tobey folder, when present, is backed up and retired during installation as recommended by the current loader release. Unrelated plugins are retained.",
-  "Remove VR Enhancements or the older SN1MC/Motion Controls mod with their existing installer before using SubmersedVR. The Hub recognizes VREnhancements.dll/SN1MC.dll, but does not detect every possible conflict.",
-  "Use xrizer as the host OpenVR adapter with WiVRn. Copy the Hub launch options into Steam Properties -> General. Review the winhttp override, runtime import and WiVRn comp_ipc exposure there; the Hub does not edit Steam settings.",
+  "Use Steam's default Subnautica branch with your existing working Proton. Launch once and close the game.",
+  "Download SubmersedVR_0.2.1.zip and Tobey.s.BepInEx.Pack.for.Subnautica.zip (5.4.23-pack.3.1.1) from the linked releases, not source-code ZIPs or Below Zero files.",
+  "In Install / Update, scan local archives and choose Install verified dependencies when both downloads are verified. Review the installation and backups.",
+  "Remove an existing recorded Hub installation before replacing it. Remove conflicting VR Enhancements or older SN1MC/Motion Controls using their original removal instructions. The Hub cannot detect every conflict.",
+  "Select xrizer with WiVRn. Copy the Hub launch options into Steam Properties > General; the Hub does not edit Steam settings.",
 ]
 play = [
-  "Connect the Quest through WiVRn first. Keep xrizer selected, then choose Launch Subnautica in Steam VR Mode in Steam (or select it when Steam asks). Keep the copied launch options; the regular Play Subnautica choice was used in the earlier flat-screen failure.",
-  "Load a save and check full headset rendering, stereo depth, head tracking, movement, turning, PDA/inventory, tool aiming and interaction. This game does not use a separate UEVR injector.",
-  "Keep the stock Touch bindings: Y opens/closes the PDA. In the PDA, hold A and drag an item into a quick slot. The October 19 test reported both A and trigger interaction working flawlessly; this is one user setup, not a guarantee for other sessions.",
-  "Avoid the in-game binding editor: the user reported it gets stuck waiting for a button and cannot cancel. The user preferred stock bindings over the external Menu-button layout for comfort and requested its reversal; Y -> UIAssign was not successful.",
-  "Record a live test in the Hub. If it remains flat or controllers fail, open Game log diagnostics for BepInEx/LogOutput.log and retain the compatibility report.",
+  "Connect your headset through WiVRn. In Steam choose Launch Subnautica in Steam VR Mode, not regular Play Subnautica.",
+  "Load a save and check full VR, tracking, movement and interaction. No UEVR injector is needed.",
+  "Keep default Touch controls: Y opens the PDA; hold A and drag an item into a quick slot. Avoid the in-game binding editor, which got stuck during testing.",
+  "Record the gameplay result. If VR or controllers fail, check Game log diagnostics.",
 ]
 good_to_know = [
-  "The bundled reference records the October 19 user-reported core VR SUCCESS, plus October 20 control follow-ups. Stock bindings are preferred. This historical evidence does not verify your current session or a full playthrough.",
-  "The loader archive also ships macOS files. The Hub skips libdoorstop.dylib and run_bepinex.sh for this Windows/Proton route; all Windows loader files and every SubmersedVR file are installed, preserving case.",
-  "The two archives were inspected on October 19, 2026. New releases require recipe review before installation; the normal update checker can notify you but does not silently substitute a newer package.",
-  "Backups are kept under the Hub data folder. Removal restores original game files and the retired legacy patcher folder; changed settings files are preserved in the backup before removal. Changed binaries require manual review. Game saves and unrelated mods are not installation targets.",
+  "The October 19–20 player tests confirmed core VR and the listed controls. Other setups and longer sessions are not guaranteed.",
+  "Newer downloads require review. Uninstall through the Hub to restore original files; changed binaries or missing backups require review. Saves and unrelated mods are not installation targets.",
 ]
+
+[[guide_links]]
+label = "SubmersedVR 0.2.1"
+url = "https://github.com/Okabintaro/SubmersedVR/releases/tag/0.2.1"
+
+[[guide_links]]
+label = "Tobey's BepInEx pack 5.4.23-pack.3.1.1"
+url = "https://github.com/toebeann/BepInEx.Subnautica/releases/tag/v5.4.23-pack.3.1.1"
+
+[[guide_links]]
+label = "SubmersedVR Linux guide"
+url = "https://github.com/Okabintaro/SubmersedVR#linux-setup"
 
 [[links]]
 label = "Download Tobey's BepInEx pack (pack.3.1.1)"

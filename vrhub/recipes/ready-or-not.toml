@@ -6,22 +6,27 @@ mod_page = "https://www.nexusmods.com/readyornot/mods/6914"
 manual_download = true
 
 setup = [
-  "Download the VRO zip from the mod page (a Nexus login is needed).",
-  "Scan local archives, then choose Review installation for the detected VRO ZIP.",
-  "Copy the launch options above into the game's Steam Properties > General.",
-  "In that same screen, choose 'DirectX 11' in the launch option dropdown if it's offered; otherwise add -d3d11 to the launch options.",
-  "In the game's controller settings, turn aim assist intensity off.",
+  "Download the VRO ZIP from its official Nexus page. Sign in to Nexus if required.",
+  "Remove conflicting UEVR files using their original removal instructions before installing VRO. Back up saves and settings; do not blindly delete the game folder.",
+  "In Install / Update, scan local archives and review installation for the VRO ZIP.",
+  "Copy launch options into Steam Properties > General. Choose DirectX 11 in the launch dropdown, or add -d3d11 if the dropdown is unavailable.",
+  "Turn off aim assist intensity in the game's controller settings.",
 ]
 
 play = [
-  "Start WiVRn and connect the Quest before launching.",
-  "Launch from Steam in flat mode, then pick your loadout and mission.",
-  "Once the mission has loaded, press U to switch to VR. The Home key exits VR.",
+  "Start WiVRn and connect your headset.",
+  "Launch from Steam, choose your loadout and start a mission.",
+  "Press U after the mission loads to enter VR. Press Home to leave VR; restart the mission before entering VR again.",
 ]
 
 good_to_know = [
-  "If you ever used UEVR on this game, do a full reinstall first (uninstall it, then delete the game folder).",
+  "The player reported successful VR gameplay on October 17. New game or mod versions require fresh checks.",
+  "If conflicts remain, stop and review the author instructions before changing game files. Steam verification alone may not remove extra mod files.",
 ]
+
+[[guide_links]]
+label = "Ready or Not VRO"
+url = "https://www.nexusmods.com/readyornot/mods/6914"
 
 [[files]]
 kind = "pak"

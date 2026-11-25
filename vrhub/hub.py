@@ -1071,15 +1071,22 @@ SECTIONS = (("One-time setup", "setup", True), ("Each time you play", "play", Tr
             ("Good to know", "good_to_know", False))
 
 
+def setup_guide_links(recipe: dict) -> list[tuple[str, str]]:
+    """Display-only links; never substitute archive or update sources."""
+    if "guide_links" in recipe:
+        return [(x["label"], x["url"]) for x in recipe["guide_links"]]
+    links = [] if recipe.get("guide_links_only") else [("Mod page", recipe["mod_page"])]
+    links += [(x["label"], x["url"]) for x in recipe.get("links", [])]
+    if not recipe.get("guide_links_only") and recipe.get("profile", {}).get("page"):
+        links.append(("Profile page", recipe["profile"]["page"]))
+    return links
+
+
 def details_text(recipe: dict) -> str:
     launch = recipe.get("launch", {})
     lines = [recipe["name"], ""]
-    if not recipe.get("guide_links_only"):
-        lines.append(f"Mod page: {recipe['mod_page']}")
-    for link in recipe.get("links", []):
-        lines.append(f"{link['label']}: {link['url']}")
-    if not recipe.get("guide_links_only") and recipe.get("profile", {}).get("page"):
-        lines.append(f"Profile:  {recipe['profile']['page']}")
+    for label, url in setup_guide_links(recipe):
+        lines.append(f"{label}: {url}")
     if recipe.get("store", "steam") == "steam":
         lines += ["", "Steam launch options:", f"  {launch_options(recipe)}"]
     if launch.get("optional_args"):
@@ -1115,11 +1122,8 @@ def details_html(recipe: dict, update_items: list[dict] | None = None,
     ]
     # Explicitly labeled guide links may differ from the pinned archive
     # candidate sources; do not change dependency identities or scan history.
-    links = [] if recipe.get("guide_links_only") else [
-        f'<a href="{e(recipe["mod_page"])}">Mod page</a>']
-    links += [f'<a href="{e(x["url"])}">{e(x["label"])}</a>' for x in recipe.get("links", [])]
-    if not recipe.get("guide_links_only") and recipe.get("profile", {}).get("page"):
-        links.append(f'<a href="{e(recipe["profile"]["page"])}">Profile page</a>')
+    links = [f'<a href="{e(url)}">{e(label)}</a>'
+             for label, url in setup_guide_links(recipe)]
     out.append("<p>" + " &nbsp;|&nbsp; ".join(links) + "</p>")
     if update_items:
         if compact_updates:

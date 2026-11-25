@@ -7,25 +7,32 @@ handler = "kharvox-gog"
 manual_download = true
 mod_page = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"
 setup = [
- "Launch the flat GOG game once through native Heroic. Keep its existing prefix. DOOMx64vk.exe is the supported Vulkan executable; DOOMx64.exe is OpenGL.",
- "Scan the KHARVOX release ZIP in Install / Update. Review installation opens a read-only release and compatibility review; it does not extract or install anything.",
- "Only the tested KHARVOX 1.4 package is currently accepted by the existing runner. If setting up that tested version manually, extract it outside DOOM and use Choose KHARVOX folder…. The Hub checks the package and supported GOG executable before launching.",
- "Close DOOM and KHARVOX, then click Install VR runner. This reuses the verified isolated runner or obtains the pinned Proton-CachyOS11.0-20260703-slr x86_64 release from upstream and applies the lab 0.1.6 bridge. The separate bridge component archive and all payload files are verified first; the base archive and seven baseline files are then checked. Heroic runner selection stays unchanged.",
- "Connect the headset through WiVRn and click Test VR bridge. A full matching lab 0.1.6 pass is required. Existing standalone lab state is reused from ~/.local/share/nanners-kharvox-lab/0.1.0.",
- "The Hub installs its separate pinned bridge component only when requested. Before its public release, use Import bridge package with the matching 0.2.0 source archive. This keeps ordinary Hub updates small.",
+  "Launch the GOG game once through native Heroic. Keep the existing game environment. The supported game executable is DOOMx64vk.exe (Vulkan).",
+  "Download KHARVOX 1.4 from the linked release page. Scan the ZIP in Install / Update; Review installation checks compatibility only and does not extract it.",
+  "Extract the tested KHARVOX package outside the DOOM folder, then use Choose KHARVOX folder… in the Hub. Other versions require review.",
+  "Close DOOM and KHARVOX. Use Import bridge package with the matching 0.2.0 source archive if the separate bridge component is not available publicly.",
+  "Click Install VR runner. The Hub verifies and prepares its separate tested runner and bridge without replacing Heroic's runner.",
+  "Connect WiVRn and click Test VR bridge. A matching lab 0.1.6 pass is required before launch.",
 ]
 play = [
- "Connect WiVRn and use Launch DOOM VR. The Hub starts the tested isolated runner through umu-run, using the existing native Heroic GOG prefix. No original runner or game files are replaced.",
- "In KHARVOX select the complete GOG DOOM installation, keep SFS selected, enable Extended Logging if troubleshooting, and choose Launch Game. Shift+left-click Made by Cactus exposes the developer controls.",
- "Load a campaign save to evaluate VR gameplay. The user reported 40 minutes with both controllers and head tracking working on October 21, 2026. Stereo depth and individual control actions were not separately reported in that session.",
- "Open DOOM diagnostics opens the launch/probe/audit log folder and probe-results subfolder. Game log diagnostics also reads the KHARVOX main log and bridge logs as historical evidence.",
- "Keep the DOOM window focused. Review upstream guidance before changing graphics quality in a loaded level.",
+  "With your headset connected, click Launch DOOM VR. The Hub uses its isolated runner with your existing Heroic GOG game environment.",
+  "In KHARVOX, select the complete GOG DOOM installation, keep SFS selected and choose Launch Game. Keep the DOOM window focused.",
+  "Load a campaign save and check VR rendering, depth, tracking and controllers. Review the author guidance before changing graphics quality in a loaded level.",
+  "If something fails, enable Extended Logging in KHARVOX and use Open DOOM diagnostics or Game log diagnostics.",
 ]
 good_to_know = [
- "The dated gameplay reference covers KHARVOX 1.4, SFS and isolated lab 0.1.6 on one CachyOS/WiVRn/NVIDIA setup. A synthetic bridge pass does not verify current headset rendering or gameplay.",
- "Launch DOOM (flat) remains a normal Heroic launch. Other games and local gameplay-test history are not rewritten by this profile.",
- "Windows Vulkan-layer activation stays in KHARVOX's child process. Do not add its Windows DLL to host Linux Vulkan layer paths.",
+  "KHARVOX 1.4 with SFS and lab 0.1.6 passed on one CachyOS/WiVRn/NVIDIA setup. Bridge testing alone does not confirm gameplay.",
+  "A standalone session lasted 40 minutes; later rc1 testing confirmed stereo depth and controller input, but individual bindings were not separately tested.",
+  "Launch DOOM (flat) still uses Heroic normally. Do not add KHARVOX's Windows Vulkan DLL to Linux system Vulkan paths.",
 ]
+[[guide_links]]
+label = "KHARVOX 1.4"
+url = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"
+
+[[guide_links]]
+label = "KHARVOX guide and controls"
+url = "https://github.com/CactusVRStudios/KHARVOX"
+
 [[updates]]
 name = "KHARVOX"
 github = "CactusVRStudios/KHARVOX"

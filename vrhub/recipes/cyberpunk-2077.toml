@@ -9,30 +9,31 @@ nexus_game = "cyberpunk2077"
 track_component_updates = true
 
 setup = [
-  "Check that the plain game runs under Proton first.",
-  "Once only: enable the 'version' DLL override so CET and friends load under Proton. Run: protontricks 1091500 --gui, pick the default wineprefix, Run winecfg, open the Libraries tab, add 'version', then Apply (the method on the Red Modding wiki's CET Linux page).",
-  "Download the MAIN file of every mod in the checklist below (the links open each Nexus page; a free account is needed). Mods 1-14 first; the VR port (last row) comes later. Skip any 'test' or 'optional' files, and keep the file names Nexus gives you: the hub tells the mods apart by the number in the name.",
-  "In Install / Update, scan local archives. Use More installation tools > Choose archives manually… for the deliberate batch of mods 1-14. The Hub reviews the order, destinations and backup policy before any authorized installation.",
-  "Make sure the checklist says READY, then start the game once WITHOUT VR so the mod loaders create their files, and quit.",
-  "Download the CyberpunkVR Port (last row), rescan, select that dependency and review installation. The existing Stage 2 gate applies.",
+  "Launch the unmodified game once using Proton. This guide covers the older tested CyberpunkVR Port v0.1.7 workflow for patch 2.31; newer releases need separate compatibility review.",
+  "Enable the version DLL override using protontricks 1091500 --gui: choose the default wineprefix, run winecfg, open Libraries, add version and apply. Copy the Hub launch options into Steam Properties > General.",
+  "Download the main files for prerequisite mods 1–14 from the checklist source pages. Keep their original Nexus filenames; do not select optional or test files.",
+  "In Install / Update, scan local archives. Use More installation tools > Choose archives manually… to review the batch of prerequisites. Review destinations and backups before approval.",
+  "Once the prerequisite checklist is READY, launch the game without VR and quit so the mod loaders can finish their first setup.",
+  "Download the supported CyberpunkVR Port (last checklist entry), scan again, select it and review installation. Stage 2 remains blocked until its requirements are met.",
 ]
 
 play = [
-  "Start WiVRn and connect the Quest first (the mod wants the OpenXR runtime running before the game).",
-  "Launch Cyberpunk 2077 from Steam. The mod describes a pre-launch picker for headset and resolution; whether it appears under Proton is unverified.",
-  "In game: F10 opens the in-headset settings overlay, F7 recenters, F8 switches the VR menu between full view and a small panel. Start with the mod's supplied VR graphics preset.",
+  "Start WiVRn and connect your headset before launching Cyberpunk 2077 through Steam.",
+  "Use the supplied VR graphics preset. The author's pre-launch headset picker has not been verified under Proton.",
+  "F10 opens settings, F7 recenters, and F8 changes the VR menu view in the tested build.",
+  "If VR stays flat, in loaded gameplay turn off General > VR menu quad, HUD > Enable HUD panel and HUD > World-space interactions / dialogs. Close F10 completely before checking immersion.",
 ]
 
 good_to_know = [
-  "Experimental community mod (v0.1.7), tested by its author on Windows with a PICO 4. Linux/Proton support isn't documented, though its Nexus changelog includes a fix for something that only broke under Proton. A user-reported CachyOS/WiVRn immersive test succeeded with the documented HUD-panel workaround; full stability remains unverified.",
-  "The launch options above are the usual Proton setup (version DLL override + OpenXR runtime visibility) but are unverified for this mod.",
-  "Remove any other VR injector first (for example R.E.A.L. VR's dxgi.dll in bin/x64). Two VR mods on the same engine hooks crash the game.",
-  "If it crashes: check dependency versions (Codeware must be 1.20+) and read bin/x64/cyberpunkvrport.log and red4ext/logs.",
-  "This build targets game patch 2.31. Game updates can break RED4ext mods.",
-  "The launch options start with a small guard (vrhub-check). It refuses to start the game if a required mod is missing or damaged, and tells you which. Add VRHUB_SKIP_CHECK=1 at the start of the launch options to bypass it.",
-  "Mods 11-14 are labelled by Nexus number until the hub can look up their names. Enter your Nexus API key in the hub and the names fill in.",
-  "'Uninstall mod' removes everything installed through the hub for this game, dependencies included. Steam's 'Verify integrity of game files' restores the vanilla files.",
+  "Experimental: immersion was confirmed with the HUD workaround, but stereo depth, longer sessions and restoring HUD features remain untested.",
+  "Remove other VR injectors using their original removal instructions before installing. Codeware must be 1.20 or newer for this workflow.",
+  "If the game fails to start, check the required mods and game logs. Do not bypass the Hub readiness guard as a normal setup step.",
+  "Newer CyberpunkVR Port releases need review; do not assume they work with this guide. Uninstall through the Hub only after reviewing backups. Steam verification does not remove every extra mod file.",
 ]
+
+[[guide_links]]
+label = "CyberpunkVR Port"
+url = "https://www.nexusmods.com/cyberpunk2077/mods/30093"
 
 [[components]]
 nexus_mod = 107
