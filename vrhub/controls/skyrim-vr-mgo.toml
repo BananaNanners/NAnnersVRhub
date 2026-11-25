@@ -1,9 +1,9 @@
 id = "skyrim-vr-mgo"
-title = "Skyrim VR — Mad God’s Overhaul"
-scope = "MGO 3.8: right-handed Vanilla Quest / Touch layout with the user-confirmed trigger-ready exception. Triggers do not draw or ready sheathed weapons; normal combat and casting remain available once weapons or spells are readied."
-version = "MGO 3.8 · Vanilla + trigger-ready exception"
-reviewed = "2026-10-20"
-notes = ["This reference replaces the previous VRIK V2.1.0 example with the Vanilla layout reviewed and approved by the user on October 20, 2026.", "Trigger-ready exception: pressing either trigger while weapons are sheathed must not draw or ready them. Once readied, triggers retain their normal combat, power-attack and spell-casting actions.", "This is the requested guide layout, not a scan or automatic change of the installed game bindings. Keep the separate active MGO/OpenComposite preset and mod settings consistent with your chosen layout.", "Plain Vanilla is different from Vanilla + Oculus Touch, VRIK, Kvite, Cangar and VR Safe. Other presets or left-handed settings may differ.", "The successful MGO test confirmed VR/controllers overall. This review does not create a new gameplay test or certify every listed action."]
+title = "Skyrim VR Mad God Overhaul - NSFW"
+scope = "MGO 3.8.8.1: right-handed Vanilla Quest / Touch layout with the user-confirmed trigger-ready exception. Triggers do not draw or ready sheathed weapons; normal combat and casting remain available once weapons or spells are readied."
+version = "MGO 3.8.8.1 · Vanilla + trigger-ready exception"
+reviewed = "2026-11-25"
+notes = ["This reference replaces the previous VRIK V2.1.0 example with the Vanilla layout reviewed and approved by the user on October 20, 2026.", "Trigger-ready exception: pressing either trigger while weapons are sheathed must not draw or ready them. Once readied, triggers retain their normal combat, power-attack and spell-casting actions.", "This is the requested guide layout, not a scan or automatic change of the installed game bindings. Keep the separate active MGO/OpenComposite preset and mod settings consistent with your chosen layout.", "Plain Vanilla is different from Vanilla + Oculus Touch, VRIK, Kvite, Cangar and VR Safe. Other presets or left-handed settings may differ.", "The successful MGO test confirmed VR/controllers overall. This review does not create a new gameplay test or certify every listed action.", "The player-approved Vanilla layout is retained. Current MGO documentation describes other presets; do not substitute them for this layout. Mod controls below are conditional references for mods enabled in the reviewed 3.8.8.1 MO2 list, not a scan of their active settings."]
 
 [sources.local]
 label = "User-reviewed layout · Oct 20, 2026"
@@ -12,13 +12,23 @@ user_report = true
 
 [sources.upstream]
 label = "MGO OpenComposite preset guide"
-detail = "Documents plain Vanilla as a separate preset; does not establish the active preset or the custom trigger exception."
+detail = "Current MGO documentation distinguishes plain Vanilla from alternative presets; not an exact archived 3.8 mapping."
 url = "https://synergyvr.org/mgo/performance/open-composite/index.html"
 
 [sources.higgs]
 label = "HIGGS author guide"
 detail = "Hand interaction is affected by HIGGS configuration and selected controller bindings."
 url = "https://www.nexusmods.com/skyrimspecialedition/mods/43930"
+
+[sources.mgo_controls]
+label = "MGO controller schemes"
+detail = "Current MGO preset reference; not a replacement for the approved Vanilla layout."
+url = "https://synergyvr.org/mgo/controls/index.html"
+
+[sources.mgo_mods]
+label = "MGO Mod Keybindings"
+detail = "Current community reference to mod defaults. The listed mods are enabled in the reviewed 3.8.8.1 MO2 profile; exact installed settings and version-specific defaults are not independently verified."
+url = "https://synergyvr.org/mgo/controls/mod-keybindings/"
 
 [[sections]]
 name = "Movement · Vanilla"
@@ -159,15 +169,70 @@ source = "local"
 name = "Physical interaction"
 
 [[sections.bindings]]
-input = "HIGGS grab input"
-action = "Grab / pull nearby objects"
-note = "Check HIGGS settings and the active preset for grip/trigger selection."
+input = "Grip near object"
+action = "HIGGS: grab object"
+note = "Quest grip input; hand state and HIGGS settings can change behavior."
 evidence = "dependent"
-source = "higgs"
+source = "mgo_mods"
 
 [[sections.bindings]]
-input = "VRIK / Spell Wheel gestures"
-action = "Holsters, spells and quick selection"
-note = "These mod-specific assignments remain controlled by the installed profile and MCM settings."
+input = "Grip or trigger + pull"
+action = "HIGGS: gravity gloves"
+note = "Select at distance, hold and pull; depends on hand state."
 evidence = "dependent"
-source = "local"
+source = "mgo_mods"
+
+[[sections]]
+name = "Holsters and spell selection"
+
+[[sections.bindings]]
+input = "Grip near holster"
+action = "VRIK: draw / store weapon"
+note = "Pull to draw; holster placement and assignments depend on configuration."
+evidence = "dependent"
+source = "mgo_mods"
+
+[[sections.bindings]]
+input = "Hold grip near holster"
+action = "VRIK: reposition holster"
+note = "Use configured holster settings."
+evidence = "dependent"
+source = "mgo_mods"
+
+[[sections.bindings]]
+input = "Grip then trigger · same hand"
+action = "Spell Wheel VR: open wheel"
+note = "Documented default chord; verify MCM settings."
+evidence = "dependent"
+source = "mgo_mods"
+
+[[sections.bindings]]
+input = "Point at orb + release wheel controls"
+action = "Spell Wheel VR: select orb"
+note = "Release the activation controls to select."
+evidence = "dependent"
+source = "mgo_mods"
+
+[[sections]]
+name = "Archery and map"
+
+[[sections.bindings]]
+input = "Right trigger over shoulder"
+action = "Simple Realistic Archery VR: equip last arrow"
+note = "Documented default; check installed settings."
+evidence = "dependent"
+source = "mgo_mods"
+
+[[sections.bindings]]
+input = "Left trigger · local map"
+action = "Local Map Upgrade VR: place marker"
+note = "Only in local map context."
+evidence = "dependent"
+source = "mgo_mods"
+
+[[sections.bindings]]
+input = "Right trigger · local map"
+action = "Local Map Upgrade VR: move map"
+note = "Only in local map context."
+evidence = "dependent"
+source = "mgo_mods"

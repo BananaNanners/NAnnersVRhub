@@ -2,8 +2,8 @@ id = "hogwarts-legacy"
 title = "Hogwarts Legacy — HL UEVR"
 scope = "Heroic/Epic workflow with the matching HL profile. Gesture features are optional; enable them in the profile before using them."
 version = "HL_UEVR v2.0.6"
-reviewed = "2026-10-20"
-notes = ["Glyph drawing requires the spell to have been learned. Gesture-cast spells need not occupy the four active spell slots.", "Voice casting, mount steering, healing, Protego/Stupefy gestures and body tracking remain unverified on this Linux setup.", "The tested Heroic one-click injector route is unchanged. This guide does not alter the installed profile or its settings."]
+reviewed = "2026-11-25"
+notes = ["Glyph drawing requires the spell to have been learned. Gesture-cast spells need not occupy the four active spell slots.", "Voice casting, mount steering, healing, Protego/Stupefy gestures and body tracking remain unverified on this Linux setup.", "The tested Heroic one-click injector route is unchanged. This guide does not alter the installed profile or its settings.", "The final Fastidio challenge intentionally reverses left-stick direction; this is not a controller fault.", "The reviewed guide remains for v2.0.6, not the blocked v2.1.0 update."]
 
 [sources.upstream]
 label = "HL v2.0.6 gesture guide"
@@ -44,7 +44,7 @@ name = "Spell gestures"
 input = "Hold left trigger + draw with wand"
 action = "Draw a spell glyph"
 note = "Release the trigger when finished. Gesture casting must be enabled."
-evidence = "default"
+evidence = "dependent"
 source = "upstream"
 
 [[sections.bindings]]
@@ -58,35 +58,35 @@ source = "local"
 input = "Flick wand wrist down"
 action = "Recast the recognized spell"
 note = "The glyph symbol on the right hand identifies the remembered spell."
-evidence = "default"
+evidence = "dependent"
 source = "upstream"
 
 [[sections.bindings]]
 input = "Flick wand wrist up"
 action = "Deactivate Lumos / applicable sustained spell"
 note = "Applies to supported spells such as Lumos and pulling with Accio."
-evidence = "default"
+evidence = "dependent"
 source = "upstream"
 
 [[sections.bindings]]
 input = "Raise left hand · palm outward"
 action = "Protego; hold for Stupefy"
 note = "Optional custom gesture; not locally confirmed."
-evidence = "default"
+evidence = "dependent"
 source = "upstream"
 
 [[sections.bindings]]
 input = "Left grip near mouth"
 action = "Heal"
 note = "Optional gesture; not locally confirmed."
-evidence = "default"
+evidence = "dependent"
 source = "upstream"
 
 [[sections.bindings]]
 input = "Left grip near ear"
 action = "Open inventory"
 note = "Optional gesture; not locally confirmed."
-evidence = "default"
+evidence = "dependent"
 source = "upstream"
 
 [[sections]]
@@ -96,14 +96,14 @@ name = "Mounts"
 input = "Grip mount with either / both hands"
 action = "Enable physical mount steering"
 note = "Optional feature; not locally tested."
-evidence = "default"
+evidence = "dependent"
 source = "upstream"
 
 [[sections.bindings]]
 input = "Tilt gripping hands"
 action = "Steer mount"
 note = "Forward/back changes elevation where supported; side tilt turns."
-evidence = "default"
+evidence = "dependent"
 source = "upstream"
 
 [[sections]]
@@ -120,5 +120,5 @@ source = "uevr"
 input = "Profile/game button prompts"
 action = "Standard button-based spells and menus"
 note = "Use the active profile’s prompts; a complete face-button map has not been verified for this release."
-evidence = "dependent"
+evidence = "unverified"
 source = "uevr"

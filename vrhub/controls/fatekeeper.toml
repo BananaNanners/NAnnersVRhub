@@ -1,14 +1,14 @@
 id = "fatekeeper"
 title = "Fatekeeper — FK UEVR profile"
-scope = "Stock UEVR controller translation plus FK profile 1.0.0. Review remaps if your community build differs."
-version = "FK_UEVR 1.0.0"
-reviewed = "2026-10-20"
-notes = ["Button-by-button FK defaults are source-derived, not a claim that every listed action passed a local test.", "Input Config controls movement orientation and turn settings. Menu and interactive UI modes can change button behavior."]
+scope = "Right-handed FK v1.0.4 reference with stock UEVR translation. Menus, grip ownership and profile settings can change actions."
+version = "FK_UEVR v1.0.4"
+reviewed = "2026-11-25"
+notes = ["General controller operation passed on November 24; individual v1.0.4 actions still need gameplay checks.", "When a grip is already holding an item, it can take priority over shoulder and mouth gestures.", "The author mapping panel names X and B; UEVR can translate physical face buttons differently. Check the active prompts.", "If the UEVR overlay shortcut also opens WayVR, use Insert instead."]
 
 [sources.upstream]
-label = "FK 1.0.0 input script"
-detail = "Profile keyboard/action translation; paired with UEVR’s default Quest button translation."
-url = "https://github.com/jbusfield/FK_UEVR/blob/1.0.0/scripts/main.lua"
+label = "FK v1.0.4 controller mapping"
+detail = "Tagged main.lua mapping panel and input callbacks; physical face-button translation depends on UEVR."
+url = "https://github.com/jbusfield/FK_UEVR/blob/v1.0.4/scripts/main.lua"
 
 [sources.uevr]
 label = "UEVR default bindings"
@@ -20,80 +20,137 @@ label = "User report · Oct 18, 2026"
 detail = "Insert closed the in-game overlay and restored immersion with 2D Screen Mode off. The controller overlay combination also opened WayVR. The user corrected the combination to L2 + R3 on October 20."
 user_report = true
 
+[sources.gameplay]
+label = "Dev5E5 gameplay acceptance · Nov 24, 2026"
+detail = "Both controllers worked after the verified backend was installed; no individual v1.0.4 binding certification."
+user_report = true
+
 [[sections]]
 name = "Movement"
 
 [[sections.bindings]]
 input = "Left thumbstick"
 action = "Move"
-note = "FK profile translates this to movement keys."
-evidence = "default"
-source = "upstream"
-
-[[sections.bindings]]
-input = "Right thumbstick left / right"
-action = "Turn"
-note = "UEVR snap / smooth-turn settings apply."
-evidence = "default"
+note = "Standard movement; orientation follows the active profile."
+evidence = "dependent"
 source = "uevr"
 
 [[sections.bindings]]
-input = "L3 · left stick click"
-action = "Toggle sprint"
-note = "Profile stops sprinting when movement stops."
+input = "Right stick left / right"
+action = "Turn"
+note = "Snap or smooth follows UEVR settings."
+evidence = "dependent"
+source = "uevr"
+
+[[sections.bindings]]
+input = "Right stick forward"
+action = "Jump"
+note = "Author mapping."
 evidence = "default"
 source = "upstream"
 
 [[sections.bindings]]
-input = "Right stick up / down"
-action = "Jump / dodge"
-note = "FK profile default."
+input = "Right stick backward + left stick direction"
+action = "Dodge"
+note = "Choose dodge direction with movement stick."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Check game/profile prompts"
+action = "Sprint"
+note = "The v1.0.4 mapping panel no longer lists the older L3 sprint shortcut."
+evidence = "unverified"
+source = "upstream"
+
+[[sections]]
+name = "Combat"
+
+[[sections.bindings]]
+input = "Right-hand swing"
+action = "Melee attack"
+note = "Physical swing with the weapon hand."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Hold right trigger + swing"
+action = "Heavy attack"
+note = "Hold while swinging."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left trigger"
+action = "Cast spell"
+note = "Documented spell input; grip gestures are separate."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Hold right grip"
+action = "Block"
+note = "An item grab can take priority."
 evidence = "default"
 source = "upstream"
 
 [[sections.bindings]]
 input = "R3 · right stick click"
-action = "Secondary interaction / kick"
-note = "Uses the game’s mapped SecondaryInteract action."
+action = "Kick"
+note = "Author mapping."
 evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right grip over right shoulder"
+action = "Change weapon"
+note = "Grip gesture; item ownership can take priority."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "X (author gamepad label)"
+action = "Weapon / spell wheel"
+note = "Physical Touch button depends on UEVR translation."
+evidence = "dependent"
 source = "upstream"
 
 [[sections]]
-name = "Combat and interaction"
+name = "Items and inventory"
 
 [[sections.bindings]]
-input = "A · right hand"
-action = "Interact"
-note = "Uses the game’s mapped Interact action."
+input = "Grip hovered item with empty hand"
+action = "Pick up item"
+note = "Release over shoulder to store; release elsewhere to drop."
 evidence = "default"
 source = "upstream"
 
 [[sections.bindings]]
-input = "Left grip / right grip"
-action = "Cast selected spell / block or parry"
-note = "Assumes stock UEVR grip → shoulder-button mapping."
+input = "Left grip near mouth"
+action = "Use slot 1"
+note = "Item grab can take priority."
 evidence = "default"
 source = "upstream"
 
 [[sections.bindings]]
-input = "B · right hand · tap / hold"
-action = "Switch weapon / alternate switch action"
-note = "Stock UEVR maps right B to XInput X; FK sends C / T."
+input = "Left menu button · tap"
+action = "Open menu"
+note = "Runtime menu-button routing may differ."
+evidence = "dependent"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left menu button · hold 2 seconds or left grip over left shoulder"
+action = "Open inventory"
+note = "Gesture may depend on grip ownership."
 evidence = "default"
 source = "upstream"
 
 [[sections.bindings]]
-input = "Y · left hand"
-action = "Change spell"
-note = "Stock UEVR maps this to XInput Y."
-evidence = "default"
-source = "upstream"
-
-[[sections.bindings]]
-input = "Weapon swing"
-action = "Melee attack"
-note = "Profile detects swipe gestures; target and trigger state affect the attack."
-evidence = "default"
+input = "B (author gamepad label)"
+action = "Cancel / exit"
+note = "Check physical Touch mapping in UEVR."
+evidence = "dependent"
 source = "upstream"
 
 [[sections]]

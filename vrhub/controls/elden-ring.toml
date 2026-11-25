@@ -2,8 +2,8 @@ id = "elden-ring"
 title = "Elden Ring — ERVR"
 scope = "Quest / Touch defaults from the inspected ERVR 0.4.0 archive. Physical first-person combat and button mode differ; no local Linux gameplay test is recorded."
 version = "ERVR 0.4.0 · experimental Steam / Proton / WiVRn"
-reviewed = "2026-10-20"
-notes = ["Offline / EAC-disabled play only. This controller reference does not configure or verify the launch route.", "Full stereo is evaluated in a loaded offline save; title screens, menus, loading and cutscenes intentionally use cinema.", "ERVR.ini has no in-headset settings menu in this version. Review [Buttons], [MenuNav], [Movement] and [Combat] for customization. The confusingly named LeftGripPlusStickIsDpad setting is documented in this archive as left-stick click + tilt, not grip + tilt.", "Normal game menus suppress physical swing combat and use the left stick for navigation. Mount, full-body, weapon-specific and gesture behavior need separate local tests."]
+reviewed = "2026-11-25"
+notes = ["Offline / EAC-disabled play only. This controller reference does not configure or verify the launch route.", "Full stereo is evaluated in a loaded offline save; title screens, menus, loading and cutscenes intentionally use cinema.", "ERVR.ini has no in-headset settings menu in this version. Review [Buttons], [MenuNav], [Movement] and [Combat] for customization. The confusingly named LeftGripPlusStickIsDpad setting is documented in this archive as left-stick click + tilt, not grip + tilt.", "Normal game menus suppress physical swing combat and use the left stick for navigation. Mount, full-body, weapon-specific and gesture behavior need separate local tests.", "The original 0.4.0 archive was rechecked on November 25. Button mode uses the configured gamepad mappings; physical combat settings can change their effect."]
 
 [sources.archive]
 label = "Inspected ERVR 0.4.0 archive"
@@ -96,7 +96,7 @@ source = "archive"
 [[sections.bindings]]
 input = "Left stick in menu"
 action = "Navigate / auto-repeat"
-note = "Automatic menu mode; physical swings are muted while a menu is open."
+note = "Automatic menu mode; swings are muted. The map is excluded: stick pans the map."
 evidence = "default"
 source = "archive"
 

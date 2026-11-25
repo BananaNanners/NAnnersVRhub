@@ -9,7 +9,7 @@ import tomllib
 from urllib.parse import urlparse
 
 GUIDES = Path(__file__).with_name("controls")
-EVIDENCE = {"tested": "User tested", "default": "Mod default", "dependent": "Profile dependent"}
+EVIDENCE = {"tested": "User tested", "default": "Mod default", "dependent": "Profile dependent", "unverified": "Unverified"}
 
 
 def load(recipe_id):
@@ -81,8 +81,8 @@ def html(guide, query="", category="All sections"):
     e = escape
     parts = [f'<h2>{e(guide["title"])}</h2>', f'<p>{e(guide["scope"])}</p>',
              f'<p style="color:#A7ADB7">{e(guide["version"])} · Reviewed {e(guide["reviewed"])}</p>',
-             '<p><b>Evidence:</b> User tested = reported on this setup; Mod default = documented mapping; '
-             'Profile dependent = review the selected preset. Current bindings are not scanned.</p>']
+             '<p><b>Evidence:</b> User tested = specific action reported working; Mod default = author-documented mapping; '
+             'Profile dependent = review the selected preset or optional setting; Unverified = exact mapping not established. Current bindings are not scanned.</p>']
     sections = filtered_sections(guide, query, category)
     if not sections:
         parts.append('<p><b>No matching controls.</b> Clear the search or choose another section.</p>')

@@ -2,7 +2,7 @@ id = "valheim"
 title = "Valheim — VHVR"
 scope = "Default Oculus Touch / Quest layout. Right-handed build controls; custom bindings or handedness settings can differ."
 version = "VHVR 0.11.2"
-reviewed = "2026-10-20"
+reviewed = "2026-11-25"
 notes = ["User reported successful basic building and both controllers during at least 30 minutes of gameplay; this does not establish that every listed combination works.", "Rotation remains a follow-up test. If the right-grip + stick combination does not work, report it; do not replace the tested bindings blindly.", "Steam Compatibility must select Proton for this game. Steam Linux Runtime uses the native Linux build even if a global Proton preference is set."]
 
 [sources.upstream]
@@ -43,6 +43,13 @@ source = "upstream"
 input = "A · right hand"
 action = "Jump"
 note = "Outside building modifier context."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left trigger + A"
+action = "Dodge"
+note = "Documented combination; not separately tested."
 evidence = "default"
 source = "upstream"
 
@@ -104,7 +111,7 @@ name = "Building"
 [[sections.bindings]]
 input = "Hold right grip + right stick left / right"
 action = "Rotate the selected piece"
-note = "Equip hammer, choose a piece and close the selection menu. NOT YET confirmed on this WiVRn/xrizer setup."
+note = "Left rotates clockwise; right counterclockwise. Equip hammer, choose a piece and close selection menu. NOT YET confirmed on this WiVRn/xrizer setup."
 evidence = "default"
 source = "upstream"
 
@@ -127,4 +134,21 @@ input = "In-game Compendium"
 action = "Motion and advanced building guidance"
 note = "Use the installed version’s instructions for snapping, gestures and advanced rotation."
 evidence = "dependent"
+source = "upstream"
+
+[[sections]]
+name = "Map and inventory shortcuts"
+
+[[sections.bindings]]
+input = "Grip + trigger on same hand"
+action = "Add map pin / discard item"
+note = "Depends on active map or inventory context; not separately tested."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Grip + opposite-hand trigger"
+action = "Split inventory stack"
+note = "Inventory context; not separately tested."
+evidence = "default"
 source = "upstream"

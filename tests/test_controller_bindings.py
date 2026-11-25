@@ -30,6 +30,30 @@ class ControllerGuidesTests(unittest.TestCase):
         self.assertTrue(all(r['evidence'] == 'dependent' for s in guide['sections'] for r in s['bindings']))
         self.assertIn('3.8', guide['scope'])
 
+    def test_reviewed_mgo_name_version_and_contextual_mod_controls(self):
+        guide = controls.load('skyrim-vr-mgo')
+        self.assertEqual(guide['title'], 'Skyrim VR Mad God Overhaul - NSFW')
+        self.assertIn('3.8.8.1', guide['version'])
+        rows = [r for sec in guide['sections'] for r in sec['bindings']]
+        self.assertEqual(next(r for r in rows if r['action']=='Activate / interact')['input'], 'A · right hand')
+        self.assertEqual(next(r for r in rows if r['action']=='Ready / sheathe weapons')['input'], 'Left grip')
+        self.assertEqual(next(r for r in rows if r['action']=='Shout / power')['input'], 'Right grip')
+        self.assertTrue(any(r['action']=='Does not draw or ready weapons' for r in rows))
+        for mod in ('HIGGS', 'VRIK', 'Spell Wheel VR', 'Simple Realistic Archery VR', 'Local Map Upgrade VR'):
+            self.assertTrue(controls.filtered_sections(guide, mod))
+        self.assertTrue(all(r['evidence']=='dependent' for r in rows))
+        self.assertIn('https://synergyvr.org/mgo/controls/mod-keybindings/', controls.plain_text(guide))
+
+    def test_corrected_fatekeeper_and_unverified_evidence(self):
+        guide = controls.load('fatekeeper')
+        self.assertIn('v1.0.4', guide['version'])
+        rows = [r for sec in guide['sections'] for r in sec['bindings']]
+        self.assertEqual(next(r for r in rows if r['action']=='Cast spell')['input'], 'Left trigger')
+        self.assertEqual(next(r for r in rows if r['action']=='Sprint')['evidence'], 'unverified')
+        self.assertIn('Unverified', controls.plain_text(guide))
+        self.assertTrue(controls.filtered_sections(guide, 'unverified sprint'))
+        self.assertTrue(any(r['evidence']=='tested' and 'WayVR' in r['action'] for r in rows))
+
     def test_subnautica_keeps_stock_pda_and_tested_drag_without_failed_override(self):
         guide = controls.load('subnautica')
         rows = [r for s in guide['sections'] for r in s['bindings']]

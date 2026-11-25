@@ -2,7 +2,7 @@ id = "cyberpunk-2077"
 title = "Cyberpunk 2077 — CyberpunkVR Port"
 scope = "Right-handed on-foot defaults from the port. Native Controller remaps and mod settings can override them."
 version = "CyberpunkVR Port 0.1.7"
-reviewed = "2026-10-20"
+reviewed = "2026-11-25"
 notes = ["Successful local workaround: F10 → General → VR menu quad OFF; HUD → Enable HUD panel OFF; World-space interactions / dialogs OFF. Close F10 completely.", "The menu/passthrough limitation remains. The presence of this guide does not change the experimental compatibility status.", "Consult the port’s Bindings page and native Controller settings for the active mapping."]
 
 [sources.upstream]
@@ -11,8 +11,8 @@ detail = "Maintainer README: on-foot and driving defaults. Individual mappings h
 url = "https://github.com/dariulone/cyberpunk-vr-port/blob/0.1.7/README.md"
 
 [sources.local]
-label = "User report · Oct 18, 2026"
-detail = "Immersive rendering, tracking, controllers and stereo passed; menu/HUD workaround required."
+label = "User report · Oct 17, 2026"
+detail = "Historical report on October 17 confirmed immersion after disabling menu/HUD panels and closing F10; individual bindings and stereo-depth validation not established by that report."
 user_report = true
 
 [[sections]]
@@ -106,6 +106,51 @@ evidence = "default"
 source = "upstream"
 
 [[sections]]
+name = "Scanner and cyberware"
+
+[[sections.bindings]]
+input = "Left stick fully up / down · scanner open"
+action = "Page quickhack list"
+note = "Scanner context."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "X · scanner open"
+action = "Apply selected quickhack"
+note = "Uses current controller mapping."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Right trigger · scanner open"
+action = "Tag target"
+note = "Does not fire in scanner context."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "R3 · scanner open"
+action = "Change scanner tab"
+note = "Contextual action."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left trigger + right stick · scanner open"
+action = "Zoom scanner"
+note = "Contextual action."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "L3 + left grip · hold 0.5 s"
+action = "Activate iconic cyberware"
+note = "Requires Input Loader."
+evidence = "default"
+source = "upstream"
+
+[[sections]]
 name = "Driving"
 
 [[sections.bindings]]
@@ -126,6 +171,13 @@ source = "upstream"
 input = "Hold X"
 action = "Exit vehicle"
 note = "A hold, not a tap."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Hand at wheel center"
+action = "Horn"
+note = "Hand must not already be gripping wheel."
 evidence = "default"
 source = "upstream"
 
@@ -154,8 +206,22 @@ evidence = "default"
 source = "upstream"
 
 [[sections.bindings]]
-input = "Close game menu"
+input = "Disable affected panels + close F10"
 action = "Return from passthrough to immersive gameplay"
-note = "Reported limitation; opening the game menu can show passthrough."
+note = "Turn off VR menu quad, HUD panel and world-space interactions/dialogs; close F10 completely."
 evidence = "tested"
 source = "local"
+
+[[sections.bindings]]
+input = "F8 · keyboard"
+action = "Toggle VR menu panel size"
+note = "Full headset view or small panel."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left menu button"
+action = "Pause"
+note = "Touch default."
+evidence = "default"
+source = "upstream"

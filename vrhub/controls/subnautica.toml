@@ -2,7 +2,7 @@ id = "subnautica"
 title = "Subnautica — SubmersedVR"
 scope = "Stock Oculus Touch / Quest bindings. The user reverted the experimental Menu/PDA override and prefers this layout."
 version = "SubmersedVR 0.2.1"
-reviewed = "2026-10-20"
+reviewed = "2026-11-25"
 notes = ["The in-game binding editor was reported to get stuck waiting for input without a working cancel. Keep stock bindings for this tested setup.", "Y → UIAssign did not work in the external-binding experiment. Use the tested A-drag method instead.", "The Meta system button is reserved by the headset. The failed system-button PDA experiment is not part of this guide."]
 
 [sources.upstream]
@@ -102,6 +102,13 @@ source = "upstream"
 input = "Right thumbstick"
 action = "Scroll inventory UI"
 note = "When a scrollable UI is active."
+evidence = "default"
+source = "upstream"
+
+[[sections.bindings]]
+input = "Left trigger"
+action = "Left-hand action"
+note = "Depends on tool and context."
 evidence = "default"
 source = "upstream"
 
