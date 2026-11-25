@@ -261,19 +261,36 @@ def production_journal(scope):
     record = _ledger(scope)
     digest = tx._digest(raw)
     if raw is None:
-        if record is not None and not (record['staging'] and record['current'] is None):
-            raise RuntimeError('Missing authorized production journal; manual review required.')
+        if record is not None:
+            if record['next'] is not None:
+                raise RuntimeError('Pending initial production journal transition; manual review required.')
+            if not (record['staging'] and record['current'] is None):
+                raise RuntimeError('Missing authorized production journal; manual review required.')
         return None, None
     if record is None or digest not in (record['current'], record['next']):
         raise RuntimeError('Production journal lacks authorized transaction provenance; manual review required.')
+    # A durable intent cannot distinguish a crash before publication from
+    # replay of the old journal after publication. Only the intended next
+    # bytes can establish forward progress. Never authorize the old digest.
+    if record['next'] is not None and digest != record['next']:
+        raise RuntimeError('Pending production journal transition; manual review required.')
     destination = tx.Destination(scope.root, scope.prefix, scope.injector,
                                  scope.profile, scope.state, scope.journal_dir)
     parsed = tx._parse_journal(destination, raw)
-    if record['next'] is not None and digest == record['current']:
-        terminal = dict(parsed, phase='rolled-back')
-        if tx._digest(json.dumps(terminal).encode()) == record['next']:
-            raise RuntimeError('Pending terminal production journal transition; manual review required.')
     return digest, parsed
+
+
+def finalize_production_transition(scope, expected):
+    """Accept only observed intended publication, under the transaction lock."""
+    digest, parsed = production_journal(scope)
+    if digest is None or digest != expected:
+        raise RuntimeError('Production journal changed during transition validation.')
+    record = _ledger(scope)
+    if record['next'] is not None:
+        if digest != record['next']:
+            raise RuntimeError('Pending production journal transition; manual review required.')
+        _save_ledger(scope, digest, None)
+    return parsed
 
 
 def begin_production_staging(scope):
@@ -282,11 +299,7 @@ def begin_production_staging(scope):
         raise RuntimeError('Recover the existing Fatekeeper transaction before retrying.')
     record = _ledger(scope)
     if digest is not None:
-        # Do not discard an unresolved transition from a prior operation.
-        if record['next'] is not None:
-            if digest != record['next']:
-                raise RuntimeError('Pending production journal transition; manual review required.')
-            _save_ledger(scope, digest, None)
+        finalize_production_transition(scope, digest)
         return
     for entry in scope.journal_dir.iterdir():
         info = entry.lstat()
@@ -370,7 +383,12 @@ def _record_journal(scope, stage, previous, digest):
     """Write intent before journal, finalize afterward, under transaction lock."""
     record = _ledger(scope)
     if stage == 'before':
-        if record is None:
+        if isinstance(scope, ProductionScope):
+            if (record is None or record['next'] is not None or
+                    record['current'] != previous or
+                    (previous is None and not record['staging'])):
+                raise RuntimeError('Unresolved production provenance transition; manual review required.')
+        elif record is None:
             if previous is not None:
                 raise RuntimeError('Missing authorized transaction provenance.')
         elif ((previous is None and not record['staging']) or

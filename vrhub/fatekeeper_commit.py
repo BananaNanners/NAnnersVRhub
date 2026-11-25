@@ -632,6 +632,8 @@ def recover_live(steam_roots=None, *, scoped_root=None, scoped_token=None):
         if record is None or record["phase"] == "rolled-back":
             raise RuntimeError("No authorized recoverable Fatekeeper transaction exists.")
 
+        auth.finalize_production_transition(scope, binding)
+
         def guard():
             if _live_destination(steam_roots) != destination:
                 raise RuntimeError("Fatekeeper recovery destination changed.")

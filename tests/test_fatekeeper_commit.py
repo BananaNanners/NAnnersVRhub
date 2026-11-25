@@ -232,6 +232,61 @@ class FatekeeperCommitTests(unittest.TestCase):
             auth._save_ledger(scope, record["current"], "0"*64)
         self.production_noop(state, error="Pending production journal transition")
 
+    def test_production_pending_old_digest_rejected(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        path = journal / "fk4-journal.json"
+        old = path.read_bytes()
+        dest = transaction._live_destination(None)
+        with transaction._locked(dest):
+            scope = auth.production_authority(dest)
+            auth._save_ledger(scope, transaction._digest(old), "1"*64)
+        ledger = next(authority.glob("*.json"))
+        before = ledger.read_bytes(), state.read_bytes(), self.config.read_bytes()
+        for call in (lambda: transaction.install_reviewed("review"), transaction.recover_live):
+            with self.assertRaisesRegex(RuntimeError, "Pending production journal transition"):
+                call()
+            self.assertEqual((ledger.read_bytes(), state.read_bytes(), self.config.read_bytes()), before)
+            self.assertEqual(path.read_bytes(), old)
+
+    def test_production_pending_next_publication_recovered(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        original = state.read_bytes()
+        transaction.install_reviewed("review")
+        path = journal / "fk4-journal.json"
+        old = path.read_bytes()
+        next_raw = json.dumps(dict(json.loads(old), phase="recovering")).encode()
+        dest = transaction._live_destination(None)
+        with transaction._locked(dest):
+            scope = auth.production_authority(dest)
+            auth._save_ledger(scope, transaction._digest(old), transaction._digest(next_raw))
+            transaction._write(path, next_raw)
+        transaction.recover_live()
+        self.assertEqual(state.read_bytes(), original)
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+        self.assertEqual(json.loads(path.read_bytes())["phase"], "rolled-back")
+        with transaction._locked(dest):
+            with self.assertRaisesRegex(RuntimeError, "provenance"):
+                transaction._write(path, old)
+                auth.production_journal(scope)
+
+    def test_production_pending_writer_cannot_replace_intent(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        dest = transaction._live_destination(None)
+        with transaction._locked(dest):
+            scope = auth.production_authority(dest)
+            current = auth._ledger(scope)["current"]
+            auth._save_ledger(scope, current, "1"*64)
+            ledger = next(authority.glob("*.json"))
+            before = ledger.read_bytes()
+            with self.assertRaisesRegex(RuntimeError, "Unresolved production provenance"):
+                auth._record_journal(scope, "before", current, "2"*64)
+            self.assertEqual(ledger.read_bytes(), before)
+
     def test_production_staging_retry_preserves_existing_install(self):
         state, journal, authority = self.production_fixture()
         original = state.read_bytes()
@@ -390,13 +445,19 @@ with (patch("pathlib.Path.home", return_value=root / "home"),
       patch("vrhub.fatekeeper_install.prepare_reviewed_install", side_effect=prepare),
       patch.object(tx, "_write", side_effect=write),
       patch.object(auth, "_record_journal", side_effect=record)):
-    if action == "install":
-        tx.install_reviewed("disposable review")
+    if action in {"install", "reject-initial"}:
+        try:
+            tx.install_reviewed("disposable review")
+        except RuntimeError as exc:
+            if action != "reject-initial" or "Pending initial production journal transition" not in str(exc):
+                raise
+        else:
+            assert action != "reject-initial", "initial intent was accepted"
     else:
         try:
             tx.recover_live()
         except RuntimeError as exc:
-            if action != "reject-terminal" or "Pending terminal" not in str(exc):
+            if action != "reject-terminal" or "Pending production journal transition" not in str(exc):
                 raise
         else:
             assert action != "reject-terminal", "terminal replay was accepted"
@@ -444,10 +505,10 @@ assert not tx.live_install_authorized()
         backup = self.state.parent / "fatekeeper-recovery/fk4-backup/state-new"
         retained = backup.read_bytes()
         self.assertEqual(self.state.read_bytes(), original)
-        self.production_child("install")
+        self.production_child("reject-initial")
         self.assertEqual(backup.read_bytes(), retained)
-        self.production_child("recover")
-        self.assert_production_child_restored(original)
+        self.assertEqual(self.state.read_bytes(), original)
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
 
     def test_production_child_applying_publication_recovery(self):
         original = self.production_child_fixture()
