@@ -1,7 +1,7 @@
 ## 0.5.5-dev5F3 — Controller bindings (unreleased)
 
 - Revise nine controller guides, update Fatekeeper v1.0.4, retain approved MGO 3.8.8.1 Vanilla layout and add contextual mod references; distinguish unverified mappings.
-- Full regression: 1676 passed, no skips; installation records unchanged. KDE acceptance pending. See DEV5F3-CONTROLLER-BINDINGS.md.
+- Full regression: 1676 passed, no skips; installation records unchanged. All eleven KDE controller binding acceptance checks passed. See DEV5F3-CONTROLLER-BINDINGS.md.
 
 ## 0.5.5-dev5F2A — DOOM installation workflow (unreleased)
 

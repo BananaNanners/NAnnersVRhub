@@ -30,4 +30,15 @@ regression began. No state restoration. Production gate closed.
 Evidence: ~/NAnnersVRhub-recovery/Dev5F3-evidence-aeDWi6.
 Remaining: original MGO 3.8.8.1 mapping source incomplete; full VRO mapping
 unverified; new individual actions need gameplay confirmation.
-KDE interactive acceptance pending.
+## KDE desktop acceptance — November 25, 2026
+Player confirmed all eleven checks passed: nine game guides, evidence labels,
+and controller interface/navigation. Runtime checkpoint
+e7cb04e01606a7dee29671c25d4e4957c142d4ff, PID 130738, started 05:16:11 PST.
+Previous PID 111139 closed normally. KWin verification at 05:22:32 PST found
+one named current preview, non-modal, not minimized, geometry 1630 x 1087.
+Evidence manifest SHA-256:
+6a0a93c25ed722a06cf71ee1be93f65b89a6d780ddfa90cda60f5dce3dd374b0.
+All three manifest entries reverified. Installation records unchanged; Nexus
+cache differences retained. Production gate closed. Desktop acceptance does
+not certify individual gameplay bindings or authorize production writes.
+Preview remains open. Dev5G is next; release blockers remain outstanding.
