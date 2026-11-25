@@ -326,6 +326,8 @@ def install(recipe: dict, zip_file: Path, steam_roots=None, *,
     from . import hub
     if not confirmed or not approved_fingerprint:
         raise RuntimeError("UEVR profile replacement requires explicit reviewed confirmation.")
+    if recipe.get("id") == "fatekeeper" and (recipe.get("archive_pins") or hub.load_recipes().get("fatekeeper", {}).get("archive_pins")):
+        raise RuntimeError("Use Review installation for the verified Fatekeeper dependency pair.")
     # The Dev5C3 preview must never create even a live-state lock file.
     _assert_execution_gate()
     with _lock():
@@ -396,6 +398,8 @@ def install(recipe: dict, zip_file: Path, steam_roots=None, *,
 def review_restore(recipe_id: str) -> dict:
     """Read-only current-vs-installed and backup checks before confirmation."""
     from . import hub
+    if recipe_id == "fatekeeper:profile" and hub.load_recipes().get("fatekeeper", {}).get("archive_pins"):
+        return {"ready": False, "reason": "Fatekeeper requires paired recovery review; independent profile restoration blocked."}
     state = hub._load_state()
     entry = state.get(recipe_id)
     if not isinstance(entry, dict) or entry.get("installer") != "uevr-profile-2":
@@ -435,6 +439,8 @@ def restore(recipe_id: str, *, confirmed: bool = False) -> list[Path]:
     from . import hub
     if not confirmed:
         raise RuntimeError("Profile restoration requires explicit confirmation.")
+    if recipe_id == "fatekeeper:profile" and hub.load_recipes().get("fatekeeper", {}).get("archive_pins"):
+        raise RuntimeError("Fatekeeper requires paired recovery review; independent profile restoration blocked.")
     _assert_execution_gate()
     with _lock():
         state = hub._load_state()

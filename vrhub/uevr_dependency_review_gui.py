@@ -112,7 +112,11 @@ class DependencyReviewDialog(QDialog):
             self.backup = label(summary)
             status = ("Existing files selected for replacement and Hub records are backed up before writes."
                       if self.has_changes else
-                      "Already compatible with the pinned packages. No file or Hub record writes are needed.")
+                      "No file or Hub record writes are needed.")
+            from .fatekeeper_recognition import summarize_plan, summary_text
+            status = summary_text(summarize_plan(plan)) + "\n" + status
+            if plan.blockers:
+                status += "\n" + "\n".join(plan.blockers)
             self.blockers = label(status)
         else:
             self.backup = label("Backup policy: existing profile requires verified backup and recovery.")

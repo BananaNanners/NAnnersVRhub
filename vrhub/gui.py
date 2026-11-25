@@ -687,6 +687,7 @@ class HubWindow(QMainWindow):
         self.downloads = GuidedDownloadsPage()
         self.downloads.inspect_requested.connect(self.inspect_planned_archive)
         self.downloads.install_review_requested.connect(self.review_requested_install)
+        self.downloads.recognition_changed.connect(self.refresh_compatibility)
         self.downloads.scan_idle.connect(self.close_when_idle)
         self.downloads.download_idle.connect(self.close_when_idle)
         self.install_btn = QPushButton("Review mod archives")
@@ -1253,7 +1254,6 @@ class HubWindow(QMainWindow):
         self.install_btn.hide()
         self.profile_btn.hide()
         self.controller_bindings.set_recipe(r)
-        self.refresh_compatibility()
         verification = hub.verify(r) if r else None
         available = self.update_results.get(r["id"]) if r else None
         checked = self.preflight_results.get(r["id"]) if r else None
@@ -1261,6 +1261,7 @@ class HubWindow(QMainWindow):
             dashboard_snapshot(row, available, verification, checked))
         self.mod_updates.set_recipe(r, available)
         self.downloads.set_recipe(r)
+        self.refresh_compatibility()
         self.downloads.set_online_results(available)
         self.refresh_rollback_summary(r)
         update_count = updates.release_count(available)
@@ -1359,6 +1360,8 @@ class HubWindow(QMainWindow):
             mod_status = "No Hub-managed mod installation record."
         elif installed.get("installer") == "fatekeeper-pair-fk4":
             mod_status = "Recorded Fatekeeper transaction; latest recovery journal requires revalidation."
+        elif recipe["id"] == "fatekeeper" and recipe.get("archive_pins"):
+            mod_status = "Legacy Fatekeeper record: automatic removal blocked; paired recovery review required."
         elif installed.get("installer") == "gameroot-2":
             mod_status = "Recorded game-root install with retained originals; revalidation required."
         else:
@@ -1369,6 +1372,8 @@ class HubWindow(QMainWindow):
             profile_status = "No Hub-managed UEVR profile record."
         elif profile.get("installer") == "fatekeeper-pair-fk4":
             profile_status = "Recorded paired Fatekeeper profile; recovery covers the latest reviewed transaction."
+        elif recipe["id"] == "fatekeeper" and recipe.get("archive_pins"):
+            profile_status = "Legacy Fatekeeper profile: independent restoration blocked; paired recovery review required."
         elif profile.get("installer") == "uevr-profile-2":
             profile_status = "Recorded profile backup; full SHA-256 recheck required before restore."
         else:
@@ -1394,6 +1399,11 @@ class HubWindow(QMainWindow):
             return
         try:
             self.compat_report = compatibility.report(r, _roots())
+            if r["id"] == "fatekeeper" and self.downloads.recipe and self.downloads.recipe["id"] == r["id"]:
+                evidence = self.downloads.recognition_result
+                if evidence:
+                    from .fatekeeper_recognition import summary_text
+                    self.compat_report["checks"].append({"name": "Last explicit pinned dependency verification", "status": "ok" if evidence["status"] == "Verified existing dependencies" else "warning" if evidence["status"] == "Review" else "unknown", "detail": summary_text(evidence) + " Sampled: " + evidence.get("sampled_at", "unavailable") + ". Not a fresh rescan."})
             self.compat_details.setHtml(compatibility.report_html(self.compat_report))
             self.compat_copy_btn.setEnabled(True)
         except (RuntimeError, OSError) as exc:
@@ -1836,6 +1846,9 @@ class HubWindow(QMainWindow):
     def uninstall_profile(self):
         recipe = self.current()
         if not recipe or not recipe.get("profile"):
+            return
+        if recipe["id"] == "fatekeeper" and recipe.get("archive_pins"):
+            self.uninstall()
             return
         key = recipe["id"] + ":profile"
         review = profile_safety.review_restore(key)

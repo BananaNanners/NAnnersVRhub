@@ -785,13 +785,21 @@ def uninstall(recipe_id: str, *, profile_confirm: bool = False) -> list[Path]:
     with state_transaction.locked(state_file()):
         state = _load_state()
         from . import fatekeeper_commit
-        if recipe_id in {"fatekeeper", "fatekeeper:profile"} and (state.get(recipe_id, {}).get(
-                "installer") == "fatekeeper-pair-fk4" or fatekeeper_commit.recovery_notice()):
-            if not profile_confirm:
-                raise RuntimeError("Confirm recovery of the complete Fatekeeper dependency pair.")
-            from . import fatekeeper_commit
-            fatekeeper_commit.recover_live()
-            return []
+        if recipe_id in {"fatekeeper", "fatekeeper:profile"}:
+            paired = any(isinstance(state.get(key), dict) and
+                         state[key].get("installer") == "fatekeeper-pair-fk4"
+                         for key in ("fatekeeper", "fatekeeper:profile"))
+            if paired or fatekeeper_commit.recovery_notice():
+                if not profile_confirm:
+                    raise RuntimeError("Confirm recovery of the complete Fatekeeper dependency pair.")
+                fatekeeper_commit.recover_live()
+                return []
+            # Historical profile-2 records are independently recoverable only
+            # for the older, unpinned recipe. The current pinned pair must never
+            # fall through to either independent profile or generic removal.
+            recipe = load_recipes().get("fatekeeper", {})
+            if recipe_id != "fatekeeper:profile" or recipe.get("archive_pins") or not recipe:
+                raise RuntimeError("Legacy or manual Fatekeeper installation: automatic removal blocked; paired recovery review required. Nothing changed.")
         if recipe_id.endswith(":profile"):
             from . import profile_safety
             return profile_safety.restore(recipe_id, confirmed=profile_confirm)

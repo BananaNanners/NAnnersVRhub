@@ -64,6 +64,7 @@ class InstalledIntegrityWorker(QThread):
         super().__init__(parent)
         self.recipe = dict(recipe)
         self.cancel_flag = Event()
+        self.recognition_archives = ()
 
     def cancel(self):
         self.cancel_flag.set()
@@ -110,6 +111,13 @@ class InstalledIntegrityWorker(QThread):
             if self.cancel_flag.is_set():
                 self.cancelled.emit()
                 return
+            if self.recipe.get("id") == "fatekeeper" and self.recipe.get("archive_pins"):
+                from . import fatekeeper_recognition
+                result["recognition"] = (fatekeeper_recognition.recognize(self.recipe, self.recognition_archives)
+                    if self.recognition_archives else {"status": "Unknown", "detail": "Scan both verified local ZIP archives first."})
+                if self.cancel_flag.is_set():
+                    self.cancelled.emit()
+                    return
             self.done.emit(result)
 
 
@@ -258,6 +266,7 @@ class GuidedDownloadsPage(QWidget):
     scan_idle = Signal()
     download_idle = Signal()
     advanced_availability_changed = Signal()
+    recognition_changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -271,6 +280,7 @@ class GuidedDownloadsPage(QWidget):
         self.download_worker = None
         self.integrity_worker = None
         self._integrity_result = None
+        self.recognition_result = None
         self.allow_transfers = True
         self._download_notice = None  # (game_id, result message, color)
         self._rescan_after_download = False
@@ -692,13 +702,17 @@ class GuidedDownloadsPage(QWidget):
         return planner.scan_folders(self.recipe) if self.recipe else ()
 
     def set_recipe(self, recipe):
+        if self.integrity_worker is not None:
+            self.integrity_worker.cancel()
         if (recipe or {}).get("id") != (self.recipe or {}).get("id"):
             self._comparison_online = None
-            if self.integrity_worker is not None:
-                self.integrity_worker.cancel()
             if self.safety_worker is not None:
                 self.safety_worker.cancel()
         self.recipe = recipe
+        had_recognition = self.recognition_result is not None
+        self.recognition_result = None
+        if had_recognition:
+            self.recognition_changed.emit()
         self._update_backend_install_status()
         self._invalidate_safety_review()
         self.safety_button.setEnabled(bool(recipe))
@@ -1004,6 +1018,13 @@ class GuidedDownloadsPage(QWidget):
         except (ValueError, RuntimeError, OSError) as exc:
             self.summary.setText(f"Cannot scan folders: {exc}")
             return
+        if self.integrity_worker is not None:
+            self.integrity_worker.cancel()
+        if self.recognition_result is not None:
+            self.recognition_result = None
+            self.recognition_changed.emit()
+            self.integrity_status.setText("Installed file integrity: not checked.")
+            self.integrity_details.hide()
         self._folder_feedback("")
         self.summary.setToolTip("")
         self.progress.show()
@@ -1612,6 +1633,8 @@ class GuidedDownloadsPage(QWidget):
         if not self.recipe:
             return
         self.integrity_status.setText(
+            "Checking installed dependencies (read-only). No game-file writes will occur…"
+            if self.recipe.get("id") == "fatekeeper" else
             "Reading recorded installation hashes (read-only). No game-file writes will occur…")
         # Any prior verification is now superseded by this in-progress job.
         self._integrity_result = None
@@ -1620,6 +1643,14 @@ class GuidedDownloadsPage(QWidget):
         self.integrity_details.clear()
         self.integrity_details.hide()
         worker = InstalledIntegrityWorker(self.recipe, self)
+        self.recognition_result = None
+        self.recognition_changed.emit()
+        if self.recipe.get("id") == "fatekeeper":
+            from .fatekeeper_recognition import archives_from_rows
+            try:
+                worker.recognition_archives = archives_from_rows(self.recipe, self._fresh_review_rows() or [])
+            except (OSError, RuntimeError, ValueError):
+                pass
         self.integrity_worker = worker
         self.integrity_button.setText("Cancel verification")
         worker.done.connect(lambda result, token=worker:
@@ -1654,8 +1685,17 @@ class GuidedDownloadsPage(QWidget):
                     f" Required mod presence: {presence.get('ok', 0)}/"
                     f"{presence.get('total', 0)} recorded present "
                     "(presence only; not hash verification).")
+        self.recognition_result = result.get("recognition")
+        if self.recognition_result is not None:
+            from .fatekeeper_recognition import summary_text
+            message = summary_text(self.recognition_result) + " Historical record integrity (separate): " + message
         self.integrity_status.setText(message + " No game-file writes performed.")
+        self.recognition_changed.emit()
         lines = []
+        if self.recognition_result is not None:
+            for component in self.recognition_result.get("components", ()):
+                for name, action in component["issues"][:installed_integrity.MAX_ISSUES_PER_COMPONENT]:
+                    lines.append(f"Current pinned dependency: {component['component']} / {name} — {action} requires review.")
         for row in result["rows"]:
             if row["status"] == "Verified":
                 continue
