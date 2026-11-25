@@ -74,3 +74,14 @@ Global live installation/recovery gate remains closed. No release or push.
   all possible races. Production recovery remains disabled.
 - Remaining: restart-persistent recovery design, latest interactive KDE
   acceptance, production acceptance, packaging and remaining game tests.
+
+## E1 interactive KDE acceptance
+
+Player confirmed all eight desktop checks passed: preview, navigation,
+Install / Update organization, verified backend, existing installation
+recognition, VR System/runtime detection, no extra controls, and closed
+installation/recovery gates. Previous PID 35782 closed normally; exactly
+one new preview PID 75884 observed in KDE, launched from code checkpoint
+c797d59038fae485792ab079dca71e1e3841214c. Stable state hash unchanged.
+Interactive acceptance closes E1, not production authorization.
+Restart-persistent recovery remains pending.

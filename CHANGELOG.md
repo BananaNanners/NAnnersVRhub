@@ -3,7 +3,7 @@
 - Actual 111-file scoped Fatekeeper installation, automatic backend retrieval and independent rollback verified. Steam-native fresh-prefix launch and Quest 3 gameplay passed all nine player checks; successful gameplay shutdown passed all four.
 - Original Steam options restored; Cloud enabled and synchronized per player/local status; 51 protected save/cache files and four working installation/state hashes unchanged.
 - Scoped recovery now requires process-local authorized journal provenance; fabricated or modified journals rejected. Full regression: 1624 passed, one skipped, zero failures/errors.
-- Restart-persistent recovery, final KDE and production acceptance remain pending. Global live gate closed. See DEV5E6-FRESH-INSTALL-ACCEPTANCE.md.
+- All eight E1 KDE desktop checks passed. Restart-persistent recovery and production acceptance remain pending. Global live gate closed. See DEV5E6-FRESH-INSTALL-ACCEPTANCE.md.
 
 ## 0.5.5-dev5E6-A — Injector shutdown investigation (unreleased)
 
