@@ -5,6 +5,26 @@ For every GUI milestone, review the interactive KDE development build with the
 player before requesting acceptance. Report each item below as PASS, FAIL, or
 PENDING, with the exact checkpoint and observed process.
 
+## Player-first language, setup guides and controller bindings
+
+- Write visible labels, buttons, statuses, tooltips, warnings and confirmations
+  in clear everyday language. Explain what happened and what the player should
+  do next. Avoid internal terminology unless necessary; explain essential
+  names such as UEVR, Proton, OpenXR and WiVRn in context.
+- Keep technical details in existing diagnostics, Logs and development tools.
+  Never hide material safety consequences or weaken informed consent.
+- Keep setup guides accurate, short and ordered by the player's actual
+  workflow: named source-page links, required downloads, installation,
+  game-specific settings, headset connection and launch. Avoid redundant
+  steps and manual file placement where the Hub already handles it.
+- Make controller bindings readable and organized by gameplay action. Clearly
+  distinguish documented defaults, preset-dependent mappings and actual
+  player-tested controls; do not infer working controls from telemetry.
+  Include known conflicts and workarounds without inventing mappings.
+- Review player-facing wording and guide accuracy during acceptance.
+  Reuse existing interface and controls; no unnecessary tabs or selectors.
+  Preserve approved behavior, safety gates and historical evidence.
+
 ## Mandatory KDE acceptance checklist
 
 - [ ] Previous development preview identified, or verified absent.

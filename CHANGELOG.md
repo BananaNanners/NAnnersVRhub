@@ -1,3 +1,10 @@
+## 0.5.5-dev5E8 — Production transaction integration (unreleased)
+
+- Integrate persistent authority and safe staging retry into gated Fatekeeper production install/recovery, with existing-install protection.
+- Thirteen new tests; 103 targeted passed, full discovery 1655 tests reported, one skip, zero failures/errors. All 122 sampled live dependency/state files unchanged.
+- Production gate remains closed; reboot durability and remaining activation safeguards pending. No GUI changes. See DEV5E8-PRODUCTION-INTEGRATION.md.
+- Record player-friendly wording, setup guide and controller binding requirements in AGENTS.md.
+
 ## 0.5.5-dev5E7 — Production readiness review (unreleased)
 
 - Add safe scoped staging retry, retained abandoned evidence, fixed disk-backed development authority and duplicate-key rejection.

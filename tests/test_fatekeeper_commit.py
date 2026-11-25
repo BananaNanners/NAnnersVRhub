@@ -85,7 +85,10 @@ class FatekeeperCommitTests(unittest.TestCase):
         state_path = storage / "state.json"
         self.state.rename(state_path)
         original = state_path.read_bytes()
-        with (patch.multiple(hub, _pfx=lambda *_: self.prefix, _uevr_dir=lambda *_: self.injector,
+        home = self.root / "fixture-home"
+        (home / ".local/share").mkdir(parents=True)
+        with (patch("pathlib.Path.home", return_value=home),
+            patch.multiple(hub, _pfx=lambda *_: self.prefix, _uevr_dir=lambda *_: self.injector,
                             profile_dir=lambda *_: self.profile, state_file=lambda: state_path),
             patch.object(profile_safety, "_assert_game_stopped") as stopped,
             patch.object(transaction, "live_install_authorized", return_value=True), patch(
@@ -97,10 +100,266 @@ class FatekeeperCommitTests(unittest.TestCase):
             records = hub._load_state(path=state_path)
             self.assertNotIn(str(self.profile / "custom.ini"), records["fatekeeper:profile"]["files"])
             self.assertTrue((storage / "fatekeeper-recovery/fk4-journal.json").is_file())
+            authority = home / ".local/share/nannersvrhub-transaction-authority"
+            self.assertEqual(len(list(authority.glob("*.json"))), 1)
             hub.uninstall("fatekeeper:profile", profile_confirm=True)
             self.assertEqual(state_path.read_bytes(), original)
             self.assertEqual(self.config.read_bytes(), b"old configuration")
             stopped.assert_called_with("fatekeeper")
+
+    def production_fixture(self, repair=True):
+        prepared = self.prepare(repair)
+        storage = self.root / "hub"
+        storage.mkdir()
+        state = storage / "state.json"
+        if self.state.exists():
+            self.state.rename(state)
+        home = self.root / "fixture-home"
+        (home / ".local/share").mkdir(parents=True)
+        self.enterContext(patch("pathlib.Path.home", return_value=home))
+        self.enterContext(patch.multiple(hub, _pfx=lambda *_: self.prefix,
+            _uevr_dir=lambda *_: self.injector, profile_dir=lambda *_: self.profile,
+            state_file=lambda: state))
+        self.enterContext(patch.object(profile_safety, "_assert_game_stopped"))
+        self.enterContext(patch.object(transaction, "live_install_authorized", return_value=True))
+        self.enterContext(patch("vrhub.fatekeeper_install.prepare_reviewed_install", return_value=prepared))
+        return state, storage / "fatekeeper-recovery", home / ".local/share/nannersvrhub-transaction-authority"
+
+    def test_production_staging_retry_preserves_existing_install(self):
+        state, journal, authority = self.production_fixture()
+        original = state.read_bytes()
+        write = transaction._write
+        def interrupt(path, data, mode=0o600):
+            write(path, data, mode)
+            if path.name == "state-new":
+                raise OSError("staging interruption")
+        with patch.object(transaction, "_write", side_effect=interrupt):
+            with self.assertRaisesRegex(OSError, "staging interruption"):
+                transaction.install_reviewed("review")
+        backup = journal / "fk4-backup/state-new"
+        retained = backup.read_bytes()
+        self.assertEqual(state.read_bytes(), original)
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+        transaction.install_reviewed("review")
+        self.assertEqual(backup.read_bytes(), retained)
+        transaction.recover_live()
+        self.assertEqual(state.read_bytes(), original)
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+        self.assertEqual((self.profile / "custom.ini").read_bytes(), b"player customisation")
+
+    def test_production_staging_retry_fresh(self):
+        state, journal, authority = self.production_fixture(False)
+        write = transaction._write
+        def interrupt(path, data, mode=0o600):
+            write(path, data, mode)
+            if path.name == "state-new":
+                raise OSError("staging interruption")
+        with patch.object(transaction, "_write", side_effect=interrupt):
+            with self.assertRaises(OSError):
+                transaction.install_reviewed("review")
+        self.assertFalse(state.exists())
+        transaction.install_reviewed("review")
+        transaction.recover_live()
+        self.assertFalse(state.exists())
+        self.assertFalse(self.injector.exists())
+        self.assertFalse(self.profile.exists())
+
+    def test_production_missing_authority_refuses_recovery(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        next(authority.glob("*.json")).unlink()
+        before = state.read_bytes()
+        with self.assertRaisesRegex(RuntimeError, "provenance"):
+            transaction.recover_live()
+        self.assertEqual(state.read_bytes(), before)
+        self.assertEqual(self.config.read_bytes(), b"new configuration")
+
+    def test_production_corrupt_authority_refuses_recovery(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        next(authority.glob("*.json")).write_bytes(b"bad JSON")
+        with self.assertRaisesRegex(RuntimeError, "provenance"):
+            transaction.recover_live()
+        self.assertEqual(self.config.read_bytes(), b"new configuration")
+
+    def test_production_redirected_authority_refuses_recovery(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        saved = authority.with_name("saved-authority")
+        authority.rename(saved)
+        authority.symlink_to(saved)
+        with self.assertRaisesRegex(RuntimeError, "storage"):
+            transaction.recover_live()
+        self.assertEqual(self.config.read_bytes(), b"new configuration")
+
+    def test_production_finalized_replay_refused(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        path = journal / "fk4-journal.json"
+        old = path.read_bytes()
+        transaction.recover_live()
+        path.write_bytes(old)
+        with self.assertRaisesRegex(RuntimeError, "provenance"):
+            transaction.recover_live()
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+
+    def test_production_foreign_staging_evidence_refused(self):
+        state, journal, authority = self.production_fixture()
+        journal.mkdir(mode=0o700)
+        foreign = journal / "player-file"
+        foreign.write_bytes(b"keep")
+        with self.assertRaisesRegex(RuntimeError, "staging evidence"):
+            transaction.install_reviewed("review")
+        self.assertEqual(foreign.read_bytes(), b"keep")
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+
+    def production_child_fixture(self):
+        # A disk-backed disposable HOME, with no real Steam tree or Hub state.
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory(
+            prefix="nanners-e8-process-", dir=Path.home())))
+        self.prefix = self.root / "pfx"
+        self.injector = self.prefix / "drive_c/uevr"
+        self.profile = self.prefix / "drive_c/users/steamuser/AppData" / hub.load_recipes()["fatekeeper"]["profile"]["dir"]
+        self.backend = self.injector / "UEVRBackend.dll"
+        self.config = self.profile / "config.txt"
+        self.state = self.root / "hub/state.json"
+        self.state.parent.mkdir()
+        (self.root / "home/.local/share").mkdir(parents=True)
+        self.prepare(True)
+        return self.state.read_bytes()
+
+    def production_child(self, action, interruption="none", expected=0):
+        import subprocess
+        import sys
+        script = r"""
+import os, sys, json
+from pathlib import Path
+from unittest.mock import patch
+from vrhub import fatekeeper_commit as tx, fatekeeper_authorization as auth, hub, profile_safety
+from vrhub.fatekeeper_install import PreparedInstall
+root = Path(sys.argv[1])
+action, interruption = sys.argv[2:]
+assert root.name.startswith("nanners-e8-process-")
+assert root.resolve() == root and root.stat().st_mode & 0o777 == 0o700
+prefix = root / "pfx"
+injector = prefix / "drive_c/uevr"
+profile = prefix / "drive_c/users/steamuser/AppData" / hub.load_recipes()["fatekeeper"]["profile"]["dir"]
+state = root / "hub/state.json"
+journal = state.parent / "fatekeeper-recovery/fk4-journal.json"
+backend = injector / "UEVRBackend.dll"
+config = profile / "config.txt"
+assert not tx.live_install_authorized()
+original_write = tx._write
+original_record = auth._record_journal
+def write(path, data, mode=0o600):
+    original_write(path, data, mode)
+    if interruption == "staging" and path.name == "state-new":
+        os._exit(73)
+    if interruption == "payload" and path == config:
+        os._exit(73)
+    if interruption == "rollback-payload" and path == config and data == b"old configuration":
+        os._exit(73)
+    if path == journal and interruption == json.loads(data)["phase"] + "-published":
+        os._exit(73)
+def record(scope, stage, previous, digest):
+    original_record(scope, stage, previous, digest)
+    if stage == "before" and interruption == "initial-intent" and previous is None:
+        os._exit(73)
+    if stage == "before" and interruption == "terminal-intent":
+        raw, _ = tx._read(journal)
+        if raw is not None:
+            parsed = json.loads(raw)
+            if tx._digest(json.dumps(dict(parsed, phase="rolled-back")).encode()) == digest:
+                os._exit(73)
+def prepare(*args, **kwargs):
+    return PreparedInstall(prefix, profile_safety._snapshot(injector),
+        profile_safety._snapshot(profile), hub._load_state(path=state),
+        {str(config): b"new configuration", str(backend): b"new backend"})
+with (patch("pathlib.Path.home", return_value=root / "home"),
+      patch.multiple(hub, _pfx=lambda *_: prefix, _uevr_dir=lambda *_: injector,
+          profile_dir=lambda *_: profile, state_file=lambda: state),
+      patch.object(profile_safety, "_assert_game_stopped"),
+      patch.object(tx, "live_install_authorized", return_value=True),
+      patch("vrhub.fatekeeper_install.prepare_reviewed_install", side_effect=prepare),
+      patch.object(tx, "_write", side_effect=write),
+      patch.object(auth, "_record_journal", side_effect=record)):
+    if action == "install":
+        tx.install_reviewed("disposable review")
+    else:
+        try:
+            tx.recover_live()
+        except RuntimeError as exc:
+            if action != "reject-terminal" or "Pending terminal" not in str(exc):
+                raise
+        else:
+            assert action != "reject-terminal", "terminal replay was accepted"
+assert not tx.live_install_authorized()
+"""
+        result = subprocess.run([sys.executable, "-B", "-c", script,
+            str(self.root), action, interruption], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+
+    def assert_production_child_restored(self, original):
+        self.assertEqual(self.state.read_bytes(), original)
+        self.assertEqual(self.backend.read_bytes(), b"approved backend already installed")
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+        self.assertEqual((self.profile / "custom.ini").read_bytes(), b"player customisation")
+        journal = self.state.parent / "fatekeeper-recovery/fk4-journal.json"
+        self.assertEqual(json.loads(journal.read_bytes())["phase"], "rolled-back")
+
+    def test_production_child_completed_install_recovery(self):
+        original = self.production_child_fixture()
+        self.production_child("install")
+        self.assertEqual(self.backend.read_bytes(), b"new backend")
+        self.production_child("recover")
+        self.assert_production_child_restored(original)
+
+    def test_production_child_interrupted_install_recovery(self):
+        original = self.production_child_fixture()
+        self.production_child("install", "payload", 73)
+        self.assertEqual(self.config.read_bytes(), b"new configuration")
+        self.assertEqual(self.state.read_bytes(), original)
+        self.production_child("recover")
+        self.assert_production_child_restored(original)
+
+    def test_production_child_interrupted_rollback_resume(self):
+        original = self.production_child_fixture()
+        self.production_child("install")
+        self.production_child("recover", "rollback-payload", 73)
+        journal = self.state.parent / "fatekeeper-recovery/fk4-journal.json"
+        self.assertEqual(json.loads(journal.read_bytes())["phase"], "recovering")
+        self.production_child("recover")
+        self.assert_production_child_restored(original)
+
+    def test_production_child_initial_intent_retry(self):
+        original = self.production_child_fixture()
+        self.production_child("install", "initial-intent", 73)
+        backup = self.state.parent / "fatekeeper-recovery/fk4-backup/state-new"
+        retained = backup.read_bytes()
+        self.assertEqual(self.state.read_bytes(), original)
+        self.production_child("install")
+        self.assertEqual(backup.read_bytes(), retained)
+        self.production_child("recover")
+        self.assert_production_child_restored(original)
+
+    def test_production_child_applying_publication_recovery(self):
+        original = self.production_child_fixture()
+        self.production_child("install", "applying-published", 73)
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+        self.production_child("recover")
+        self.assert_production_child_restored(original)
+
+    def test_production_child_terminal_intent_blocks_replay(self):
+        original = self.production_child_fixture()
+        self.production_child("install")
+        self.production_child("recover", "terminal-intent", 73)
+        self.assertEqual(self.state.read_bytes(), original)
+        journal = self.state.parent / "fatekeeper-recovery/fk4-journal.json"
+        before = journal.read_bytes()
+        self.assertEqual(json.loads(before)["phase"], "recovering")
+        self.production_child("reject-terminal")
+        self.assertEqual(journal.read_bytes(), before)
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
 
     def test_repair_retains_prior_same_root_ownership_only(self):
         from dataclasses import replace

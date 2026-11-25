@@ -119,7 +119,8 @@ def _locked(destination):
         root.mkdir(mode=0o700, exist_ok=True)
         flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
         with os.fdopen(os.open(root / "fk4.lock", flags, 0o600), "rb") as lock:
-            if not stat.S_ISREG(os.fstat(lock.fileno()).st_mode):
+            info = os.fstat(lock.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1:
                 raise RuntimeError("Unsafe Fatekeeper lock.")
             fcntl.flock(lock, fcntl.LOCK_EX)
             yield
@@ -568,19 +569,33 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
                     journal_published=lambda *args: auth._record_journal(scope, *args))
         return [Path(name) for name in prepared.writes]
 
+    from . import fatekeeper_authorization as auth
     destination = _live_destination(steam_roots)
-    prepared = prepare_reviewed_install(review, steam_roots, verified_backend=verified_backend)
-    if _live_destination(steam_roots) != destination:
-        raise RuntimeError("Fatekeeper paths changed while staging. Reopen the review.")
-    if not prepared.writes:
-        with state_transaction.locked(destination.state):
-            path = destination.journal_dir / "fk4-journal.json"
-            profile_safety._safe_destination(path.parent, destination.root)
-            raw, _ = _read(path)
-            if raw is not None and _parse_journal(destination, raw)["phase"] not in {"committed", "rolled-back"}:
-                raise RuntimeError("Recover the existing Fatekeeper transaction before retrying.")
-        return []
-    _commit(destination, prepared, process_guard=lambda: profile_safety._assert_game_stopped("fatekeeper"))
+    with state_transaction.locked(destination.state):
+        prepared = prepare_reviewed_install(review, steam_roots, verified_backend=verified_backend)
+        if _live_destination(steam_roots) != destination:
+            raise RuntimeError("Fatekeeper paths changed while staging. Reopen the review.")
+        # Never create authority for an unreviewed no-op. A pending journal
+        # still blocks it, even when no new files are required.
+        if not prepared.writes:
+            raw, _ = _read(destination.journal_dir / "fk4-journal.json")
+            if raw is not None:
+                record = _parse_journal(destination, raw)
+                if record["phase"] not in {"committed", "rolled-back"}:
+                    raise RuntimeError("Recover the existing Fatekeeper transaction before retrying.")
+                auth.production_journal(auth.production_authority(destination))
+            return []
+        with _locked(destination):
+            scope = auth.production_authority(destination, provision=True)
+            auth.begin_production_staging(scope)
+
+        def guard():
+            if _live_destination(steam_roots) != destination:
+                raise RuntimeError("Fatekeeper paths changed while staging. Reopen the review.")
+            auth._assert_scope(scope)
+
+        _commit(destination, prepared, process_guard=guard,
+                journal_published=lambda *args: auth._record_journal(scope, *args))
     return [Path(name) for name in prepared.writes]
 
 
@@ -614,6 +629,18 @@ def recover_live(steam_roots=None, *, scoped_root=None, scoped_token=None):
             _recover(destination, process_guard=guard, expected_journal=binding,
                      journal_published=lambda *args: auth._record_journal(scope, *args))
         return
+    from . import fatekeeper_authorization as auth
     destination = _live_destination(steam_roots)
     with _locked(destination):
-        _recover(destination, process_guard=lambda: profile_safety._assert_game_stopped("fatekeeper"))
+        scope = auth.production_authority(destination)
+        binding, record = auth.production_journal(scope)
+        if record is None or record["phase"] == "rolled-back":
+            raise RuntimeError("No authorized recoverable Fatekeeper transaction exists.")
+
+        def guard():
+            if _live_destination(steam_roots) != destination:
+                raise RuntimeError("Fatekeeper recovery destination changed.")
+            auth._assert_scope(scope)
+
+        _recover(destination, process_guard=guard, expected_journal=binding,
+                 journal_published=lambda *args: auth._record_journal(scope, *args))

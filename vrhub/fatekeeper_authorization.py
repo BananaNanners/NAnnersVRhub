@@ -144,8 +144,123 @@ _permissions = {}
 # The caller provisions a private authority directory independently of
 # the disposable destination. This is an application trust boundary,
 # not protection against arbitrary same-UID code editing both stores.
+@dataclass(frozen=True)
+class ProductionScope:
+    root: Path
+    prefix: Path
+    state: Path
+    injector: Path
+    profile: Path
+    journal_dir: Path
+    identity: dict
+    authority: Path
+    authority_identity: tuple
+
+
+def production_authority(destination, *, provision=False):
+    """Use a fixed private store independent of the journal and prefix.
+
+    Called only inside the gated production path and its state lock.
+    """
+    from . import fatekeeper_commit as tx
+    if not tx.live_install_authorized():
+        raise RuntimeError('Explicit live Fatekeeper authorization is required.')
+    authority = Path.home() / '.local/share/nannersvrhub-transaction-authority'
+    parent = authority.parent
+    if (parent.resolve() != parent or not parent.is_dir()
+            or parent.stat().st_uid != os.getuid()
+            or authority.is_relative_to(destination.prefix)
+            or authority.is_relative_to(destination.journal_dir)
+            or destination.state.is_relative_to(authority)):
+        raise RuntimeError('Unsafe production authority storage.')
+    if provision and not authority.exists() and not authority.is_symlink():
+        authority.mkdir(mode=0o700)
+        tx._sync(parent)
+    _private_parent(authority)
+    for path in (destination.prefix, destination.state.parent, destination.journal_dir):
+        _directory(path, destination.root)
+    if stat.S_IMODE(destination.journal_dir.stat().st_mode) != 0o700:
+        raise RuntimeError('Unsafe production recovery storage.')
+    for path in (destination.state, destination.journal_dir / 'fk4-journal.json'):
+        if path.is_symlink() or (path.exists() and
+                (not path.is_file() or path.stat().st_uid != os.getuid()
+                 or path.stat().st_nlink != 1)):
+            raise RuntimeError('Unsafe production transaction evidence.')
+    return ProductionScope(destination.root, destination.prefix, destination.state,
+                           destination.injector, destination.profile, destination.journal_dir,
+                           tx._identity(destination), authority, _directory(authority, authority))
+
+
+def _assert_scope(scope):
+    if isinstance(scope, ProductionScope):
+        from . import fatekeeper_commit as tx
+        destination = tx.Destination(scope.root, scope.prefix, scope.injector,
+                                     scope.profile, scope.state, scope.journal_dir)
+        current = production_authority(destination)
+    else:
+        current = resolve_scope(scope.root)
+    if current != scope:
+        raise RuntimeError('Scoped authority identity changed.')
+
+
+def production_journal(scope):
+    """Validate existing provenance before a new install or any recovery."""
+    from . import fatekeeper_commit as tx
+    raw, _ = tx._read(scope.journal_dir / 'fk4-journal.json')
+    record = _ledger(scope)
+    digest = tx._digest(raw)
+    if raw is None:
+        if record is not None and not (record['staging'] and record['current'] is None):
+            raise RuntimeError('Missing authorized production journal; manual review required.')
+        return None, None
+    if record is None or digest not in (record['current'], record['next']):
+        raise RuntimeError('Production journal lacks authorized transaction provenance; manual review required.')
+    destination = tx.Destination(scope.root, scope.prefix, scope.injector,
+                                 scope.profile, scope.state, scope.journal_dir)
+    parsed = tx._parse_journal(destination, raw)
+    if record['next'] is not None and digest == record['current']:
+        terminal = dict(parsed, phase='rolled-back')
+        if tx._digest(json.dumps(terminal).encode()) == record['next']:
+            raise RuntimeError('Pending terminal production journal transition; manual review required.')
+    return digest, parsed
+
+
+def begin_production_staging(scope):
+    digest, previous = production_journal(scope)
+    if previous is not None and previous['phase'] not in {'committed', 'rolled-back'}:
+        raise RuntimeError('Recover the existing Fatekeeper transaction before retrying.')
+    record = _ledger(scope)
+    if digest is not None:
+        # Do not discard an unresolved transition from a prior operation.
+        if record['next'] is not None:
+            if digest != record['next']:
+                raise RuntimeError('Pending production journal transition; manual review required.')
+            _save_ledger(scope, digest, None)
+        return
+    for entry in scope.journal_dir.iterdir():
+        info = entry.lstat()
+        safe = False
+        if entry.name == 'fk4.lock':
+            safe = stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+        elif record is not None and record['staging'] and re.fullmatch(
+                r'fk4-backup(?:-[0-9a-f]{32})?', entry.name):
+            safe = stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o700
+            if safe:
+                for child in entry.iterdir():
+                    meta = child.lstat()
+                    if (not re.fullmatch(r'(?:[0-9]+|state-new|\.(?:[0-9]+|state-new)-[a-zA-Z0-9_]+)', child.name)
+                            or not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.getuid()
+                            or meta.st_nlink != 1 or stat.S_IMODE(meta.st_mode) != 0o600):
+                        safe = False
+                        break
+        if not safe or info.st_uid != os.getuid():
+            raise RuntimeError('Unsafe production staging evidence; manual review required.')
+    _save_ledger(scope, None, None, staging=True)
+
+
 def _ledger_path(scope):
-    return scope.authority / (sha256(str(scope.root).encode()).hexdigest() + '.json')
+    key = str(scope.state) if isinstance(scope, ProductionScope) else str(scope.root)
+    return scope.authority / (sha256(key.encode()).hexdigest() + '.json')
 
 
 def _scope_binding(scope):
@@ -154,8 +269,7 @@ def _scope_binding(scope):
 
 def _ledger(scope):
     path = _ledger_path(scope)
-    if resolve_scope(scope.root) != scope:
-        raise RuntimeError('Scoped authority identity changed.')
+    _assert_scope(scope)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
@@ -194,8 +308,7 @@ def _ledger(scope):
 
 def _save_ledger(scope, current, next_digest, *, staging=False):
     from . import fatekeeper_commit as tx
-    if resolve_scope(scope.root) != scope:
-        raise RuntimeError('Scoped authority identity changed.')
+    _assert_scope(scope)
     tx._write(_ledger_path(scope), json.dumps({
         'schema': 1, 'scope': _scope_binding(scope),
         'current': current, 'next': next_digest, 'staging': staging,
