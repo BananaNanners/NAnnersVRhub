@@ -22,7 +22,8 @@ class ScopedAuthorizationTests(unittest.TestCase):
         (self.steam / 'steamapps/appmanifest_2186990.acf').write_text('"AppState" { "appid" "2186990" "installdir" "Fatekeeper" }')
         self.state = self.root / 'hub/state.json'
         (self.state.parent / 'fatekeeper-recovery').mkdir(parents=True)
-        self.enterContext(patch.dict(os.environ, {'VRHUB_STATE': str(self.state)}))
+        self.authority = Path(self.enterContext(tempfile.TemporaryDirectory(prefix='nanners-e6-authority-', dir='/tmp')))
+        self.enterContext(patch.dict(os.environ, {'VRHUB_STATE': str(self.state), 'VRHUB_SCOPED_AUTHORITY_DIR': str(self.authority)}))
         self.scope = auth.resolve_scope(self.root)
         profile = ProfilePlan('fatekeeper', 'Fatekeeper', '/tmp/profile.zip', auth.PINS['profile'], str(self.scope.profile), ('config.txt',), 1, 1, 0, 0, 0, False, (), 'fingerprint')
         self.review = DependencyReview('Fatekeeper', '/tmp/uevr.zip', auth.PINS['uevr'], str(self.scope.injector), ('UEVRBackend.dll',), 1, 0, 0, 0, profile, ((), ()), (), file_decisions=(('Install', 'Injector', 'UEVRBackend.dll'),))
@@ -246,21 +247,26 @@ class ScopedAuthorizationTests(unittest.TestCase):
             self.recovery_token()
         self.assertTrue(self.state.exists())
 
-    def test_restart_without_provenance_fails_closed(self):
+    def test_missing_provenance_fails_closed(self):
         self.installed_fixture()
-        with patch.object(auth, '_journal_provenance', {}):
-            with self.assertRaisesRegex(RuntimeError, 'manual review'):
-                self.recovery_token()
+        ledger = auth._ledger_path(self.scope)
+        raw = ledger.read_bytes()
+        ledger.unlink()
+        with self.assertRaisesRegex(RuntimeError, 'manual review'):
+            self.recovery_token()
         self.assertTrue(self.state.exists())
+        ledger.write_bytes(raw)
+        ledger.chmod(0o600)
         with patch('vrhub.profile_safety._assert_game_stopped'):
             self.rollback(self.recovery_token())
         self.assertFalse(self.state.exists())
 
-    def test_other_process_cannot_reuse_provenance(self):
+    def test_other_process_cannot_reuse_permission(self):
         self.installed_fixture()
+        token = self.recovery_token()
         with patch.object(auth.os, 'getpid', return_value=os.getpid()+1):
-            with self.assertRaisesRegex(RuntimeError, 'provenance'):
-                self.recovery_token()
+            with self.assertRaisesRegex(RuntimeError, 'consumed'):
+                self.rollback(token)
         self.assertTrue(self.state.exists())
 
     def test_old_phase_replay_rejected(self):
@@ -295,6 +301,130 @@ class ScopedAuthorizationTests(unittest.TestCase):
             self.rollback(self.recovery_token())
         self.assertFalse(self.state.exists())
         self.assertFalse(self.scope.injector.exists())
+
+    def child_transaction(self, action, interruption='none'):
+        import subprocess
+        import sys
+        script = r"""
+import os, sys
+from pathlib import Path
+from unittest.mock import patch
+from vrhub import fatekeeper_authorization as auth, fatekeeper_commit as tx, profile_safety
+from vrhub.fatekeeper_install import PreparedInstall
+from vrhub.profile_safety import ProfilePlan
+from vrhub.uevr_dependency_review import DependencyReview
+root = Path(sys.argv[1])
+action, interruption = sys.argv[2:]
+scope = auth.resolve_scope(root)
+assert not tx.live_install_authorized()
+backend = scope.injector / 'UEVRBackend.dll'
+profile_file = scope.profile / 'config.txt'
+profile = ProfilePlan('fatekeeper', 'Fatekeeper', '/tmp/profile.zip', auth.PINS['profile'], str(scope.profile), ('config.txt',), 1, 1, 0, 0, 0, False, (), 'fingerprint')
+review = DependencyReview('Fatekeeper', '/tmp/uevr.zip', auth.PINS['uevr'], str(scope.injector), ('UEVRBackend.dll',), 1, 0, 0, 0, profile, ((), ()), (), file_decisions=(('Install', 'Injector', 'UEVRBackend.dll'), ('Install', 'Profile', 'config.txt')))
+prepared = PreparedInstall(scope.prefix, profile_safety._snapshot(scope.injector), profile_safety._snapshot(scope.profile), {}, {str(backend): b'test fixture', str(profile_file): b'profile fixture'}, archive_pins=auth.PINS.copy())
+original_write = tx._write
+original_record = auth._record_journal
+def write(path, data, mode=0o600):
+    original_write(path, data, mode)
+    if interruption == 'payload' and path == backend:
+        os._exit(73)
+    if path == scope.journal_dir / 'fk4-journal.json':
+        import json
+        phase = json.loads(data)['phase']
+        if interruption == phase + '-published':
+            os._exit(73)
+def record(scope_arg, stage, previous, digest):
+    original_record(scope_arg, stage, previous, digest)
+    if stage == 'before' and previous is not None and interruption == 'transition-intent':
+        os._exit(73)
+original_unlink = Path.unlink
+def unlink(path, *args, **kwargs):
+    result = original_unlink(path, *args, **kwargs)
+    if interruption == 'rollback-payload' and path == profile_file:
+        os._exit(73)
+    return result
+with (patch('vrhub.fatekeeper_install.prepare_reviewed_install', return_value=prepared),
+      patch('vrhub.profile_safety._assert_game_stopped'),
+      patch.object(tx, '_write', side_effect=write),
+      patch.object(auth, '_record_journal', side_effect=record),
+      patch.object(Path, 'unlink', unlink)):
+    if action == 'install':
+        token = auth.authorize_install(root, review, confirmed=True)
+        tx.install_reviewed(review, scoped_root=root, scoped_token=token)
+    else:
+        token = auth.authorize_recovery(root, expected_journal=auth.recovery_digest(scope), confirmed=True)
+        tx.recover_live(scoped_root=root, scoped_token=token)
+assert not tx.live_install_authorized()
+"""
+        result = subprocess.run([sys.executable, '-B', '-c', script, str(self.root), action, interruption],
+                                capture_output=True, text=True, timeout=30)
+        expected = 0 if interruption == 'none' else 73
+        self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+
+    def assert_child_recovered(self):
+        self.child_transaction('recover')
+        self.assertFalse(self.state.exists())
+        self.assertFalse(self.scope.injector.exists())
+        self.assertFalse(self.scope.profile.exists())
+        self.assertIn('rolled-back', (self.scope.journal_dir / 'fk4-journal.json').read_text())
+        with self.assertRaisesRegex(RuntimeError, 'not recoverable'):
+            self.recovery_token()
+
+    def test_independent_process_completed_install_recovery(self):
+        self.child_transaction('install')
+        self.assertTrue(self.state.exists())
+        self.assert_child_recovered()
+
+    def test_independent_process_crash_after_first_payload(self):
+        self.child_transaction('install', 'payload')
+        self.assertTrue(self.scope.injector.exists())
+        self.assertFalse(self.state.exists())
+        self.assert_child_recovered()
+
+    def test_independent_process_crash_after_applying_publication(self):
+        self.child_transaction('install', 'applying-published')
+        self.assertFalse(self.scope.injector.exists())
+        self.assert_child_recovered()
+
+    def test_independent_process_crash_before_committed_publication(self):
+        self.child_transaction('install', 'transition-intent')
+        self.assertTrue(self.state.exists())
+        self.assert_child_recovered()
+
+    def test_independent_process_crash_after_committed_publication(self):
+        self.child_transaction('install', 'committed-published')
+        self.assertTrue(self.state.exists())
+        self.assert_child_recovered()
+
+    def test_independent_process_crash_after_recovering_publication(self):
+        self.child_transaction('install')
+        self.child_transaction('recover', 'recovering-published')
+        self.assertTrue(self.state.exists())
+        self.assert_child_recovered()
+
+    def test_independent_process_crash_during_rollback(self):
+        self.child_transaction('install')
+        self.child_transaction('recover', 'rollback-payload')
+        self.assertFalse(self.state.exists())
+        self.assertTrue(self.scope.injector.exists())
+        self.assert_child_recovered()
+
+    def test_corrupt_authority_evidence_refused(self):
+        self.installed_fixture()
+        auth._ledger_path(self.scope).write_bytes(b'not json')
+        with self.assertRaisesRegex(RuntimeError, 'provenance'):
+            self.recovery_token()
+        self.assertTrue(self.state.exists())
+
+    def test_authority_symlink_refused(self):
+        self.installed_fixture()
+        ledger = auth._ledger_path(self.scope)
+        saved = ledger.with_suffix('.saved')
+        ledger.rename(saved)
+        ledger.symlink_to(saved)
+        with self.assertRaisesRegex(RuntimeError, 'provenance'):
+            self.recovery_token()
+        self.assertTrue(self.state.exists())
 
     def test_recovery_requires_explicit_confirmation_and_exact_digest(self):
         self.installed_fixture()

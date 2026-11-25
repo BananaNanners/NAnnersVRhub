@@ -31,6 +31,8 @@ class Scope:
     profile: Path
     journal_dir: Path
     identity: tuple
+    authority: Path
+    authority_identity: tuple
 
 
 def _directory(path, root):
@@ -83,7 +85,20 @@ def resolve_scope(root):
         raise RuntimeError('Scoped Steam or Hub state resolver mismatch.')
     if hub._uevr_dir(recipe, [steam]) != injector or hub.profile_dir(recipe, [steam]) != profile:
         raise RuntimeError('Scoped dependency destination mismatch.')
-    return Scope(root, steam, prefix, state, injector, profile, journal_dir, identity)
+    authority = Path(os.environ.get('VRHUB_SCOPED_AUTHORITY_DIR', ''))
+    if (authority.parent != Path('/tmp').resolve() or
+            not authority.name.startswith('nanners-e6-authority-') or
+            authority.resolve() != authority or not authority.is_dir() or
+            stat.S_IMODE(authority.stat().st_mode) != 0o700):
+        raise RuntimeError('Independent private scoped authority directory required.')
+    with open('/proc/self/mountinfo', encoding='utf-8') as mounts:
+        for line in mounts:
+            mountpoint = Path(line.split()[4])
+            if mountpoint == authority or mountpoint.is_relative_to(authority):
+                raise RuntimeError('Mounted scoped authority directory refused.')
+    authority_identity = _directory(authority, authority)
+    return Scope(root, steam, prefix, state, injector, profile, journal_dir,
+                 identity, authority, authority_identity)
 
 
 def review_digest(scope, review):
@@ -107,23 +122,81 @@ class _Permission:
 
 _lock = Lock()
 _permissions = {}
-# Scoped development provenance is intentionally process-local, like tokens.
-# Never infer authority from a journal or backup supplied by the filesystem.
-# A restart requires manual review; this is not a same-UID security boundary.
-_journal_provenance = {}
+# The caller provisions a private authority directory independently of
+# the disposable destination. This is an application trust boundary,
+# not protection against arbitrary same-UID code editing both stores.
+def _ledger_path(scope):
+    return scope.authority / (sha256(str(scope.root).encode()).hexdigest() + '.json')
 
 
-def _record_journal(scope, digest):
-    """Called only by the authorized transaction writer after durable publish."""
-    with _lock:
-        _journal_provenance[scope.root] = (os.getpid(), scope, digest)
+def _scope_binding(scope):
+    return json.loads(json.dumps(asdict(scope), default=str))
+
+
+def _ledger(scope):
+    path = _ledger_path(scope)
+    if resolve_scope(scope.root) != scope:
+        raise RuntimeError('Scoped authority identity changed.')
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise RuntimeError('Unsafe scoped provenance evidence.') from exc
+    with os.fdopen(fd, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+                info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600 or
+                info.st_size > 65536):
+            raise RuntimeError('Unsafe scoped provenance evidence.')
+        try:
+            record = json.loads(stream.read(65537))
+        except (ValueError, UnicodeError) as exc:
+            raise RuntimeError('Corrupted scoped provenance evidence.') from exc
+    import re
+    if (not isinstance(record, dict) or
+            set(record) != {'schema', 'scope', 'current', 'next'} or
+            record['schema'] != 1 or record['scope'] != _scope_binding(scope) or
+            any(value is not None and (not isinstance(value, str) or
+                not re.fullmatch('[0-9a-f]{64}', value))
+                for value in (record['current'], record['next'])) or
+            (record['current'] is None and record['next'] is None)):
+        raise RuntimeError('Invalid scoped provenance evidence; manual review required.')
+    return record
+
+
+def _save_ledger(scope, current, next_digest):
+    from . import fatekeeper_commit as tx
+    if resolve_scope(scope.root) != scope:
+        raise RuntimeError('Scoped authority identity changed.')
+    tx._write(_ledger_path(scope), json.dumps({
+        'schema': 1, 'scope': _scope_binding(scope),
+        'current': current, 'next': next_digest,
+    }, sort_keys=True).encode())
+
+
+def _record_journal(scope, stage, previous, digest):
+    """Write intent before journal, finalize afterward, under transaction lock."""
+    record = _ledger(scope)
+    if stage == 'before':
+        if record is None:
+            if previous is not None:
+                raise RuntimeError('Missing authorized transaction provenance.')
+        elif previous is None or previous not in (record['current'], record['next']):
+            raise RuntimeError('Scoped recovery journal changed or lacks provenance.')
+        _save_ledger(scope, previous, digest)
+    elif stage == 'after':
+        if record is None or record['current'] != previous or record['next'] != digest:
+            raise RuntimeError('Scoped provenance transition changed.')
+        _save_ledger(scope, digest, None)
+    else:
+        raise RuntimeError('Invalid provenance transition.')
 
 
 def _trusted_recovery_digest(scope):
     digest = recovery_digest(scope)
-    with _lock:
-        provenance = _journal_provenance.get(scope.root)
-    if provenance != (os.getpid(), scope, digest):
+    record = _ledger(scope)
+    if record is None or digest not in (record['current'], record['next']):
         raise RuntimeError('Scoped recovery journal changed or lacks authorized transaction provenance; manual review required.')
     return digest
 
@@ -143,7 +216,7 @@ def _issue(scope, operation, binding, ttl):
 
 def assert_fresh(scope):
     if (scope.injector.exists() or scope.profile.exists() or scope.state.exists() or
-            any(scope.journal_dir.iterdir())):
+            any(scope.journal_dir.iterdir()) or _ledger(scope) is not None):
         raise RuntimeError("Scoped first install requires a fresh dependency and state destination.")
 
 

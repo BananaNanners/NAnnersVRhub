@@ -150,12 +150,18 @@ def _assert_identity(destination, expected):
         raise RuntimeError("Fatekeeper destination identity changed; recovery blocked.")
 
 
-def _journal(path, phase, rows, directories, backup_name, identity):
+def _journal(path, phase, rows, directories, backup_name, identity, *, provenance=None):
     raw = json.dumps({"schema": 2, "phase": phase, "rows": rows,
                       "directories": directories, "backup": backup_name,
                       "identity": identity}).encode()
+    digest = _digest(raw)
+    previous = _digest(_read(path)[0])
+    if provenance is not None:
+        provenance('before', previous, digest)
     _write(path, raw)
-    return _digest(raw)
+    if provenance is not None:
+        provenance('after', previous, digest)
+    return digest
 
 
 def _parse_journal(destination, raw):
@@ -402,9 +408,8 @@ def _commit(destination, prepared, *, interrupt_after_files=False, process_guard
         if process_guard is not None:
             process_guard()
         _assert_identity(destination, identity)
-        binding = _journal(journal, "applying", rows, sorted(directories), backup_name, identity)
-        if journal_published is not None:
-            journal_published(binding)
+        binding = _journal(journal, "applying", rows, sorted(directories), backup_name, identity,
+                           provenance=journal_published)
         try:
             for row in rows:
                 if process_guard is not None:
@@ -425,9 +430,8 @@ def _commit(destination, prepared, *, interrupt_after_files=False, process_guard
             _assert_identity(destination, identity)
             if journal_published is not None and _digest(_read(journal)[0]) != binding:
                 raise RuntimeError("Scoped recovery journal changed during commit.")
-            binding = _journal(journal, "committed", rows, sorted(directories), backup_name, identity)
-            if journal_published is not None:
-                journal_published(binding)
+            binding = _journal(journal, "committed", rows, sorted(directories), backup_name, identity,
+                               provenance=journal_published)
         except (OSError, RuntimeError, ValueError):
             # Never automatically restore into an active game/injector. The
             # applying journal is durable; recovery can resume after exit.
@@ -482,9 +486,8 @@ def _recover(destination, *, process_guard=None, expected_journal=None,
     _assert_identity(destination, identity)
     if expected_journal is not None and _digest(_read(journal)[0]) != expected_journal:
         raise RuntimeError("Scoped recovery journal changed during validation.")
-    binding = _journal(journal, "recovering", rows, directories, backup.name, identity)
-    if journal_published is not None:
-        journal_published(binding)
+    binding = _journal(journal, "recovering", rows, directories, backup.name, identity,
+                       provenance=journal_published)
     for path, current, original, mode in reversed(originals):
         if current == original:
             continue
@@ -515,9 +518,8 @@ def _recover(destination, *, process_guard=None, expected_journal=None,
     _assert_identity(destination, identity)
     if journal_published is not None and _digest(_read(journal)[0]) != binding:
         raise RuntimeError("Scoped recovery journal changed during recovery.")
-    binding = _journal(journal, "rolled-back", rows, directories, backup.name, identity)
-    if journal_published is not None:
-        journal_published(binding)
+    binding = _journal(journal, "rolled-back", rows, directories, backup.name, identity,
+                       provenance=journal_published)
 
 
 def recover(root):
@@ -562,7 +564,7 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
             if not prepared.writes:
                 raise RuntimeError("Scoped fresh installation has no writes.")
             _commit(destination, prepared, process_guard=guard,
-                    journal_published=lambda digest: auth._record_journal(scope, digest))
+                    journal_published=lambda *args: auth._record_journal(scope, *args))
         return [Path(name) for name in prepared.writes]
 
     destination = _live_destination(steam_roots)
@@ -609,7 +611,7 @@ def recover_live(steam_roots=None, *, scoped_root=None, scoped_token=None):
         with _locked(destination):
             guard()
             _recover(destination, process_guard=guard, expected_journal=binding,
-                     journal_published=lambda digest: auth._record_journal(scope, digest))
+                     journal_published=lambda *args: auth._record_journal(scope, *args))
         return
     destination = _live_destination(steam_roots)
     with _locked(destination):

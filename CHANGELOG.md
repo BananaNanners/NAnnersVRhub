@@ -1,3 +1,9 @@
+## 0.5.5-dev5E6-E2 — Persistent scoped recovery (unreleased)
+
+- Persist scoped journal provenance in an independent private authority directory and record intended journal transitions before publication.
+- Seven independent-process recovery scenarios and two corrupt/redirected evidence checks passed. Full suite: 1633 passed, one skipped, zero failures/errors.
+- No GUI changes; production gate closed. Reboot/power-loss durability, trusted production authority provisioning and desktop acceptance remain pending. See DEV5E6-E2-PERSISTENT-RECOVERY.md.
+
 ## 0.5.5-dev5E6 — Fresh-install gameplay and scoped recovery hardening (unreleased)
 
 - Actual 111-file scoped Fatekeeper installation, automatic backend retrieval and independent rollback verified. Steam-native fresh-prefix launch and Quest 3 gameplay passed all nine player checks; successful gameplay shutdown passed all four.
