@@ -69,7 +69,7 @@ class LauncherShellTests(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(self.window.tabs.currentIndex(), 0)
         self.assertTrue(self.window.sidebar.system_button.isChecked())
-        self.assertIn("Scan your host VR setup", self.window.scan_summary.text())
+        self.assertIn("Check your VR setup", self.window.scan_summary.text())
         self.window.sidebar.games_button.click()
         self.app.processEvents()
         self.assertEqual(self.window.tabs.currentIndex(), 1)

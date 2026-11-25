@@ -89,9 +89,9 @@ manual_checks = [
   "Verify headset rendering, head tracking, stereo depth, both controllers, movement, inventory, building and combat in a loaded world. Multiplayer, gestures, trackers and long-session behavior need their own tests.",
 ]
 notes = [
-  "VHVR 0.11.0 names Valheim 1.0.15–1.0.17; v0.11.2 is a follow-up release without a new explicit game-version range. Review other versions before proceeding.",
-  "Upstream flatScreenMode defaults to auto and checks SteamVR process state. The recipe supplies its documented false override to request VR under WiVRn; these flags are source/configuration evidence; the separate October 20 user report records successful gameplay.",
-  "Archive hashes are checked at installation. Inventories check presence, not current file versions or successful DLL/plugin loading. A dated user-reported test is bundled. Its NOT READY runtime snapshot records scan-time state and is not rewritten by this reference.",
+  "VHVR 0.11.0 lists Valheim 1.0.15–1.0.17 as supported. The follow-up v0.11.2 does not list a new supported game-version range. Review other versions before continuing.",
+  "VHVR normally checks whether SteamVR is running to choose VR mode automatically. The documented launch option requests VR when using WiVRn. The October 20 player report separately confirms successful gameplay.",
+  "Downloads are verified during installation. File checks confirm presence, not versions or successful loading. A previous gameplay test is recorded; its saved NOT READY runtime check remains unchanged.",
 ]
 [compatibility.checks]
 recorded_proton = true

@@ -281,8 +281,8 @@ class SteamWorkflowCompatibilityTests(unittest.TestCase):
         report=self.report(recipe)
         text=compatibility.report_text(report)
         self.assertLess(text.index('Required workaround'),text.index('OpenXR runtime:'))
-        self.assertIn('Stereo depth, sustained stability',text)
-        self.assertIn('have not been separately validated',text)
+        self.assertIn('Stereo depth, longer sessions',text)
+        self.assertIn('have not been separately tested',text)
         self.assertEqual(report['status'],'REVIEW REQUIRED')
 
 

@@ -88,7 +88,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         install = mock.Mock()
         dialog = DependencyReviewDialog(plan, install_action=install, install_authorized=lambda: True)
         self.addCleanup(dialog.close)
-        self.assertIn("CHECKSUM FAILED", dialog.status.text())
+        self.assertIn("DOWNLOAD COULD NOT BE VERIFIED", dialog.status.text())
         self.assertIn(str(prefix / "profile"), dialog.profile.text())
         self.assertFalse(dialog.apply_button.isEnabled())
         dialog.run_rehearsal()
@@ -193,7 +193,7 @@ class ArchiveChecklistTests(unittest.TestCase):
         self.assertFalse(events)
         self.assertTrue(self.page.install_review_button.isHidden())
         self.assertTrue(self.page.scan.isEnabled())
-        self.assertIn("Missing or stale", self.page.guidance.text())
+        self.assertIn("Missing or changed", self.page.guidance.text())
 
     def test_guide_only_and_switching_game_clear_previous_profile_intent(self):
         self._scan_fixture("fatekeeper", ("SLASHER-Win64-Shipping.zip",))

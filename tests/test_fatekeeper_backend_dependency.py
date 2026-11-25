@@ -130,13 +130,13 @@ class FatekeeperBackendDependencyTests(unittest.TestCase):
             try:
                 page.set_recipe(self.recipe)
                 self.assertIn("Missing", page.backend_install_status.text())
-                self.assertIn("automatically obtain", page.backend_install_status.text())
+                self.assertIn("automatically download and verify", page.backend_install_status.text())
                 self.assertIn("No manual DLL copying", page.backend_install_status.text())
                 self.assertEqual(page.table.rowCount(), 2)  # only the ZIPs
 
                 self.file.write_bytes(self.good)
                 page.set_recipe(self.recipe)
-                self.assertIn("Verified pinned build installed",
+                self.assertIn("Tested version installed and verified",
                               page.backend_install_status.text())
                 self.assertIn("preserve", page.backend_install_status.text())
                 self.assertEqual(page.table.rowCount(), 2)

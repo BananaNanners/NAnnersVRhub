@@ -1,3 +1,8 @@
+## 0.5.5-dev5F1 — Player-friendly wording (unreleased)
+
+- Simplify shared interface messages, confirmations and compatibility notes for all nine games; preserve settings, controls, layout and safety.
+- Full regression: 1655 tests reported, OK (skipped=1). KDE readability acceptance pending. See DEV5F1-PLAYER-FRIENDLY-WORDING.md.
+
 ## 0.5.5-dev5E8 — Production transaction integration (unreleased)
 
 - Integrate persistent authority and safe staging retry into gated Fatekeeper production install/recovery, with existing-install protection.

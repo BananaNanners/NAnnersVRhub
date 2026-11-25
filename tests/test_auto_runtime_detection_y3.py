@@ -175,7 +175,7 @@ class RuntimeSwitchDashboardQtTests(unittest.TestCase):
             win.show_system_report(sample)
             self.assertEqual(win.runtime_label.text(), "●  Idle")
             self.assertIn("SteamVR SELECTED",win.runtime_state.text())
-            self.assertEqual(win.server_state.text(),"Server: NOT OBSERVED")
+            self.assertEqual(win.server_state.text(),"Server: NOT DETECTED")
             self.assertEqual(win.headset_state.text(),"Headset: UNKNOWN")
             self.assertIn("OpenXR: SteamVR selected",win.scan_summary.text())
             self.assertIn("0.5.5-dev5D3y3",__import__("vrhub.system_scan",fromlist=["report_text"]).report_text(win.scan_report))

@@ -112,7 +112,7 @@ class CleanupTests(unittest.TestCase):
         self.page.set_recipe(recipe)
         self.assertTrue(self.page.install_review_button.isHidden())
         self.assertTrue(self.page.manual_review_button.isHidden())
-        self.assertIn("stale", self.page.guidance.text())
+        self.assertIn("Missing or changed files", self.page.guidance.text())
         self.assertTrue(self.page.scan.isEnabled())
 
     def test_single_detected_archive_no_picker_and_no_row_selection_required(self):

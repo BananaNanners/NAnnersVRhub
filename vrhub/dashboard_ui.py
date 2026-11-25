@@ -19,7 +19,7 @@ def snapshot(row, update_items=None, verification=None, preflight=None):
             "game": ("Game install", "Choose a game", "Select a game from the library.", "neutral"),
             "mods": ("Mod setup", "Not checked", "Select a game for installed component status.", "neutral"),
             "updates": ("Updates", "Not checked", "Refresh available dependency versions.", "neutral"),
-            "vr": ("VR preflight", "Not run", "Use Preflight to test local prerequisites.", "neutral"),
+            "vr": ("VR readiness", "Not run", "Use Preflight to test local prerequisites.", "neutral"),
         }
     recipe = row["recipe"]
     store = STORE_NAMES.get(recipe.get("store", "steam"), "Configured store")
@@ -74,20 +74,20 @@ def snapshot(row, update_items=None, verification=None, preflight=None):
         updates = ("Updates", title, detail, tone)
 
     if preflight is None:
-        vr = ("VR preflight", "Not run",
-              "Run Preflight to check local requirements.", "neutral")
+        vr = ("VR readiness", "Not run",
+              "Check the game’s VR requirements.", "neutral")
     else:
         bad = [i for i in preflight.get("rows", [])
                if i.get("required", True) and not i.get("ok", False)]
         if bad:
-            vr = ("VR preflight", "Needs attention",
-                  f"{len(bad)} local check(s) failed; gameplay unverified.", "warning")
+            vr = ("VR readiness", "Needs attention",
+                  f"{len(bad)} setup check(s) failed. Gameplay not tested.", "warning")
         elif preflight.get("ready"):
-            vr = ("VR preflight", "Local checks passed",
-                  "Current session only. Headset rendering not verified.", "success")
+            vr = ("VR readiness", "Local checks passed",
+                  "Setup checks passed. VR gameplay is not confirmed.", "success")
         else:
-            vr = ("VR preflight", "Needs review",
-                  "See the preflight report. Gameplay unverified.", "warning")
+            vr = ("VR readiness", "Needs review",
+                  "Review the readiness report. Gameplay not tested.", "warning")
     return {"game": game, "mods": mods, "updates": updates, "vr": vr}
 
 

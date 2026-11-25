@@ -220,9 +220,9 @@ class ModUpdatesPage(QWidget):
 
         top = QHBoxLayout()
         self.explanation = QLabel(
-            "Read-only version check. Refreshing does not download, install, "
-            "remove or automatically mark dependencies as updated. Recent GitHub "
-            "results may be reused for 15 minutes to avoid rate limits.")
+            "Check for newer versions. Refreshing does not download, install, "
+            "remove or mark mods as updated. Recent GitHub "
+            "results may be reused for 15 minutes.")
         self.explanation.setObjectName("modUpdatesExplanation")
         self.explanation.setWordWrap(True)
         top.addWidget(self.explanation, 1)
@@ -233,7 +233,7 @@ class ModUpdatesPage(QWidget):
         top.addWidget(self.refresh_button)
         root.addLayout(top)
 
-        self.summary = QLabel("Select a game to see tracked dependency updates.")
+        self.summary = QLabel("Choose a game to check its mod updates.")
         self.summary.setObjectName("modUpdatesSummary")
         self.summary.setWordWrap(True)
         root.addWidget(self.summary)
@@ -287,7 +287,7 @@ class ModUpdatesPage(QWidget):
         total = sum(len(rows) for rows in grouping.values())
         self.empty.setVisible(not total)
         if not recipe:
-            self.summary.setText("Select a game to see tracked dependency updates.")
+            self.summary.setText("Choose a game to check its mod updates.")
         elif not items:
             self.summary.setText(
                 f"{recipe['name']}: no update results yet. Use Refresh update status.")
@@ -316,10 +316,10 @@ class ModUpdatesPage(QWidget):
         self.github_notice.setVisible(github_limited > 0)
         if github_limited:
             self.github_notice.setText(
-                f"GitHub API rate limit reached: {github_limited} release "
+                f"GitHub temporarily limits update checks: {github_limited} release "
                 "check(s) couldn't finish. This is a temporary online lookup "
-                "limit, not a failed mod installation. Try again after the "
-                "quota resets; no mod files were changed.")
+                "limit, not a failed mod installation. Try again when the "
+                "limit resets. No mod files were changed.")
         else:
             self.github_notice.clear()
         for name, section in self.sections.items():

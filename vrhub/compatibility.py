@@ -167,19 +167,19 @@ def report_html(report):
     colour = "#4FE39A" if report["status"] == "LOCAL CHECKS PASSED" else "#FF5B50" if report["status"] == "NOT READY" else "#FFD21A"
     out = ['<style>body{color:#F5F2DE;}h2,h3{color:#FFD21A;}td{padding:5px;}</style>',
            f"<h2>{e(report['game'])}</h2>",
-           f"<p><b style='color:{colour}'>Local configuration: {e(report['status'])}</b><br>Sampled: {e(local_time(report['sampled_at']))}</p>"]
+           f"<p><b style='color:{colour}'>Game setup: {e(report['status'])}</b><br>Checked: {e(local_time(report['sampled_at']))}</p>"]
     out.append("<h3>Latest local gameplay test</h3><p>" + e(local_test_text(report)).replace("\n", "<br>") + "</p>")
     profile = report["profile"]
-    out.append("<h3>Bundled compatibility reference</h3>")
+    out.append("<h3>Setup and previous test results</h3>")
     if profile is None:
-        out.append("<p>Compatibility profile: <b>NOT YET DOCUMENTED</b>. Use the existing setup guide and Preflight.</p>")
+        out.append("<p>Compatibility profile: <b>NOT YET DOCUMENTED</b>. Use the Setup Guide and Check game readiness.</p>")
     else:
         out.append(f"<p><b>Gameplay evidence:</b> {e(evidence_text(profile))}</p>")
         if profile.get("workarounds"):
             out.append("<h3>Required workaround</h3><ul>" + "".join(f"<li>{e(x)}</li>" for x in profile["workarounds"]) + "</ul>")
-        out.append("<h3>Expected configuration</h3><table>")
+        out.append("<h3>Recommended setup</h3><table>")
         out += [f"<tr><td><b>{label}</b></td><td>{e(profile[key])}</td></tr>" for key, label in FIELDS]
-        out.append("</table><h3>Current local evidence</h3><table>")
+        out.append("</table><h3>Current setup checks</h3><table>")
         for row in report["checks"]:
             out.append(f"<tr><td style='color:{colours[row['status']]}'><b>{row['status'].upper()}</b></td>"
                        f"<td><b>{e(row['name'])}</b><br>{e(row['detail'])}</td></tr>")
@@ -188,7 +188,7 @@ def report_html(report):
             if profile.get(key):
                 out.append(f"<h3>{title}</h3><ul>" + "".join(f"<li>{e(x)}</li>" for x in profile[key]) + "</ul>")
         ref = profile.get("reference")
-        out.append("<h3>Dated gameplay reference</h3><p>User reported; not a current test.</p>")
+        out.append("<h3>Previous gameplay test</h3><p>Reported by a player; not a current test.</p>")
         if ref:
             out.append("<table>" + "".join(f"<tr><td><b>{label}</b></td><td>{e(ref[key])}</td></tr>"
                                          for key, label in REFERENCE_FIELDS) + "</table>")

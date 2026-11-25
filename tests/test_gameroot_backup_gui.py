@@ -100,7 +100,7 @@ class GamerootRestoreUIAutomationTests(unittest.TestCase):
         question.assert_called_once()
         self.assertIn("Restore 1 original", question.call_args.args[2])
         self.assertIn("remove 1 files", question.call_args.args[2])
-        self.assertIn("rehashed", question.call_args.args[2])
+        self.assertIn("check every current file and original backup again", question.call_args.args[2])
         self.assertEqual(question.call_args.args[-1], QMessageBox.No)
         uninstall.assert_not_called()
 

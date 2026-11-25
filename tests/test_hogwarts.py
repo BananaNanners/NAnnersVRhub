@@ -91,9 +91,9 @@ class HogwartsWorkflowTests(unittest.TestCase):
         text = compatibility.report_text(report)
         self.assertIn("Gameplay evidence: USER-REPORTED LIVE TEST", text)
         self.assertIn("2026-10-19", text)
-        self.assertIn("one-click injector button", text)
+        self.assertIn("one-click UEVR launch button", text)
         self.assertIn("wrist-flick activation", text)
-        self.assertIn("longer-session stability remain unverified", text)
+        self.assertIn("longer sessions remain untested", text)
 
     def test_old_profile_is_backed_up_replaced_and_restored(self):
         old = self.dest / "plugins/ue4ss/old.ini"

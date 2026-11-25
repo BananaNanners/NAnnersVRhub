@@ -91,8 +91,8 @@ manual_checks = [
   "Verify the Hogwarts profile, full VR rendering with the UEVR overlay closed, head tracking, stereo depth, movement/turning, wand aiming/casting and menu return behavior in loaded gameplay. Optional gesture/body/voice features remain unverified.",
 ]
 notes = [
-  "The recipe follows the maintainer's v2.0.6 packaged pair, inspected on October 19, 2026. The inventory checks presence of recorded files; it does not certify their versions or successful loading.",
-  "October 19 18:21:50 PDT user-reported SUCCESS in dev4 confirmed the Hub one-click injector button, rendering, head tracking, controller input and stereo depth with WiVRn active. A follow-up reported working controllers, spell drawing and wrist-flick activation during a few minutes of gameplay. The earlier disconnected-runtime snapshot is unchanged; voice, body tracking, other gestures and longer-session stability remain unverified.",
+  "This setup uses the maintainer’s v2.0.6 package pair, reviewed October 19, 2026. File checks confirm the recorded files are present, not their versions or whether the game loads them.",
+  "On October 19 at 18:21:50 PDT, the player confirmed the dev4 one-click UEVR launch button, VR rendering, head tracking, controller input and stereo depth with WiVRn. A short follow-up confirmed spell drawing and wrist flicks. The earlier disconnected-runtime record is unchanged. Voice, body tracking, other gestures and longer sessions remain untested.",
 ]
 
 [compatibility.checks]

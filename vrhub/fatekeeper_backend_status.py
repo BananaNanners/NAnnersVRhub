@@ -17,25 +17,25 @@ def install_update_guidance(result):
     status = result.get("status")
     if status == "verified":
         return (
-            "UEVRBackend.dll: Verified pinned build installed. The Hub will preserve "
-            "this DLL during the reviewed two-ZIP installation; no separate download."
+            "UEVRBackend.dll: Tested version installed and verified. The Hub will preserve "
+            "this file during the approved installation; no separate download needed."
         )
     if status == "not_installed":
         return (
             "UEVRBackend.dll: Missing. After the two ZIPs are verified, the Hub can "
-            "automatically obtain and SHA-256-verify the tested joeyhodge DLL and "
-            "install it in Fatekeeper's Proton prefix during an approved, backed-up "
+            "automatically download and verify the tested joeyhodge file and "
+            "install it in the correct game folder during an approved, backed-up "
             "installation. No manual DLL copying or third ZIP is needed."
         )
     if "Cannot locate the Fatekeeper Proton prefix" in result.get("detail", ""):
         return (
-            "UEVRBackend.dll: Not yet checked — Fatekeeper's Proton prefix is "
-            "unavailable. Launch Fatekeeper once from Steam to create the prefix, "
+            "UEVRBackend.dll: Not yet checked — Fatekeeper’s Windows game environment is "
+            "not available. Launch Fatekeeper once from Steam, "
             "then scan the two ZIP archives and review installation."
         )
     return (
         "UEVRBackend.dll: Needs review. The installed backend is not verified as "
-        "the gameplay-tested build. Review exact replacements and backup coverage "
+        "the gameplay-tested build. Review which files will be replaced and backed up "
         "before approving a change; it will not be silently overwritten."
     )
 

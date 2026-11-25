@@ -132,9 +132,9 @@ manual_checks = [
   "Check the current game/mod dependency versions and loader logs, then verify actual VR rendering and controller behavior in gameplay.",
 ]
 notes = [
-  "Experimental workflow with a user-reported immersive-rendering workaround. Stereo depth, sustained stability and restoring the disabled HUD features have not been separately validated.",
-  "The log reported xrEndFrame res=-39 (XR_ERROR_POSE_INVALID). The panel-dependent failure suggests a mixed-layer submission problem, but the precise cause in the installed build is not confirmed.",
-  "Existing recipe guidance supplies setup details; this profile does not download mods, change launch options or replace Proton.",
+  "Experimental VR setup. A player confirmed immersive VR after changing display settings. Stereo depth, longer sessions and restoring the disabled HUD settings have not been separately tested.",
+  "The game log reported XR_ERROR_POSE_INVALID (xrEndFrame res=-39). The problem appeared to depend on the display panels, but its exact cause is unknown.",
+  "Follow the Setup Guide. These compatibility checks do not download mods, change launch options or replace Proton.",
 ]
 
 [compatibility.checks]

@@ -68,8 +68,8 @@ manual_checks = [
   "Verify the WineOpenXR/D3D12 session, full stereo after loading a save, tracking, both controllers, movement, interactions and combat. Menus/cutscenes intentionally use cinema.",
 ]
 notes = [
-  "The inspected user-supplied 0.4.0 ZIP contains ten files. Hash checks establish archive identity; inventory checks establish file presence, not current versions or plugin loading.",
-  "No dated gameplay reference is recorded. Source/gameplay claims in the mod's documentation are not a local Linux success result.",
+  "The reviewed ERVR 0.4.0 ZIP contains ten files. Download checks confirm the expected ZIP; installed-file checks confirm that files are present, not that the game loads them correctly.",
+  "No dated local gameplay test is recorded. The mod author’s documentation is not proof of successful Linux VR gameplay.",
 ]
 [compatibility.checks]
 recorded_proton = true

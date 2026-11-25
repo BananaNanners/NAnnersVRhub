@@ -96,10 +96,10 @@ manual_checks = [
   "Test headset rendering, stereo depth, head tracking, movement/turning, both controllers, PDA/tool use and interaction in a loaded save. Confirm stock Y/PDA and hold-A-and-drag quick-slot use. The binding editor remains a known limitation.",
 ]
 notes = [
-  "October 19 23:00:22 PDT user-reported SUCCESS in dev1: VR rendering, head tracking, controller input and stereo depth PASSED. A and trigger interaction worked flawlessly. The local configuration snapshot remained REVIEW REQUIRED; existing historical test entries are unchanged.",
-  "October 20 follow-ups confirmed hold A and drag to a quick slot. The user preferred stock Y/PDA bindings and requested reverting the external Menu-button override for comfort. Y -> UIAssign did not work and is not a supported success claim.",
-  "The in-game binding editor reportedly becomes stuck waiting for input and cannot cancel. Keep stock bindings; longer sessions and other setups remain unverified.",
-  "Archive digests are checked at installation. File inventories establish presence, not current versions or successful loader/plugin execution.",
+  "On October 19 at 23:00:22 PDT, the player reported dev1 VR rendering, head tracking, controller input and stereo depth passed. A and trigger interaction worked. The saved setup check remained REVIEW REQUIRED; previous test history is unchanged.",
+  "October 20 follow-ups confirmed holding A and dragging items to quick slots. The player preferred the default Y/PDA controls and reverted the external Menu-button override. Y → UIAssign did not work.",
+  "The player reported that the in-game binding editor gets stuck waiting for input and cannot be cancelled. Keep the default controls. Longer sessions and other setups remain untested.",
+  "The Hub verifies downloads during installation. File checks confirm recorded files are present, not their versions or whether the game loads them.",
 ]
 [compatibility.checks]
 recorded_proton = true

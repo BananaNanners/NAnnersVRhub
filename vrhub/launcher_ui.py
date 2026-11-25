@@ -228,7 +228,7 @@ class GameBanner(QFrame):
         self.heading.setObjectName("launcherGameTitle")
         self.heading.setWordWrap(True)
         layout.addWidget(self.heading)
-        self.status = QLabel("Only verified installation and runtime facts are shown.")
+        self.status = QLabel("Shows checked installation and VR system information.")
         self.status.setObjectName("launcherBannerStatus")
         self.status.setWordWrap(True)
         self.status.setMaximumWidth(630)
@@ -284,7 +284,7 @@ class GameBanner(QFrame):
             self.artwork_choice = artwork.ArtworkChoice(
                 None, "NAnnersVRhub original banner")
             self.heading.setText("Choose a game")
-            self.status.setText("Select a profile from the game library.")
+            self.status.setText("Choose a game from the library.")
             self.update()
             return
         recipe = row["recipe"]

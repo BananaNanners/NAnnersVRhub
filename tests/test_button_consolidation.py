@@ -95,7 +95,7 @@ class ConsolidatedHubControlsTests(unittest.TestCase):
         self.assertFalse(self.win.doom_saves_btn.isVisible())
         self.assertFalse(self.win.unprofile_btn.isVisible())
         self.assertFalse(self.win.development_tools_enabled)
-        self.assertIn("Recorded does not mean verified",
+        self.assertIn("does not guarantee that files can be restored",
                       self.win.rollback_page.findChildren(
                           __import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel,
                           "rollbackNotice")[0].text())

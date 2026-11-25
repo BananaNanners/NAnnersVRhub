@@ -300,12 +300,12 @@ class GuidedDownloadsPage(QWidget):
         outer.setContentsMargins(10, 10, 10, 10)
         outer.setSpacing(9)
 
-        title = QLabel("ARCHIVE DEPENDENCIES")
+        title = QLabel("REQUIRED DOWNLOADS")
         title.setObjectName("downloadsHeading")
         outer.addWidget(title)
 
         explanation = QLabel(
-            "Find downloaded VR dependencies, then review what needs installing. "
+            "Find downloaded VR mod files, then review what needs installing. "
             "Scanning never changes game files.")
         explanation.setObjectName("downloadsExplanation")
         explanation.setWordWrap(True)
@@ -320,7 +320,7 @@ class GuidedDownloadsPage(QWidget):
         self.upstream_link.hide()
         outer.addWidget(self.upstream_link)
 
-        self.location = QLabel("Select a game to review its archive library.")
+        self.location = QLabel("Choose a game to view its downloads.")
         self.location.setObjectName("downloadsLocation")
         self.location.setWordWrap(True)
         self.location.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -344,7 +344,7 @@ class GuidedDownloadsPage(QWidget):
             "Archives are not moved or downloaded.")
         self.set_game.setToolTip(
             "Add a folder for this game only.\n"
-            "Prior scan sets remain in history.\n"
+            "Previous scans stay saved.\n"
             "Other games keep their saved scans.")
         self.clear_game.setToolTip(
             "Remove this game's additional archive folder.\n"
@@ -356,7 +356,7 @@ class GuidedDownloadsPage(QWidget):
             "Unchanged-folder scans stay saved.")
         self.scan.setToolTip(
             "Scan Downloads and this game's optional extra folder.\n"
-            "Preserve previous scans by folder combination.\n"
+            "Previous scans stay saved for each folder selection.\n"
             "No archives are installed or changed.")
         # Dev5D1-B: one folder menu replaces four persistent buttons.
         # Keep each original action object and its signal handler so folder
@@ -403,7 +403,7 @@ class GuidedDownloadsPage(QWidget):
         self.progress.hide()
         outer.addWidget(self.progress)
 
-        self.summary = QLabel("Choose a game, then scan for local archives.")
+        self.summary = QLabel("Choose a game, then scan for downloaded files.")
         self.summary.setObjectName("downloadsSummary")
         self.summary.setWordWrap(True)
         outer.addWidget(self.summary)
@@ -499,7 +499,7 @@ class GuidedDownloadsPage(QWidget):
             "This does NOT approve replacement or simulate rollback.")
         self.safety_button.clicked.connect(self._start_safety_review)
         comparison_layout.addWidget(self.safety_button)
-        self.safety_summary = QLabel("Replacement safety: not reviewed.")
+        self.safety_summary = QLabel("File replacement: not reviewed.")
         self.safety_summary.setObjectName("preUpdateSafetySummary")
         self.safety_summary.setWordWrap(True)
         comparison_layout.addWidget(self.safety_summary)
@@ -537,7 +537,7 @@ class GuidedDownloadsPage(QWidget):
         integrity_line.addWidget(self.integrity_button)
         integrity_line.addStretch()
         outer.addLayout(integrity_line)
-        self.integrity_status = QLabel("Installed file integrity: not checked.")
+        self.integrity_status = QLabel("Installed files: not checked.")
         self.integrity_status.setWordWrap(True)
         self.integrity_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
         outer.addWidget(self.integrity_status)
@@ -564,15 +564,15 @@ class GuidedDownloadsPage(QWidget):
         self.install_review_button = QPushButton("Review installation")
         self.install_review_button.setObjectName("primaryAction")
         self.install_review_button.setToolTip(
-            "Review selected archives and backup policy.\n"
-            "The Hub checks every destination internally.\n"
+            "Review downloaded files and backups.\n"
+            "The Hub checks where every file will go.\n"
             "Nothing changes without confirmation.")
         self.install_review_button.clicked.connect(self._request_install_review)
         self.manual_review_button = QPushButton("Choose archives manually…")
         self.manual_review_button.setObjectName("downloadsAction")
         self.manual_review_button.setToolTip(
-            "Explicit fallback when archives need manual selection. "
-            "Opens the existing safety review; never installs directly.")
+            "Choose files yourself if needed. "
+            "Opens the installation review without installing anything.")
         self.manual_review_button.clicked.connect(self._request_manual_review)
         self.manual_review_button.hide()
         footer.addWidget(self.manual_review_button)
@@ -619,8 +619,8 @@ class GuidedDownloadsPage(QWidget):
         self.table.itemSelectionChanged.connect(self._update_download_button)
 
         self.guidance = QLabel(
-            "Only approved installer workflows should modify game files. "
-            "The existing Setup guide remains the source for installation order.")
+            "Use the Hub’s approved installation steps to change game files. "
+            "Follow the Setup Guide for the correct order.")
         self.guidance.setObjectName("downloadsExplanation")
         self.guidance.setWordWrap(True)
         outer.insertWidget(outer.indexOf(self.review_actions), self.guidance)
@@ -719,7 +719,7 @@ class GuidedDownloadsPage(QWidget):
         # A verification result is never reused across game switches,
         # saved-scan refreshes, or later update checks.
         self._integrity_result = None
-        self.integrity_status.setText("Installed file integrity: not checked.")
+        self.integrity_status.setText("Installed files: not checked.")
         self.integrity_details.clear()
         self.integrity_details.hide()
         active_integrity = bool(self.integrity_worker and self.integrity_worker.isRunning())
@@ -835,7 +835,7 @@ class GuidedDownloadsPage(QWidget):
         elif recipe:
             self.location.setText(f"Download preferences unavailable: {error}")
         else:
-            self.location.setText("Select a game to review its archive library.")
+            self.location.setText("Choose a game to view its downloads.")
         self.location.setToolTip(str(folder or error or ""))
         if self._last_plan is None:
             self._display_unsanned(recipe, error)
@@ -934,7 +934,7 @@ class GuidedDownloadsPage(QWidget):
         self.summary.setText(
             f"Cannot read preferences: {error}" if error else
             "Scan local archives to find candidate packages. Nothing is installed."
-            if recipe else "Select a game to review its archive library.")
+            if recipe else "Choose a game to view its downloads.")
         self._refresh_comparison()
 
     def _choose_folder(self, scope):
@@ -1023,12 +1023,12 @@ class GuidedDownloadsPage(QWidget):
         if self.recognition_result is not None:
             self.recognition_result = None
             self.recognition_changed.emit()
-            self.integrity_status.setText("Installed file integrity: not checked.")
+            self.integrity_status.setText("Installed files: not checked.")
             self.integrity_details.hide()
         self._folder_feedback("")
         self.summary.setToolTip("")
         self.progress.show()
-        self.summary.setText("Scanning local archives and checking any pinned release hashes…")
+        self.summary.setText("Finding downloads and checking supported versions…")
         for btn in (self.set_global, self.set_game, self.clear_game,
                     self.reset_global, self.scan, self.install_review_button):
             btn.setEnabled(False)
@@ -1213,7 +1213,7 @@ class GuidedDownloadsPage(QWidget):
         if self.safety_worker is not None and self.safety_worker.isRunning():
             self.safety_worker.cancel()
         self._safety_result = None
-        self.safety_summary.setText("Replacement safety: not reviewed.")
+        self.safety_summary.setText("File replacement: not reviewed.")
         self.safety_details.clear()
         self.safety_details.hide()
         self.comparison_panel.setMinimumHeight(0)
@@ -2046,53 +2046,53 @@ class GuidedDownloadsPage(QWidget):
         elif (self._last_plan or {}).get("warning"):
             message = "Scan incomplete: " + str(self._last_plan["warning"])
         elif route == "pinned-release-review":
-            message = "Newer official release matched, but the recipe pin is not approved. Review only; installation remains blocked."
+            message = "Newer official download found, but this version is not approved yet. Review only; installation is blocked."
         elif route in ("kharvox-review", "kharvox-wait"):
             record = (plan.get("rows") or [{}])[0]
             latest = record.get("release_expected")
-            message = ("Official release SHA-256 matched. Review compatibility with the tested 1.4 runner; no installation is authorized."
+            message = ("Official download verified. Check whether it works with the tested 1.4 runner. Installation is not approved."
                        if route == "kharvox-review" else
-                       "Scan or obtain an official KHARVOX ZIP with matching SHA-256 before review.")
+                       "Download the official KHARVOX ZIP and scan it before review.")
             if latest:
-                message += f" Latest upstream archive: {latest}."
+                message += f" Latest official download: {latest}."
             if record.get("release_notice"):
                 message += " " + record["release_notice"]
         elif route == "uevr-hash-review":
-            message = "Review the failed checksum and the required release. Installation is blocked."
+            message = "The download does not match the required version. Review the correct release before installing. Installation is blocked."
         elif route == "blocked":
-            message = "Archive verification blocked. Obtain the correct package from its source and rescan."
+            message = "The download could not be verified. Get the correct file from its source and scan again."
         elif route == "scan":
-            message = "Scan the archive folder. Missing or stale dependencies must be checked before review."
+            message = "Scan your downloads. Missing or changed files must be checked before installation review."
         elif route == "select":
-            message = "Select a dependency below, or choose multiple archives manually."
+            message = "Select a required file below, or choose several downloads manually."
         elif label == "Choose archive":
-            message = "Different archive candidates need your selection before review."
+            message = "More than one possible download was found. Choose the correct file."
         elif route == "uevr-pair":
-            message = "Review both downloaded dependencies together. Existing injector/profile files and recovery needs are evaluated separately. No installation is authorized."
+            message = "Review both downloaded files together. The Hub checks existing UEVR files, profiles and backups. Installation is not yet approved."
         elif route == "guide":
-            message = "Follow this game's existing Setup Guide. Archive detection alone is not installation readiness."
+            message = "Follow this game's Setup Guide. Finding the downloads does not mean the game is ready."
         elif row.get("status") == "Archive changed — rescan required" or row.get("candidate_incomplete"):
-            message = "Archive selection is stale or incomplete. Scan local archives again before review."
+            message = "The download list is out of date or incomplete. Scan again before review."
         elif row.get("phase", 1) > 1:
-            message = "Stage 2: complete the required flat-game first launch using Setup Guide. The existing installation gate remains in place."
+            message = "Stage 2: launch the game without VR first, following the Setup Guide. Installation stays blocked until this step is checked."
         elif row.get("status") in ("Hash mismatch — do not install", "Hash not verified — do not install") or (
                 self.recipe.get("method") in ("bepinex", "ervr") and
                 (plan.get("mismatch") or plan.get("unverified"))):
-            message = "Archive verification blocked. Obtain the correct package from its source and rescan."
+            message = "The download could not be verified. Get the correct file from its source and scan again."
         elif row.get("matches", 0) > 1 and not row.get("sha256") and "candidates" not in row:
-            message = "Saved scan predates candidate detection. Scan local archives to choose the intended version."
+            message = "Your saved scan is out of date. Scan again to choose the correct version."
         elif row.get("ambiguous"):
-            message = "Multiple different or unidentified archives match this dependency. Choose the intended archive before review."
+            message = "Several possible downloads were found. Choose the correct file before review."
         elif row.get("release_expected") and not any(c.get("expected") for c in row.get("candidates", [])):
-            message = f"Could not identify expected release {row['release_expected']} by SHA-256. Check the source before selecting an archive."
+            message = f"Could not verify the required version {row['release_expected']}. Check the source before choosing a file."
         elif row.get("status") == "Not found locally" or plan.get("missing", 0) and self.recipe.get("method") in ("bepinex", "ervr"):
-            message = "Required archive missing. Open source, download the dependency and rescan."
+            message = "Required download missing. Open its source, download the file and scan again."
         elif plan.get("rows") and plan.get("verified") == len(plan["rows"]):
-            message = "All required archives are pinned-hash verified. Continue to installation review."
+            message = "All required downloads are verified. Continue to installation review."
         else:
-            message = "Review archives as packages; the Hub checks internal files, destinations and backups. A release match does not establish compatibility."
+            message = "Review your downloads. The Hub checks the files, where they will go and which backups are needed. Verified downloads do not guarantee VR will work."
         if row.get("phase", 1) > 1 and "Stage 2" not in message:
-            message += " Stage 2 requires the game's first flat launch; the installation gate remains in place."
+            message += " Stage 2 requires launching the game without VR first. Installation stays blocked until this is checked."
         if row.get("release_notice"):
             message += " " + row["release_notice"]
         self.guidance.setText(message)
@@ -2115,10 +2115,10 @@ class GuidedDownloadsPage(QWidget):
             if route == "guide" and self.recipe else
             "Open read-only KHARVOX release and compatibility review. No extraction or installation."
             if route in ("kharvox-review", "kharvox-wait") else
-            "Review the selected profile ZIP, exact destination and full-directory backup. Nothing changes without confirmation."
+            "Review the profile ZIP, where it will go and the backup of the entire profile folder. Nothing changes without confirmation."
             if route == "profile" else
-            "Resolve the Fatekeeper recovery journal before installation." if route == "recovery-blocked" else
-            "Review selected archives and backup policy. Nothing changes without confirmation."
+            "Review the interrupted Fatekeeper installation before continuing." if route == "recovery-blocked" else
+            "Review downloaded files and backups. Nothing changes without confirmation."
             if route != "blocked" else "Verification blocked. Obtain the correct archive and rescan.")
         self._update_workflow_guidance()
         self.advanced_availability_changed.emit()

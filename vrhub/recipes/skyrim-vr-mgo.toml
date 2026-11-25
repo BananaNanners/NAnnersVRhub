@@ -63,9 +63,9 @@ requirements = [
   "Review PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1 in the MO2 shortcut's Steam launch options. The report checks simple leading environment assignments; wrappers may need manual review.",
 ]
 notes = [
-  "The October 17 profile snapshot reports Open Composite Unleashed for Skyrim VR 171182 5.0.4 2026 enabled and the older XR entry disabled. This is configuration evidence, not a new gameplay test.",
-  "A local pass means configuration checks passed; it does not confirm a current gameplay session.",
-  "Jackify/Wabbajack remains responsible for MGO installation and updates.",
+  "The October 17 setup check found Open Composite Unleashed for Skyrim VR 171182 5.0.4 2026 enabled and the older XR entry disabled. This was a setup check, not a new gameplay test.",
+  "Passing setup checks does not confirm that the game is currently working in VR.",
+  "Use Jackify or Wabbajack to install and update Mad God’s Overhaul.",
 ]
 
 [compatibility.reference]

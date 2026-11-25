@@ -69,7 +69,7 @@ class DependencyReviewDialog(QDialog):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         if plan.verification_failed:
-            self.status.setText("INSTALLATION BLOCKED - DEPENDENCY CHECKSUM FAILED")
+            self.status.setText("INSTALLATION BLOCKED - DOWNLOAD COULD NOT BE VERIFIED")
 
         def archive_label(path, role):
             if path in plan.failed_archives:
@@ -123,7 +123,7 @@ class DependencyReviewDialog(QDialog):
             self.blockers = label(chr(10).join(plan.blockers) if plan.blockers else
                                   "No additional recovery blocker detected.")
         self.blockers.setStyleSheet("color:#FFD21A;font-weight:700")
-        label("Archive identity and layout do not establish VR compatibility. Follow the Setup Guide for runtime prerequisites.")
+        label("Verified downloads do not guarantee that VR will work. Follow the Setup Guide for the remaining requirements.")
         details = "file decisions" if plan.file_decisions else "exact archive file inventories"
         self.inventory_toggle = QPushButton("Show " + details)
         self.inventory_toggle.setCheckable(True)
@@ -141,7 +141,7 @@ class DependencyReviewDialog(QDialog):
                                                        "", "PROFILE", *plan.profile.file_names)))
         if plan.verification_failed:
             self.inventory_toggle.hide()
-            label("Archive SHA-256 values in the table are the required pins. Download the approved release and rescan.")
+            label("The file checks in the table identify the required versions. Download the approved release and scan again.")
         self.inventory.hide()
         layout.addWidget(self.inventory)
         self.inventory_toggle.toggled.connect(self.inventory.setVisible)
@@ -170,7 +170,7 @@ class DependencyReviewDialog(QDialog):
             self.apply_button.setToolTip("Runs only against a separate disposable prefix.")
             self.apply_button.clicked.connect(self.run_rehearsal)
         if plan.needs_backend_verification:
-            self.backend.setText(plan.backend_status + " Verifying the pinned backend release...")
+            self.backend.setText(plan.backend_status + " Checking the required UEVR file...")
             worker = BackendVerification(QApplication.instance())
             worker.result.connect(self.show_backend_result)
             worker.finished.connect(worker.deleteLater)
@@ -180,7 +180,7 @@ class DependencyReviewDialog(QDialog):
         if asset is not None:
             self.verified_asset = asset
             self.apply_button.setEnabled(self.disposable_rehearsal or (self.has_changes and self.install_authorized()))
-            self.backend.setText(self.plan.backend_status + " Backend SHA-256 verified.")
+            self.backend.setText(self.plan.backend_status + " Required UEVR file verified.")
         else:
             self.backend.setText(
                 "Backend verification failed. Check your connection and reopen Review installation. "

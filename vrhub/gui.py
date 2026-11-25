@@ -58,7 +58,7 @@ class HeroicInjectorDialog(QDialog):
         self.resize(690, 360)
         layout = QVBoxLayout(self)
         self.launch = launch
-        self.status = QLabel(error or ("Injector launch requested using Heroic's selected runner and prefix." if launch else "Use the manual Heroic route below."))
+        self.status = QLabel(error or ("UEVR launch requested using this game’s Heroic settings." if launch else "Use the manual Heroic steps below."))
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         text = QLabel("Keep Hogwarts Legacy running after shader loading. In the injector, choose the HogwartsLegacy process and OpenXR, then Inject. Close the in-game overlay with Insert before checking immersion. Closing this Hub dialog leaves the injector and game running.")
@@ -108,7 +108,7 @@ class HeroicInjectorDialog(QDialog):
             self.output.setPlainText(self.launch.output_tail()[-6000:])
             self.output.show()
         else:
-            self.status.setText("Launcher exited without an error. Check the UEVR window; this does not confirm injection or VR rendering.")
+            self.status.setText("The launcher closed without an error. Check the UEVR window. VR gameplay is not confirmed.")
 
     def open_heroic(self):
         try:
@@ -164,7 +164,7 @@ class LogDiagnosticsDialog(QDialog):
         title.setWordWrap(True)
         title.setStyleSheet(f"color: {YELLOW}; font-size: 16px; font-weight: 700;")
         layout.addWidget(title)
-        intro = QLabel("Inspect recent log tails for known errors. Findings are historical evidence; they do not change compatibility checks or gameplay test history.")
+        intro = QLabel("Check recent game logs for known errors. Past errors do not confirm a current problem. This does not change your readiness checks or saved gameplay tests.")
         intro.setWordWrap(True)
         layout.addWidget(intro)
         self.auto_btn = QPushButton("Scan expected log")
@@ -209,7 +209,7 @@ class LogDiagnosticsDialog(QDialog):
         self.copy_btn.setEnabled(False)
         for button in (self.auto_btn, self.choose_btn, self.refresh_btn):
             button.setEnabled(False)
-        self.summary.setText("Reading bounded log tails…")
+        self.summary.setText("Reading recent log entries…")
         self.details.clear()
         self.worker = LogWorker(self.recipe, self.roots, self.files, self)
         self.worker.done.connect(self.show_report)
@@ -693,13 +693,13 @@ class HubWindow(QMainWindow):
         self.install_btn = QPushButton("Review mod archives")
         self.install_btn.setToolTip(
             "Choose archive files for review.\n"
-            "The Hub checks exact destinations and backups.\n"
+            "The Hub checks where files will go and which backups are needed.\n"
             "Installation requires a separate confirmation.")
         self.uninstall_btn = QPushButton("Uninstall mod")
         self.profile_btn = QPushButton("Review UEVR profile…")
         self.profile_btn.setToolTip(
-            "Review selected ZIP, exact profile destination, persistent backup policy, "
-            "and any legacy/manual-recovery blockers before installation.")
+            "Review the selected ZIP, where files will go, how backups are kept, "
+            "and anything that prevents safe installation.")
         self.unprofile_btn = QPushButton("Remove profile")
         self.copy_btn = QPushButton("Copy launch options")
         self._steam_injectors = {}
@@ -712,11 +712,11 @@ class HubWindow(QMainWindow):
         # one backend, one in-progress status, and no duplicated signal.
         self.check_btn = self.mod_updates.refresh_button
         self.check_btn.setToolTip(
-            "Read-only version lookup. Does not download, install or remove mods.")
+            "Check for newer versions. Nothing is downloaded, installed or removed.")
         self.mark_btn = QPushButton("Mark as up to date")
         self.key_btn = QPushButton("Nexus API key…")
         self.verify_btn = QPushButton("Verify mods")
-        self.preflight_btn = QPushButton("Preflight")
+        self.preflight_btn = QPushButton("Check game readiness")
         self.inspect_btn = QPushButton("Inspect archive…")
         self.diag_btn = QPushButton("Copy diagnostics")
         self.bridge_log_btn = QPushButton("Open bridge log")
@@ -904,15 +904,15 @@ class HubWindow(QMainWindow):
         rollback_title.setObjectName("rollbackHeading")
         rollback_layout.addWidget(rollback_title)
         self.rollback_summary = QLabel(
-            "Choose a game to view its Hub-managed recovery records.")
+            "Choose a game to view its installation and backup records.")
         self.rollback_summary.setObjectName("rollbackSummary")
         self.rollback_summary.setWordWrap(True)
         rollback_layout.addWidget(self.rollback_summary)
         rollback_notice = QLabel(
-            "Recorded does not mean verified or recoverable. The Hub checks "
-            "current files and retained originals when an operation is requested. "
-            "Legacy and modified UEVR profile installations remain protected; "
-            "Dev5C3 live-profile execution is disabled.")
+            "A saved installation record does not guarantee that files can be restored. The Hub checks "
+            "current files and saved originals before any restore. "
+            "Older and customized UEVR profiles remain protected. "
+            "Live profile installation and recovery are disabled in this preview.")
         rollback_notice.setObjectName("rollbackNotice")
         rollback_notice.setWordWrap(True)
         rollback_layout.addWidget(rollback_notice)
@@ -989,12 +989,12 @@ class HubWindow(QMainWindow):
         dashboard_layout = QVBoxLayout(dashboard)
         dashboard_title = QLabel("VR SYSTEM DASHBOARD")
         dashboard_title.setStyleSheet(f"color: {YELLOW}; font-size: 20px; font-weight: 800;")
-        self.scan_summary = QLabel("Scan your host VR setup, then use game Preflight for the selected game.")
+        self.scan_summary = QLabel("Check your VR setup, then check the selected game.")
         self.scan_summary.setWordWrap(True)
         self.runtime_state = QLabel("Runtime: checking…")
         self.server_state = QLabel("Server: checking…")
         self.headset_state = QLabel("Headset: checking…")
-        self.controllers_state = QLabel("Controllers: UNVERIFIED")
+        self.controllers_state = QLabel("Controllers: Not tested")
         for label in (self.runtime_state, self.server_state, self.headset_state, self.controllers_state):
             label.setObjectName("runtimePill")
         self.auto_live = QCheckBox("Auto-refresh live status every 5 seconds")
@@ -1010,7 +1010,7 @@ class HubWindow(QMainWindow):
         self.save_scan_btn.clicked.connect(self.save_system_report)
         self.save_scan_btn.setEnabled(False)
         self.system_details = QTextBrowser()
-        self.system_details.setPlainText("Connect the headset in your runtime manager, then scan. The scan does not start a runtime or change your setup.")
+        self.system_details.setPlainText("Connect your headset using your VR software, then scan. This does not start VR software or change your setup.")
         dashboard_layout.addWidget(dashboard_title)
         dashboard_layout.addLayout(_row(self.runtime_state, self.server_state, self.headset_state, self.controllers_state))
         dashboard_layout.addWidget(self.scan_summary)
@@ -1082,7 +1082,7 @@ class HubWindow(QMainWindow):
         self.copy_scan_btn.setEnabled(False)
         self.save_scan_btn.setEnabled(False)
         if not live_only:
-            self.scan_summary.setText("Scanning host VR setup…")
+            self.scan_summary.setText("Checking your VR setup…")
         self.scan_worker = ScanWorker(self.scan_report if live_only else None, self)
         self.scan_worker.done.connect(self.show_system_report)
         self.scan_worker.failed.connect(self.scan_failed)
@@ -1096,7 +1096,7 @@ class HubWindow(QMainWindow):
         self.runtime_state.setText(f"Runtime: {selection}")
         self.runtime_state.setStyleSheet(f"color: {GREEN if live['runtime_selected'] else RED};")
         server = live["server_running"]
-        self.server_state.setText("Server: " + ("RUNNING" if server else "NOT OBSERVED" if server is False else "UNKNOWN"))
+        self.server_state.setText("Server: " + ("RUNNING" if server else "NOT DETECTED" if server is False else "UNKNOWN"))
         self.server_state.setStyleSheet(f"color: {GREEN if server else MUTED};")
         headset = live["headset_connected"]
         self.headset_state.setText("Headset: " + ("CONNECTED" if headset else "DISCONNECTED" if headset is False else "UNKNOWN"))
@@ -1110,7 +1110,7 @@ class HubWindow(QMainWindow):
             f"  •  Live status: {local_time(live['sampled_at'])}")
         activity = live.get("activity", "UNKNOWN")
         self.runtime_label.setText(f"●  {activity}")
-        self.runtime_label.setToolTip(f"OpenXR: {selection}. Runtime activity is observed, not a gameplay test.")
+        self.runtime_label.setToolTip(f"OpenXR: {selection}. This shows VR system activity, not whether a game works in VR.")
         self.runtime_label.setStyleSheet(f"color: {MUTED if activity in ('Idle', 'UNKNOWN') else GREEN};")
         scrollbar = self.system_details.verticalScrollBar()
         position = scrollbar.value()
@@ -1122,7 +1122,7 @@ class HubWindow(QMainWindow):
     def scan_failed(self, message):
         self.scan_report = None
         self.runtime_label.setText("●  UNKNOWN")
-        self.runtime_label.setToolTip("Runtime activity could not be sampled.")
+        self.runtime_label.setToolTip("Could not check VR system status.")
         self.runtime_label.setStyleSheet(f"color: {MUTED};")
         self.runtime_state.setText("Runtime: UNKNOWN")
         self.server_state.setText("Server: UNKNOWN")
@@ -1345,7 +1345,7 @@ class HubWindow(QMainWindow):
     def refresh_rollback_summary(self, recipe):
         """Describe records without implying that a backup is validated."""
         if not recipe:
-            self.rollback_summary.setText("Select a game to inspect recovery records.")
+            self.rollback_summary.setText("Choose a game to view its backups.")
             return
         try:
             records = hub.state()
@@ -1357,27 +1357,27 @@ class HubWindow(QMainWindow):
         installed = records.get(recipe["id"])
         profile = records.get(recipe["id"] + ":profile")
         if installed is None:
-            mod_status = "No Hub-managed mod installation record."
+            mod_status = "No mod installation recorded by the Hub."
         elif installed.get("installer") == "fatekeeper-pair-fk4":
-            mod_status = "Recorded Fatekeeper transaction; latest recovery journal requires revalidation."
+            mod_status = "Fatekeeper installation recorded. Its recovery files must be checked before restoring."
         elif recipe["id"] == "fatekeeper" and recipe.get("archive_pins"):
-            mod_status = "Legacy Fatekeeper record: automatic removal blocked; paired recovery review required."
+            mod_status = "Older Fatekeeper installation. Automatic removal is blocked; review the mod and profile together."
         elif installed.get("installer") == "gameroot-2":
-            mod_status = "Recorded game-root install with retained originals; revalidation required."
+            mod_status = "Installation recorded with original files saved. Check them before restoring."
         else:
-            mod_status = "Existing mod installation record; recovery policy depends on installer."
+            mod_status = "Installation recorded. Restore options depend on how it was installed."
         if "profile" not in recipe:
             profile_status = "No UEVR profile step for this game."
         elif profile is None:
-            profile_status = "No Hub-managed UEVR profile record."
+            profile_status = "No UEVR profile installation recorded by the Hub."
         elif profile.get("installer") == "fatekeeper-pair-fk4":
-            profile_status = "Recorded paired Fatekeeper profile; recovery covers the latest reviewed transaction."
+            profile_status = "Fatekeeper profile recorded. Recovery covers the last reviewed installation."
         elif recipe["id"] == "fatekeeper" and recipe.get("archive_pins"):
-            profile_status = "Legacy Fatekeeper profile: independent restoration blocked; paired recovery review required."
+            profile_status = "Older Fatekeeper profile. Restore it only together with the mod after review."
         elif profile.get("installer") == "uevr-profile-2":
-            profile_status = "Recorded profile backup; full SHA-256 recheck required before restore."
+            profile_status = "Profile backup recorded. All backup files must be verified before restoring."
         else:
-            profile_status = "Legacy UEVR profile record: automatic restoration blocked."
+            profile_status = "Older UEVR profile installation. Automatic restoration is blocked."
         notice = ""
         if recipe["id"] == "fatekeeper":
             from .fatekeeper_commit import recovery_notice
@@ -1792,11 +1792,11 @@ class HubWindow(QMainWindow):
             if not fatekeeper_commit.live_install_authorized():
                 QMessageBox.information(
                     self, "Fatekeeper recovery",
-                    "Live Fatekeeper recovery requires separate authorization.")
+                    "Fatekeeper recovery is disabled in this preview. No files have been changed.")
                 return
             if QMessageBox.question(
                     self, "Restore Fatekeeper dependencies",
-                    "Restore the verified backup of the injector, profile and Hub records?",
+                    "Restore the saved UEVR files, VR profile and Hub installation records from the verified backup?",
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
                 self._run(lambda: fatekeeper_commit.recover_live(_roots()), "Restored",
                           lambda _: "Fatekeeper files and Hub records were restored.")
@@ -1809,17 +1809,17 @@ class HubWindow(QMainWindow):
                 return
             if not entry:
                 QMessageBox.information(
-                    self, "No recorded game-root installation",
-                    "No Hub-managed Cyberpunk installation is recorded. "
+                    self, "No recorded mod installation",
+                    "The Hub has no record of installing Cyberpunk mods. "
                     "Nothing will be removed.")
                 return
             if entry.get("installer") != "gameroot-2":
                 QMessageBox.warning(
                     self, "Legacy Cyberpunk install — automatic removal blocked",
-                    "This installation record predates persistent originals. "
+                    "This older installation does not have the required original-file backups. "
                     "The Hub cannot guarantee restoration of the working mod files. "
                     "Nothing has been removed. Preserve your game and review "
-                    "the existing files manually before attempting migration.")
+                    "the existing files before making changes.")
                 return
             originals = entry.get("originals", {})
             restored = sum(v is not None for v in originals.values())
@@ -1828,9 +1828,9 @@ class HubWindow(QMainWindow):
                 f"Restore {restored} original Cyberpunk file(s) from verified "
                 f"persistent backups, and remove {removed} files added by "
                 "this recorded install?\n\n"
-                "Every current file and original backup will be rehashed. "
-                "Changes, missing backups and symlinks block all restoration. "
-                "The retained originals remain in Hub storage afterward.\n\n"
+                "The Hub will check every current file and original backup again. "
+                "Changed files, missing backups or links to other files prevent restoration. "
+                "The original backups will be kept afterward.\n\n"
                 "Confirm the game is closed before proceeding.")
         else:
             message = (
@@ -1860,13 +1860,13 @@ class HubWindow(QMainWindow):
             return
         message = (
             f"Restore the previous {recipe['name']} UEVR profile?\n\n"
-            f"Exact destination: {review['destination']}\n"
-            f"Managed files verified: {review['installed_files']}\n"
-            f"Original files retained: {review['original_files']} "
+            f"Profile folder: {review['destination']}\n"
+            f"Installed files verified: {review['installed_files']}\n"
+            f"Original files saved: {review['original_files']} "
             f"({review['original_bytes']:,} bytes)\n\n"
-            "The Hub will validate the entire installed directory again and "
-            "check the retained original backup. Any additions, removals or "
-            "changes block restoration. The backup remains retained afterward.")
+            "The Hub will check the entire profile folder again and "
+            "verify the original backup. Any additions, removals or "
+            "changes block restoration. The backup will be kept afterward.")
         choice = QMessageBox.question(
             self, "Review verified UEVR profile restoration", message,
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -2031,7 +2031,7 @@ class HubWindow(QMainWindow):
             rep = hub.preflight(r, _roots())
             self.preflight_results[r["id"]] = rep
             self.show_details()
-            QMessageBox.information(self, "Preflight", hub.preflight_text(rep))
+            QMessageBox.information(self, "Game readiness", hub.preflight_text(rep))
 
     def inspect_planned_archive(self, archive_path):
         """Use the existing validated read-only staging inspector only."""

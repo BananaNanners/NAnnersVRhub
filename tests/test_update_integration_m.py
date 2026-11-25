@@ -355,7 +355,7 @@ class IntegrationGuiTests(unittest.TestCase):
             self.assertNotIn("UPDATE ADAPTER CONTRACTS",
                              self.page.safety_details.toPlainText())
             self.assertEqual(self.page.safety_summary.text(),
-                             "Replacement safety: not reviewed.")
+                             "File replacement: not reviewed.")
             adapter.assert_not_called()
             before=(self.page.install_review_button.text(),
                     self.page.install_review_button.isEnabled())

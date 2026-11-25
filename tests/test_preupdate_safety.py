@@ -296,7 +296,7 @@ class PreUpdateSafetyGuiTests(unittest.TestCase):
             self.page.comparison_toggle.click()
             self.page.set_online_results([])
             self.assertEqual(self.page.safety_summary.text(),
-                             "Replacement safety: not reviewed.")
+                             "File replacement: not reviewed.")
             self.assertFalse(self.page.safety_details.isVisible())
             self.assertEqual(self.page.safety_button.text(),
                              "Review replacement safety (read-only)")

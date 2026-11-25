@@ -98,7 +98,7 @@ class DashboardModelTests(unittest.TestCase):
         result = snapshot(row(), preflight={"ready": True, "rows": [
             {"name": "OpenXR", "ok": True, "required": True}]})["vr"]
         self.assertEqual(result[1], "Local checks passed")
-        self.assertIn("Headset rendering not verified", result[2])
+        self.assertIn("VR gameplay is not confirmed", result[2])
 
     def test_failing_preflight_has_warning(self):
         result = snapshot(row(), preflight={"ready": False, "rows": [

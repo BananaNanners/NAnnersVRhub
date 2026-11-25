@@ -169,7 +169,7 @@ class QtModUpdatesTests(unittest.TestCase):
         self.app.processEvents()
         self.assertTrue(self.page.github_notice.isVisible())
         self.assertIn("temporary online lookup", self.page.github_notice.text())
-        self.assertIn("no mod files were changed", self.page.github_notice.text())
+        self.assertIn("no mod files were changed", self.page.github_notice.text().lower())
         self.assertEqual(self.page.sections["review"].table.item(0, 3).text(),
                          "!  Rate limited")
         self.page.set_recipe(self.recipe, sample_updates())

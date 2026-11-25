@@ -68,7 +68,7 @@ class GameNavigationTests(unittest.TestCase):
         self.assertIn("profile", self.win.compat_report)
         self.assertIn("checks", self.win.compat_report)
         self.assertIn("local_test", self.win.compat_report)
-        self.assertIn("Bundled compatibility reference", self.win.compat_details.toHtml())
+        self.assertIn("Setup and previous test results", self.win.compat_details.toHtml())
         self.assertIn("Refresh compatibility", self.win.compat_refresh_btn.text())
         self.assertEqual(self.win.compat_copy_btn.text(), "Copy compatibility report")
         self.assertEqual(self.win.test_history_btn.text(), "Test history…")
@@ -94,11 +94,11 @@ class GameNavigationTests(unittest.TestCase):
             recipe["id"] + ":profile": {"root":"/old"},
         }):
             self.win.refresh_rollback_summary(recipe)
-        self.assertIn("recovery policy depends on installer",
+        self.assertIn("Restore options depend on how it was installed",
                       self.win.rollback_summary.text())
         self.assertIn("No UEVR profile step",
                       self.win.rollback_summary.text())
-        self.assertIn("Recorded does not mean verified",
+        self.assertIn("does not guarantee that files can be restored",
                       self.win.rollback_page.findChild(QLabel, "rollbackNotice").text())
         self.assertIsNotNone(self.win.uninstall_btn)
         self.assertIsNotNone(self.win.unprofile_btn)

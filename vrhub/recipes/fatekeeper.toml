@@ -102,9 +102,9 @@ manual_checks = [
   "Review runtime import in Steam, select OpenXR in the injector, and confirm the Fatekeeper profile, VR rendering and controls in actual gameplay.",
 ]
 notes = [
-  "October 18 user report: full VR returned with 2D Screen Mode off and the UEVR overlay closed using Insert. The setting and overlay state are not scanned automatically; the exact cause of the earlier frame-validation failures remains unconfirmed.",
-  "The file inventory checks only files recorded by the Hub; it does not compare them with a downloaded release or certify plugin loading.",
-  "Manual installs without a Hub inventory stay INCOMPLETE even when the named injector and config files are found.",
+  "On October 18, the player reported full VR after turning off 2D Screen Mode and closing the UEVR overlay with Insert. The Hub does not check these settings automatically. The cause of the earlier display errors remains unknown.",
+  "Recorded-file checks confirm that the files listed by the Hub are present. They do not verify release versions or whether the game loads them.",
+  "Manual installations without a Hub installation record may still show INCOMPLETE even when the required UEVR and profile files are found.",
 ]
 
 [compatibility.checks]

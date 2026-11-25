@@ -130,7 +130,7 @@ class VisualPolishTests(unittest.TestCase):
                           margins.right(), margins.bottom()), (12, 12, 12, 12))
         self.window.game_details_tabs.setCurrentWidget(self.window.compat_page)
         self.app.processEvents()
-        self.assertIn("Bundled compatibility reference",
+        self.assertIn("Setup and previous test results",
                       self.window.compat_details.toHtml())
         self.assertEqual(self.window.compat_refresh_btn.text(),
                          "Refresh compatibility")

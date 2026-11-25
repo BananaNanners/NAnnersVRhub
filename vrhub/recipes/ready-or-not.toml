@@ -61,8 +61,8 @@ manual_checks = [
   "After loading a mission, verify the U/Home VR transitions, actual headset rendering and controller behavior.",
 ]
 notes = [
-  "The report validates recorded VRO package files, not arbitrary .pak files found in the game folder.",
-  "The October 17 user-reported live test succeeded; this dated reference does not automatically validate another session or setup.",
+  "The checks cover the VRO files recorded by the Hub, not every .pak file in the game folder.",
+  "The player reported successful VR gameplay on October 17. This does not confirm a different setup or a current game session.",
 ]
 
 [compatibility.checks]
