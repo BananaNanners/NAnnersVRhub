@@ -28,4 +28,17 @@ Baseline: 95b643ae31b373ac6c9fd39f57a77cb38385fbbf.
   component level. Existing production gate stays closed.
 - Evidence: /home/bananananers/NAnnersVRhub-recovery/Dev5F2A-evidence-jgPCMQ
 
-KDE interactive acceptance pending. Dev5F3 follows acceptance.
+KDE interactive acceptance complete. Dev5F3 is next.
+
+## KDE desktop acceptance — November 25, 2026
+
+Player confirmed all ten DOOM installation acceptance checks passed: required
+bridge dependency, official release link, installed status, relocated controls,
+wording and tooltips, Overview gameplay controls, Compatibility diagnostics,
+Setup Guide, game switching and overall interface. Accepted runtime commit
+728097015adbe44c0f39e16c7c130faf89496483, preview PID 111139; previous
+PID 106488 closed normally. Stable Hub state unchanged; production gate closed.
+Evidence manifest SHA-256:
+1671442e2b023641111665eb4b497af26b057a378168ef8d8b37d28595b0fa25.
+Development acceptance does not authorize live production installation or
+certify fresh-user gameplay.

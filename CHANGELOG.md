@@ -1,7 +1,7 @@
 ## 0.5.5-dev5F2A — DOOM installation workflow (unreleased)
 
 - Expose required KHARVOX Bridge status and source, relocate existing installation controls and simplify setup guide.
-- Real isolated fresh runner installation and manual bridge import passed; 12744 protected entries unchanged. Full regression 1663 tests reported, OK (skipped=1); all 11 skipped-class integration tests passed separately. KDE acceptance pending. See DEV5F2A-DOOM-INSTALLATION.md.
+- Real isolated fresh runner installation and manual bridge import passed; 12744 protected entries unchanged. Full regression 1663 tests reported, OK (skipped=1); all 11 skipped-class integration tests passed separately. All ten KDE DOOM installation acceptance checks passed. See DEV5F2A-DOOM-INSTALLATION.md.
 
 ## 0.5.5-dev5F2 — Setup guides (unreleased)
 
