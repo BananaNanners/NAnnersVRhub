@@ -424,7 +424,7 @@ def _commit(destination, prepared, *, interrupt_after_files=False, process_guard
             raise
 
 
-def _recover(destination, *, process_guard=None):
+def _recover(destination, *, process_guard=None, expected_journal=None):
     if process_guard is not None:
         process_guard()
     root = destination.root
@@ -432,6 +432,8 @@ def _recover(destination, *, process_guard=None):
     raw, _ = _read(journal)
     if raw is None:
         raise RuntimeError("No Fatekeeper recovery journal exists.")
+    if expected_journal is not None and _digest(raw) != expected_journal:
+        raise RuntimeError("Scoped recovery journal changed.")
     record = _parse_journal(destination, raw)
     identity = record["identity"]
     if record["phase"] == "rolled-back":
@@ -499,16 +501,48 @@ def recover(root):
         _recover(destination)
 
 
-def install_reviewed(review, steam_roots=None, *, verified_backend=None):
-    """Apply a player-confirmed Fatekeeper review after the live gate permits it."""
+def install_reviewed(review, steam_roots=None, *, verified_backend=None,
+                     scoped_root=None, scoped_token=None):
+    """Apply a confirmed review; scoped development is independent of release gate."""
     from .fatekeeper_install import prepare_reviewed_install
+    from . import state_transaction
+
+    if scoped_root is not None or scoped_token is not None:
+        from . import fatekeeper_authorization as auth
+        if scoped_root is None or scoped_token is None:
+            raise RuntimeError("Complete scoped installation authorization required.")
+        scope = auth.consume(scoped_token, scoped_root, "install",
+                             lambda scope: auth.review_digest(scope, review))
+        if steam_roots is not None and tuple(map(Path, steam_roots)) != (scope.steam,):
+            raise RuntimeError("Scoped Steam root mismatch.")
+        steam_roots = [scope.steam]
+        destination = Destination(scope.root, scope.prefix, scope.injector,
+                                  scope.profile, scope.state, scope.journal_dir)
+
+        def guard():
+            if auth.resolve_scope(scope.root) != scope:
+                raise RuntimeError("Scoped destination identity changed.")
+            profile_safety._assert_game_stopped("fatekeeper")
+
+        guard()
+        auth.assert_fresh(scope)
+        with state_transaction.locked(destination.state):
+            guard()
+            auth.assert_fresh(scope)
+            prepared = prepare_reviewed_install(review, steam_roots,
+                                                verified_backend=verified_backend)
+            guard()
+            auth.assert_fresh(scope)
+            if not prepared.writes:
+                raise RuntimeError("Scoped fresh installation has no writes.")
+            _commit(destination, prepared, process_guard=guard)
+        return [Path(name) for name in prepared.writes]
 
     destination = _live_destination(steam_roots)
     prepared = prepare_reviewed_install(review, steam_roots, verified_backend=verified_backend)
     if _live_destination(steam_roots) != destination:
         raise RuntimeError("Fatekeeper paths changed while staging. Reopen the review.")
     if not prepared.writes:
-        from . import state_transaction
         with state_transaction.locked(destination.state):
             path = destination.journal_dir / "fk4-journal.json"
             profile_safety._safe_destination(path.parent, destination.root)
@@ -520,8 +554,35 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None):
     return [Path(name) for name in prepared.writes]
 
 
-def recover_live(steam_roots=None):
-    """Restore the journal for the currently resolved Fatekeeper installation."""
+def recover_live(steam_roots=None, *, scoped_root=None, scoped_token=None):
+    """Restore the exact authorized journal; ordinary recovery stays gated."""
+    if scoped_root is not None or scoped_token is not None:
+        from . import fatekeeper_authorization as auth
+        if scoped_root is None or scoped_token is None:
+            raise RuntimeError("Complete scoped recovery authorization required.")
+        binding = None
+
+        def capture(scope):
+            nonlocal binding
+            binding = auth.recovery_digest(scope)
+            return binding
+
+        scope = auth.consume(scoped_token, scoped_root, "recover", capture)
+        if steam_roots is not None and tuple(map(Path, steam_roots)) != (scope.steam,):
+            raise RuntimeError("Scoped Steam root mismatch.")
+        destination = Destination(scope.root, scope.prefix, scope.injector,
+                                  scope.profile, scope.state, scope.journal_dir)
+
+        def guard():
+            if auth.resolve_scope(scope.root) != scope:
+                raise RuntimeError("Scoped destination identity changed.")
+            profile_safety._assert_game_stopped("fatekeeper")
+
+        guard()
+        with _locked(destination):
+            guard()
+            _recover(destination, process_guard=guard, expected_journal=binding)
+        return
     destination = _live_destination(steam_roots)
     with _locked(destination):
         _recover(destination, process_guard=lambda: profile_safety._assert_game_stopped("fatekeeper"))
