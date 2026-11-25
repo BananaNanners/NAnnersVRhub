@@ -44,7 +44,7 @@ def directory():
                 raise ValueError('invalid path')
             return Path(data['directory'])
         except (ValueError, OSError) as exc:
-            raise RuntimeError('Saved KHARVOX folder could not be read. Use Choose KHARVOX folder… to select it again.') from exc
+            raise RuntimeError('Saved KHARVOX folder could not be read. Use Select KHARVOX folder to select it again.') from exc
     explicit = os.environ.get('NANNERS_KHARVOX_DIR', '').strip()
     if explicit:
         return Path(explicit).expanduser().absolute()
@@ -64,7 +64,7 @@ def directory():
     if len(current) == 1:
         return current[0]
     if len(current) > 1:
-        raise RuntimeError('Several KHARVOX 1.4 folders were found. Use Choose KHARVOX folder… to select the intended copy.')
+        raise RuntimeError('Several KHARVOX 1.4 folders were found. Use Select KHARVOX folder to select the intended copy.')
     # Surface an old/partial extraction in diagnostics, but never launch it.
     return next(iter(candidates)) if len(candidates) == 1 else None
 
@@ -72,7 +72,7 @@ def directory():
 def package_rows(root):
     if not root or not root.is_dir() or root.is_symlink():
         return [{'name':'KHARVOX 1.4 folder','ok':False,'required':True,
-                 'detail':'Extract the complete KHARVOX-v1.4.zip outside DOOM and use Choose KHARVOX folder….'}]
+                 'detail':'Extract the complete KHARVOX-v1.4.zip outside DOOM and use Select KHARVOX folder.'}]
     missing = [name for name in REQUIRED_FILES if not regular(root,name)]
     changed = [name for name, sha in BINARY_HASHES.items() if regular(root,name) and digest(root/name) != sha]
     rows = [{'name':'KHARVOX package inventory','ok':not missing,'required':True,
@@ -148,7 +148,7 @@ def _host_plan(recipe, game):
     pfx = prefix(recipe)
     root = directory()
     if not root or root.resolve().is_relative_to(game.resolve()):
-        raise RuntimeError('Select a complete KHARVOX 1.4 folder outside DOOM with Choose KHARVOX folder….')
+        raise RuntimeError('Select a complete KHARVOX 1.4 folder outside DOOM with Select KHARVOX folder.')
     bad = [r['detail'] for r in package_rows(root) if not r['ok']]
     if bad:
         raise RuntimeError('\n'.join(bad))

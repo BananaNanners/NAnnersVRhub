@@ -720,12 +720,16 @@ class HubWindow(QMainWindow):
         self.inspect_btn = QPushButton("Inspect archive…")
         self.diag_btn = QPushButton("Copy diagnostics")
         self.bridge_log_btn = QPushButton("Open bridge log")
-        self.kharvox_folder_btn = QPushButton("Choose KHARVOX folder…")
-        self.doom_prepare_btn = QPushButton("Install VR runner")
-        self.doom_probe_btn = QPushButton("Test VR bridge")
+        self.kharvox_folder_btn = QPushButton("Select KHARVOX folder")
+        self.doom_prepare_btn = QPushButton("Install VR Runner")
+        self.doom_probe_btn = QPushButton("Test VR Setup")
         self.doom_probe_btn.setObjectName("overviewSecondaryLaunch")
         self.doom_logs_btn = QPushButton("Open DOOM diagnostics")
-        self.doom_import_btn = QPushButton("Import bridge package…")
+        self.doom_import_btn = QPushButton("Import KHARVOX Bridge")
+        self.kharvox_folder_btn.setToolTip("Select the fully extracted KHARVOX 1.4 folder outside DOOM.")
+        self.doom_prepare_btn.setToolTip("Download and verify the required bridge, then prepare the separate VR runner. Close DOOM and KHARVOX first.")
+        self.doom_import_btn.setToolTip("Use the official bridge 0.2.0 archive instead of downloading it automatically. Also prepares the VR runner.")
+        self.doom_probe_btn.setToolTip("Connect WiVRn first. Checks the VR setup, not actual gameplay.")
         self.doom_saves_btn = QPushButton("Development: restore game saves…")
         self.bridge_log_btn.setObjectName("secondaryAction")
         refresh_btn = QPushButton("Refresh library")
@@ -806,10 +810,18 @@ class HubWindow(QMainWindow):
         advanced_layout.addLayout(_row(self.diag_btn, self.bridge_log_btn,
                                        self.log_diagnostics_btn, self.support_report_btn))
         advanced_layout.addLayout(_row(self.doom_logs_btn))
-        # DOOM/KHARVOX-only specialist actions remain reachable from
-        # Compatibility, not a second generic installation-tools drawer.
-        advanced_layout.addLayout(_row(self.kharvox_folder_btn,
-                                       self.doom_prepare_btn, self.doom_import_btn))
+        # Reuse the original DOOM installation controls in Install / Update.
+        # Diagnostics stay here; the VR test and launch remain on Overview.
+        self.doom_install_panel = QWidget(self.downloads)
+        doom_layout = QVBoxLayout(self.doom_install_panel)
+        doom_layout.setContentsMargins(0, 0, 0, 0)
+        doom_layout.setSpacing(6)
+        doom_layout.addLayout(_row(self.kharvox_folder_btn,
+                                   self.doom_prepare_btn, self.doom_import_btn))
+        self.downloads.layout().insertWidget(
+            self.downloads.layout().indexOf(self.downloads.table) + 1,
+            self.doom_install_panel)
+        self.doom_install_panel.hide()
         self.more_tools_panel.hide()
         self.more_tools_toggle.toggled.connect(self.more_tools_panel.setVisible)
         self.more_tools_toggle.toggled.connect(
@@ -1246,6 +1258,7 @@ class HubWindow(QMainWindow):
             r and artwork.custom_artwork_path(r).exists()))
         kharvox = bool(r and r.get('handler') == 'kharvox-gog')
         self.doom_saves_btn.setVisible(bool(r and self.development_tools_enabled and r["id"] in game_saves.LAYOUTS))
+        self.doom_install_panel.setVisible(kharvox)
         self.kharvox_folder_btn.setVisible(kharvox)
         for button in (self.doom_prepare_btn, self.doom_probe_btn, self.doom_logs_btn, self.doom_import_btn):
             button.setVisible(kharvox)
@@ -1968,11 +1981,11 @@ class HubWindow(QMainWindow):
             previous.close()
         dialog = QDialog(self)
         dialog.bridge_launch = launch
-        names = {'prepare':'Install VR runner', 'probe':'Test VR bridge', 'doom':'Launch KHARVOX'}
+        names = {'prepare':'Install VR Runner', 'probe':'Test VR Setup', 'doom':'Launch KHARVOX'}
         dialog.setWindowTitle('DOOM — ' + names[action])
         dialog.resize(800,480)
         layout = QVBoxLayout(dialog)
-        messages = {'prepare':'Installing or verifying the isolated DOOM runner. The pinned base is downloaded if needed. Keep DOOM and KHARVOX closed.',
+        messages = {'prepare':'Installing or verifying the required KHARVOX Bridge and separate VR runner. Downloads verified packages if needed. Keep DOOM and KHARVOX closed.',
                     'probe':'Testing the DOOM VR bridge. Keep WiVRn connected; the JSON destination appears below.',
                     'doom':'KHARVOX is running through the tested isolated runner. Select DOOM and SFS in its window.'}
         status = QLabel(messages[action])
@@ -1991,7 +2004,7 @@ class HubWindow(QMainWindow):
             output.setPlainText(tail or 'No console output yet. Game log diagnostics reads the prefix logs separately.')
             if code is not None:
                 if code == 0 and action == 'prepare':
-                    status.setText('Runner installation completed. Connect WiVRn, then use Test VR bridge.')
+                    status.setText('Runner installation completed. Connect WiVRn, then use Test VR Setup.')
                 elif code == 0 and action == 'probe':
                     status.setText('Bridge test passed. You can now Launch DOOM VR. This synthetic test does not verify gameplay.')
                 else:

@@ -197,7 +197,7 @@ class OverviewLaunchToolsTests(unittest.TestCase):
                 fresh.game_details_tabs.indexOf(fresh.overview_page))
             self.app.processEvents()
             self.assertTrue(fresh.doom_probe_btn.isVisible())
-            self.assertEqual(fresh.doom_probe_btn.text(), "Test VR bridge")
+            self.assertEqual(fresh.doom_probe_btn.text(), "Test VR Setup")
             fresh.doom_probe_btn.click()
             probe.assert_called_once_with("probe")
 

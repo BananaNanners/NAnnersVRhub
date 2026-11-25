@@ -38,7 +38,7 @@ def engine():
     try:
         return bridge_installer.load_engine(payload_dir())
     except OSError as exc:
-        raise RuntimeError('The DOOM bridge component is not installed. Use Install VR runner or Import bridge package.') from exc
+        raise RuntimeError('The DOOM bridge component is not installed. Use Install VR Runner or Import KHARVOX Bridge.') from exc
 
 
 def _passed(lab, state):
@@ -70,9 +70,9 @@ def rows():
                     'detail':f'{runner}; pinned runner modules verified. Heroic selection is unchanged.'})
     except (OSError,ValueError,KeyError) as exc:
         out.extend([{'name':'Isolated DOOM VR runner','ok':False,'required':True,
-                     'detail':f'Use Install VR runner. {exc}'},
+                     'detail':f'Use Install VR Runner. {exc}'},
                     {'name':'DOOM VR bridge test','ok':False,'required':True,
-                     'detail':'Install the runner, connect WiVRn, then use Test DOOM VR bridge.'}])
+                     'detail':'Install the runner, connect WiVRn, then use Test VR Setup.'}])
         return out
     try:
         result = _passed(lab, state)
@@ -80,7 +80,7 @@ def rows():
                     'detail':f'Full lab {VERSION} probe recorded: {result}. Historical synthetic test; no current gameplay claim.'})
     except (OSError,ValueError,KeyError) as exc:
         out.append({'name':'DOOM VR bridge test','ok':False,'required':True,
-                    'detail':f'Connect WiVRn and use Test DOOM VR bridge. {exc}'})
+                    'detail':f'Connect WiVRn and use Test VR Setup. {exc}'})
     return out
 
 
@@ -96,7 +96,7 @@ def plan(recipe, game, action='doom', bridge_archive=None):
     # Installation has no game/prefix dependency and never edits Heroic settings.
     if bridge_archive is not None:
         if action != 'prepare':
-            raise RuntimeError('Import a bridge archive using Install VR runner first.')
+            raise RuntimeError('Import a bridge archive using Install VR Runner first.')
         args += ['--bridge-archive', str(bridge_archive)]
     if action == 'prepare':
         return args, dict(os.environ), str(script.parent)

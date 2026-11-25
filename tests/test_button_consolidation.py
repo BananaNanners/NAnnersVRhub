@@ -102,15 +102,16 @@ class ConsolidatedHubControlsTests(unittest.TestCase):
 
     def test_installation_and_compatibility_keep_all_original_secondary_actions(self):
         # Legacy handler objects remain parked but never offered as
-        # duplicate buttons. KHARVOX specialists live in Compatibility.
+        # duplicate buttons. DOOM installation actions live in Install / Update.
         install = ("install_btn", "profile_btn", "verify_btn", "inspect_btn")
         compat = (
             "diag_btn", "bridge_log_btn", "log_diagnostics_btn",
             "support_report_btn", "doom_logs_btn",
-            "kharvox_folder_btn", "doom_prepare_btn", "doom_import_btn",
         )
         for name in install:
             self.assertIs(getattr(self.win, name).parent(), self.win.install_tools_panel)
+        for name in ("kharvox_folder_btn", "doom_prepare_btn", "doom_import_btn"):
+            self.assertIs(getattr(self.win, name).parent(), self.win.doom_install_panel)
         for name in compat:
             self.assertIs(getattr(self.win, name).parent(), self.win.more_tools_panel)
         self.assertIs(self.win.downloads.manual_review_button.parent(), self.win.downloads.review_actions)

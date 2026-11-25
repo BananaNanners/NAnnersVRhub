@@ -237,5 +237,5 @@ class KharvoxTests(unittest.TestCase):
                 self.assertTrue(window.doom_prepare_btn.isHidden());self.assertTrue(window.doom_probe_btn.isHidden());self.assertTrue(window.doom_import_btn.isHidden())
                 self.assertTrue(window.install_btn.isHidden())
                 self.assertTrue(window.install_tools_toggle.isHidden())
-                self.assertIs(window.kharvox_folder_btn.parent(),window.more_tools_panel)
+                self.assertIs(window.kharvox_folder_btn.parent(),window.doom_install_panel)
             finally:window.close();app.processEvents()

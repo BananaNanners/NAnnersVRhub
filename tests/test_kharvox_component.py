@@ -55,6 +55,31 @@ class ComponentTests(unittest.TestCase):
             component.verified_payload(self.state)
         self.assertEqual(list(self.state.iterdir()), [self.marker])
 
+    def test_installation_status_is_read_only_and_never_executes_engine(self):
+        import json
+        with mock.patch.object(component.installer, 'load_engine', side_effect=AssertionError('status must not execute engine')):
+            self.assertEqual(component.installation_status(self.state)[0], 'missing')
+            self.assertEqual(list(self.state.iterdir()), [self.marker])
+            payload = component.payload_dir(self.state)
+            payload.mkdir(parents=True)
+            self.assertEqual(component.installation_status(self.state)[0], 'review')
+            lab = payload / 'lab.py'
+            lab.write_text('fixture')
+            manifest = payload / 'payload-sha256.json'
+            manifest.write_text(json.dumps({'lab.py': component.installer.digest(lab)}))
+            with mock.patch.object(component.installer, 'PAYLOAD_SHA256', component.installer.digest(manifest)):
+                self.assertEqual(component.installation_status(self.state)[0], 'verified')
+                lab.write_text('changed')
+                self.assertEqual(component.installation_status(self.state)[0], 'review')
+                self.assertEqual(lab.read_text(), 'changed')
+        self.preserved()
+
+    def test_installation_status_rejects_linked_component_parent(self):
+        (self.state / 'components').symlink_to(self.root / 'missing', target_is_directory=True)
+        self.assertEqual(component.installation_status(self.state)[0], 'review')
+        self.assertTrue((self.state / 'components').is_symlink())
+        self.preserved()
+
     def test_offline_import_and_reuse_preserve_runner_metadata(self):
         archive = self.archive();self.pin(archive)
         with mock.patch.object(component.installer, 'load_engine'), \

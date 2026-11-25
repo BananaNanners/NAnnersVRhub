@@ -26,6 +26,7 @@ VERSION = '0.2.0'
 ROOT = 'NAnners-KHARVOX-Bridge-0.2.0'
 ARCHIVE_NAME = ROOT + '-source.tar.gz'
 URL = 'https://github.com/BananaNanners/NAnners-KHARVOX-Bridge/releases/download/v0.2.0/' + ARCHIVE_NAME
+RELEASE_PAGE = 'https://github.com/BananaNanners/NAnners-KHARVOX-Bridge/releases/tag/v0.2.0'
 ARCHIVE_SIZE = 39406366
 ARCHIVE_SHA256 = '26dcdbef5588336954676ce2c3023f8b17c11f0263f334610d124f4a514927d0'
 MAX_EXPANDED = 128 * 1024**2
@@ -46,9 +47,32 @@ def verified_payload(state):
         raise ValueError('Linked bridge component directory rejected.')
     path = payload_dir(state)
     if not path.is_dir():
-        raise ValueError('The DOOM bridge component is not installed. Use Install VR runner or Import bridge package.')
+        raise ValueError('The DOOM bridge component is not installed. Use Install VR Runner or Import KHARVOX Bridge.')
     installer.load_engine(path)
     return path
+
+
+def installation_status(state):
+    """Inspect installed payload without importing/executing its Python engine."""
+    import json
+    state = Path(state)
+    target = component_root(state)
+    try:
+        if state.is_symlink() or target.parent.is_symlink() or target.is_symlink():
+            raise ValueError('Linked bridge directory requires review.')
+        if not target.exists():
+            return 'missing', 'Not installed. Install VR Runner downloads the required bridge automatically.'
+        payload = payload_dir(state)
+        manifest = payload / 'payload-sha256.json'
+        if payload.is_symlink() or manifest.is_symlink() or installer.digest(manifest) != installer.PAYLOAD_SHA256:
+            raise ValueError('Missing or changed bridge inventory.')
+        for name, expected in json.loads(manifest.read_text()).items():
+            path = payload / name
+            if path.is_symlink() or not path.resolve().is_relative_to(payload.resolve()) or installer.digest(path) != expected:
+                raise ValueError('Missing or changed bridge file: ' + name)
+        return 'verified', 'Installed and verified. The Hub can reuse this bridge; gameplay is not checked.'
+    except (OSError, ValueError, TypeError, RuntimeError) as exc:
+        return 'review', 'Review required. Existing bridge files will not be overwritten. ' + str(exc)
 
 
 @contextmanager

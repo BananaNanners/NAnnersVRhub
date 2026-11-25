@@ -632,6 +632,16 @@ class GuidedDownloadsPage(QWidget):
         self.backend_install_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.backend_install_status.hide()
         outer.insertWidget(outer.indexOf(self.table), self.backend_install_status)
+        self.doom_bridge_status = QLabel()
+        self.doom_bridge_status.setObjectName("doomBridgeInstallStatus")
+        self.doom_bridge_status.setWordWrap(True)
+        self.doom_bridge_status.setTextFormat(Qt.RichText)
+        self.doom_bridge_status.setOpenExternalLinks(False)
+        self.doom_bridge_status.linkActivated.connect(
+            lambda url: QDesktopServices.openUrl(QUrl(url)) if planner.source_url(url) else None)
+        self.doom_bridge_status.hide()
+        outer.insertWidget(outer.indexOf(self.table), self.doom_bridge_status)
+
         # Dev5D3-Y: move the ORIGINAL guarded primary action above the long
         # dependency table. Do not add a duplicate button or a second route.
         # The scan controls, backup warnings and next-step guidance now sit
@@ -714,6 +724,7 @@ class GuidedDownloadsPage(QWidget):
         if had_recognition:
             self.recognition_changed.emit()
         self._update_backend_install_status()
+        self._update_doom_bridge_status()
         self._invalidate_safety_review()
         self.safety_button.setEnabled(bool(recipe))
         # A verification result is never reused across game switches,
@@ -859,6 +870,21 @@ class GuidedDownloadsPage(QWidget):
         self.backend_install_status.setStyleSheet(
             f"color: {color}; font-weight: 700; padding: 5px 0;")
         self.backend_install_status.show()
+
+    def _update_doom_bridge_status(self):
+        if (self.recipe or {}).get("id") != "doom-2016-gog":
+            self.doom_bridge_status.clear()
+            self.doom_bridge_status.hide()
+            return
+        from . import kharvox_bridge, kharvox_component
+        status, detail = kharvox_component.installation_status(kharvox_bridge.state_dir())
+        color = "#4FE39A" if status == "verified" else "#FFD21A"
+        self.doom_bridge_status.setText(
+            f'<b>NAnners KHARVOX Bridge {kharvox_component.VERSION} — required</b> · '
+            f'<a style="color:#23B7FF" href="{kharvox_component.RELEASE_PAGE}">Download page</a><br>'
+            f'<span style="color:{color}">{escape(detail)}</span>')
+        self.doom_bridge_status.setToolTip("Bridge component only; runner and VR setup are checked separately.")
+        self.doom_bridge_status.show()
 
     def _show_backup_safety(self, recipe):
         if not recipe or recipe.get("method") != "gameroot":

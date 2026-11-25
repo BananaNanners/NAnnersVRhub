@@ -1160,8 +1160,8 @@ class KharvoxGOGHandler(HeroicGOGHandler):
         return rows
 
     def detail_notes(self, recipe):
-        return ['Extract KHARVOX-v1.4.zip completely into a fresh folder outside DOOM. Choose KHARVOX folder… saves only the Hub selection.',
-                'Install VR runner verifies an isolated Proton copy or downloads the exact supported base. Test VR bridge checks it with WiVRn connected. Launch DOOM VR requires its matching full probe pass.',
+        return ['Extract KHARVOX-v1.4.zip completely into a fresh folder outside DOOM. Select KHARVOX folder saves only the Hub selection.',
+                'Install VR Runner obtains the required NAnners KHARVOX Bridge 0.2.0 and verifies or prepares the isolated Proton runner. Import KHARVOX Bridge is the manual archive alternative. Test VR Setup checks it with WiVRn connected. Launch DOOM VR requires its matching full probe pass.',
                 'A user reported 40 minutes of VR gameplay with both controllers and head tracking on October 21, 2026 using KHARVOX 1.4 and lab 0.1.6. This is a dated reference for one setup.',
                 'The original Heroic runner and game prefix are preserved. Launch DOOM (flat) remains owned by Heroic. Other Proton builds are not silently substituted.',
                 'nativeAttempt=False refers to the retired Native renderer, not SFS/AER success or failure. Log evidence never establishes a live VR pass.',

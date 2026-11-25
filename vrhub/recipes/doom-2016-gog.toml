@@ -9,10 +9,10 @@ mod_page = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"
 setup = [
   "Launch the GOG game once through native Heroic. Keep the existing game environment. The supported game executable is DOOMx64vk.exe (Vulkan).",
   "Download KHARVOX 1.4 from the linked release page. Scan the ZIP in Install / Update; Review installation checks compatibility only and does not extract it.",
-  "Extract the tested KHARVOX package outside the DOOM folder, then use Choose KHARVOX folder… in the Hub. Other versions require review.",
-  "Close DOOM and KHARVOX. Use Import bridge package with the matching 0.2.0 source archive if the separate bridge component is not available publicly.",
-  "Click Install VR runner. The Hub verifies and prepares its separate tested runner and bridge without replacing Heroic's runner.",
-  "Connect WiVRn and click Test VR bridge. A matching lab 0.1.6 pass is required before launch.",
+  "Extract the tested KHARVOX package outside the DOOM folder, then use Select KHARVOX folder in the Hub. Other versions require review.",
+  "Close DOOM and KHARVOX. In Install / Update, click Install VR Runner. The Hub downloads and verifies NAnners KHARVOX Bridge 0.2.0 and prepares the separate VR runner if needed. Your original Heroic runner stays unchanged.",
+  "If automatic bridge downloading fails, download NAnners-KHARVOX-Bridge-0.2.0-source.tar.gz from the linked bridge release and use Import KHARVOX Bridge. Do not use GitHub's automatic Source code archives. This also prepares the runner.",
+  "Connect WiVRn and click Test VR Setup in Overview. A matching lab 0.1.6 pass is required before launch.",
 ]
 play = [
   "With your headset connected, click Launch DOOM VR. The Hub uses its isolated runner with your existing Heroic GOG game environment.",
@@ -28,6 +28,10 @@ good_to_know = [
 [[guide_links]]
 label = "KHARVOX 1.4"
 url = "https://github.com/CactusVRStudios/KHARVOX/releases/tag/v1.4.0"
+
+[[guide_links]]
+label = "NAnners KHARVOX Bridge 0.2.0"
+url = "https://github.com/BananaNanners/NAnners-KHARVOX-Bridge/releases/tag/v0.2.0"
 
 [[guide_links]]
 label = "KHARVOX guide and controls"
@@ -66,7 +70,7 @@ runtime = "WiVRn"
 validation = "user-reported-workaround"
 proton = "Use the isolated lab 0.1.6 runner based on Proton-CachyOS11.0-20260703-slr x86_64. Heroic's original runner and selection are preserved. Installation obtains or reuses the exact pinned base; another Proton build is not silently substituted."
 adapter = "KHARVOX 1.4 Windows Vulkan/OpenXR layer with SFS, through the patched isolated runner and WineOpenXR. Host xrizer selection is separate."
-launch = "WiVRn connected -> Install VR runner -> full Test VR bridge pass -> Launch DOOM VR -> KHARVOX SFS -> loaded campaign save."
+launch = "WiVRn connected -> Install VR Runner -> full Test VR Setup pass -> Launch DOOM VR -> KHARVOX SFS -> loaded campaign save."
 workarounds = ["Use the isolated lab 0.1.6 runner and its full matching probe pass. The unpatched Heroic runner is not the tested VR route.", "Select SFS in the complete KHARVOX 1.4 launcher/runtime pair."]
 requirements = ["Keep KHARVOX outside DOOM and reuse the existing native Heroic GOG prefix.", "Connect WiVRn before testing or launching.", "Install and test the separately versioned bridge; existing standalone lab 0.1.6 results are reused only after validation."]
 manual_checks = ["Review the selected GOG installation and SFS in KHARVOX; these saved selections are not scanned.", "Verify headset rendering, stereo depth, tracking, both controllers, movement, weapons and menu return in a loaded campaign. A dated reference does not verify the current session."]

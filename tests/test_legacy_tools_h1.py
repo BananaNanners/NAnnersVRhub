@@ -91,18 +91,21 @@ class ConsolidatedToolsWindowTests(unittest.TestCase):
         self.assertFalse(action.isEnabled())
         page.worker=None
 
-    def test_kharvox_tools_in_compatibility_only(self):
+    def test_kharvox_install_tools_in_install_update_only(self):
         self.select("doom-2016-gog")
         for button in (self.win.kharvox_folder_btn,
                        self.win.doom_prepare_btn,self.win.doom_import_btn):
-            self.assertIs(button.parent(),self.win.more_tools_panel)
+            self.assertIs(button.parent(),self.win.doom_install_panel)
             self.assertFalse(button.isHidden())
         self.win.game_details_tabs.setCurrentWidget(self.win.compat_page)
-        self.win.more_tools_toggle.click()
+        self.app.processEvents()
+        self.assertFalse(self.win.kharvox_folder_btn.isVisible())
+        self.win.game_details_tabs.setCurrentIndex(
+            self.win.game_details_tabs.indexOf(self.win.downloads))
         self.app.processEvents()
         self.assertTrue(self.win.kharvox_folder_btn.isVisible())
         self.assertTrue(self.win.doom_prepare_btn.isVisible())
-        self.win.more_tools_toggle.click()
+        self.assertTrue(self.win.doom_import_btn.isVisible())
         self.select("subnautica")
         self.assertTrue(self.win.kharvox_folder_btn.isHidden())
         self.assertTrue(self.win.doom_import_btn.isHidden())
