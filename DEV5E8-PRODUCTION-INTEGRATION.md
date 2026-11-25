@@ -48,7 +48,7 @@ and mount/ancestor identity checks require review before activation.
 Legacy journals without provenance are not adopted. Full update/repair
 after a previous managed transaction needs additional production-path
 coverage. No actual reboot, live install, or gameplay acceptance implied.
-KDE acceptance pending.
+KDE desktop acceptance passed (8/8).
 
 ## Agreed player-first direction
 
@@ -57,3 +57,15 @@ setup guides (Dev5F2), controller bindings (Dev5F3), followed by end-to-end
 game installation/gameplay acceptance (Dev5G) and release preparation.
 Safety gates remain separately authorized. AGENTS.md records permanent
 player-friendly wording, guide accuracy and controller evidence rules.
+
+## Interactive KDE acceptance — November 25, 2026
+
+Player confirmed all eight desktop checks passed: preview, game navigation,
+Install / Update organization, archive scanning, Fatekeeper backend
+recognition, VR System/runtime detection, existing setup guides and
+controller bindings accessibility, and closed installation/recovery gates.
+Previous PID 85441 closed normally; current preview PID 93408 was verified
+from runtime checkpoint 489fce872943edb2f98ff48fe3e0ea9866aeb957.
+Stable Hub state hash unchanged. Development acceptance complete; production
+activation remains blocked by the limitations above. Next: Dev5F1 wording
+and readability, then setup guides and controller bindings.
