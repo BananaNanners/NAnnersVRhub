@@ -2,7 +2,7 @@
 
 - Persist scoped journal provenance in an independent private authority directory and record intended journal transitions before publication.
 - Seven independent-process recovery scenarios and two corrupt/redirected evidence checks passed. Full suite: 1633 passed, one skipped, zero failures/errors.
-- No GUI changes; production gate closed. Reboot/power-loss durability, trusted production authority provisioning and desktop acceptance remain pending. See DEV5E6-E2-PERSISTENT-RECOVERY.md.
+- No GUI changes; all eight E2 KDE desktop checks passed. Production gate closed. Reboot/power-loss durability and trusted production authority provisioning remain pending. See DEV5E6-E2-PERSISTENT-RECOVERY.md.
 
 ## 0.5.5-dev5E6 — Fresh-install gameplay and scoped recovery hardening (unreleased)
 

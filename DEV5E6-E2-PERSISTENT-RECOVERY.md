@@ -48,5 +48,17 @@ Global production installation/recovery authorization remains closed.
   security boundary.
 - Historical E1/A/B journals are not retroactively authorized. No actual
   game install or gameplay rerun in E2; E1 gameplay acceptance retained.
-- Latest KDE desktop acceptance pending. Production authorization, packaging,
+- Latest KDE desktop acceptance passed (8/8). Production authorization, packaging,
   remaining game testing and release approval remain separate.
+
+## E2 interactive KDE acceptance — November 25, 2026
+
+Player confirmed all eight desktop checks passed: preview, navigation,
+Install / Update organization, verified backend status, existing installation
+recognition, VR System/runtime detection, no extra controls, and closed
+installation/recovery gates. Previous PID 75884 closed normally; exactly
+one new preview PID 80991 observed in KDE, launched from runtime checkpoint
+f2c151789428a6f6b13efd01870ac3e11eeb21c0. Stable Hub state hash unchanged.
+This completes E2 desktop acceptance, not production authorization.
+Production authority provisioning, reboot durability, stale-ledger replay
+and initial staging cleanup limitations remain open.
