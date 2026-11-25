@@ -107,6 +107,25 @@ class _Permission:
 
 _lock = Lock()
 _permissions = {}
+# Scoped development provenance is intentionally process-local, like tokens.
+# Never infer authority from a journal or backup supplied by the filesystem.
+# A restart requires manual review; this is not a same-UID security boundary.
+_journal_provenance = {}
+
+
+def _record_journal(scope, digest):
+    """Called only by the authorized transaction writer after durable publish."""
+    with _lock:
+        _journal_provenance[scope.root] = (os.getpid(), scope, digest)
+
+
+def _trusted_recovery_digest(scope):
+    digest = recovery_digest(scope)
+    with _lock:
+        provenance = _journal_provenance.get(scope.root)
+    if provenance != (os.getpid(), scope, digest):
+        raise RuntimeError('Scoped recovery journal changed or lacks authorized transaction provenance; manual review required.')
+    return digest
 
 
 def _issue(scope, operation, binding, ttl):
@@ -181,7 +200,7 @@ def authorize_recovery(root, *, expected_journal, confirmed=False, ttl=120):
     if confirmed is not True:
         raise RuntimeError('Explicit scoped recovery approval required.')
     scope = resolve_scope(root)
-    binding = recovery_digest(scope)
+    binding = _trusted_recovery_digest(scope)
     if binding != expected_journal:
         raise RuntimeError('Scoped recovery review changed.')
     return _issue(scope, 'recover', binding, ttl)

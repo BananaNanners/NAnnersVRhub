@@ -225,6 +225,77 @@ class ScopedAuthorizationTests(unittest.TestCase):
                 self.rollback(token)
         self.assertFalse(fatekeeper_commit.live_install_authorized())
 
+    def test_unapproved_valid_journal_cannot_authorize_recovery(self):
+        # A structurally valid journal from an unscoped writer must not
+        # confer permission, even with matching payload and state evidence.
+        destination = fatekeeper_commit.Destination(
+            self.scope.root, self.scope.prefix, self.scope.injector,
+            self.scope.profile, self.scope.state, self.scope.journal_dir)
+        fatekeeper_commit._commit(destination, self.prepared())
+        digest = auth.recovery_digest(self.scope)
+        before = self.state.read_bytes()
+        with self.assertRaisesRegex(RuntimeError, 'provenance'):
+            auth.authorize_recovery(self.root, expected_journal=digest, confirmed=True)
+        self.assertEqual(self.state.read_bytes(), before)
+        self.assertTrue(self.scope.injector.exists())
+
+    def test_modified_journal_before_approval_is_rejected(self):
+        journal = self.installed_fixture()
+        journal.write_bytes(journal.read_bytes() + b'\n')
+        with self.assertRaisesRegex(RuntimeError, 'provenance'):
+            self.recovery_token()
+        self.assertTrue(self.state.exists())
+
+    def test_restart_without_provenance_fails_closed(self):
+        self.installed_fixture()
+        with patch.object(auth, '_journal_provenance', {}):
+            with self.assertRaisesRegex(RuntimeError, 'manual review'):
+                self.recovery_token()
+        self.assertTrue(self.state.exists())
+        with patch('vrhub.profile_safety._assert_game_stopped'):
+            self.rollback(self.recovery_token())
+        self.assertFalse(self.state.exists())
+
+    def test_other_process_cannot_reuse_provenance(self):
+        self.installed_fixture()
+        with patch.object(auth.os, 'getpid', return_value=os.getpid()+1):
+            with self.assertRaisesRegex(RuntimeError, 'provenance'):
+                self.recovery_token()
+        self.assertTrue(self.state.exists())
+
+    def test_old_phase_replay_rejected(self):
+        import json
+        journal = self.installed_fixture()
+        record = json.loads(journal.read_bytes())
+        record['phase'] = 'applying'
+        journal.write_bytes(json.dumps(record).encode())
+        with self.assertRaisesRegex(RuntimeError, 'provenance'):
+            self.recovery_token()
+        self.assertTrue(self.state.exists())
+
+    def test_recovering_phase_can_resume_after_interruption(self):
+        journal = self.installed_fixture()
+        original = fatekeeper_commit._journal
+        interrupted = False
+        def publish(*args, **kwargs):
+            nonlocal interrupted
+            result = original(*args, **kwargs)
+            if args[1] == 'recovering':
+                interrupted = True
+            return result
+        def guard(*args):
+            if interrupted:
+                raise RuntimeError('game running')
+        with (patch.object(fatekeeper_commit, '_journal', side_effect=publish),
+              patch('vrhub.profile_safety._assert_game_stopped', side_effect=guard)):
+            with self.assertRaisesRegex(RuntimeError, 'game running'):
+                self.rollback(self.recovery_token())
+        self.assertIn('recovering', journal.read_text())
+        with patch('vrhub.profile_safety._assert_game_stopped'):
+            self.rollback(self.recovery_token())
+        self.assertFalse(self.state.exists())
+        self.assertFalse(self.scope.injector.exists())
+
     def test_recovery_requires_explicit_confirmation_and_exact_digest(self):
         self.installed_fixture()
         with self.assertRaises(RuntimeError):
