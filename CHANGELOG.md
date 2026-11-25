@@ -2,7 +2,7 @@
 
 - Add safe scoped staging retry, retained abandoned evidence, fixed disk-backed development authority and duplicate-key rejection.
 - Eight new tests passed, including exact stale journal replay rejection with intact ledger. Full regression: 1641 passed, one skipped, zero failures/errors.
-- Production activation remains blocked: ordinary live routes require authority integration, and reboot/power-loss durability is unverified. No GUI changes. See DEV5E7-PRODUCTION-READINESS.md.
+- Production activation remains blocked: ordinary live routes require authority integration, and reboot/power-loss durability is unverified. No GUI changes; all eight KDE desktop checks passed. See DEV5E7-PRODUCTION-READINESS.md.
 
 ## 0.5.5-dev5E6-E2 — Persistent scoped recovery (unreleased)
 

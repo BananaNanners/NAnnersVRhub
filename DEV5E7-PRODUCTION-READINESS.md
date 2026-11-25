@@ -60,7 +60,7 @@ Development-only implementation and validation; global live gate remains false.
    provisioned production trust store. Root/authority path checks do not
    establish a general guarantee against ancestor bind mounts or same-UID
    path substitution. Production destination and storage checks need review.
-7. Final KDE desktop acceptance pending. No new game or headset test in E7;
+7. Final KDE desktop acceptance passed (8/8). No new game or headset test in E7;
    E6 accepted actual gameplay evidence remains historical and unchanged.
 
 Nearest player outcome: verified dependencies install via the existing
@@ -68,3 +68,14 @@ Install / Update workflow without requiring manual DLL placement. Integrate
 the scoped protections into a gated production path and demonstrate the same
 workflow in disposable conditions before requesting explicit live approval.
 Do not add new tabs, selectors, or speculative infrastructure.
+
+## Interactive KDE acceptance — November 25, 2026
+
+Player confirmed all eight desktop checks passed: preview, navigation,
+Install / Update organization, archive scanning/dependency recognition,
+verified backend status, VR System/runtime detection, no extra controls,
+and closed installation/recovery gates. Previous PID 80991 closed normally;
+new preview PID 85441 launched from runtime checkpoint
+f20299c78f96a0fd9b33641626a03ccf293f00a3. Stable Hub state hash unchanged.
+Development acceptance complete; production activation remains blocked
+pending integration and the limitations above.
