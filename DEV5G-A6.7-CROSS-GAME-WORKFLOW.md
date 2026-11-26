@@ -230,3 +230,9 @@ Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D1-full-lodLGh.
 Manifest SHA-256: b3e1043e7de5dbe05c3213059468d28e4884b32c1b3f5e5895516b38b83a4f75.
 Earlier failed evidence referenced by checksum. Interactive KDE acceptance
 pending; no preview replacement performed by sealing.
+
+## D1 player acceptance seal
+Player reported 12/12 KDE checks passed at runtime c91fd63b64312e0296c6221d7b4cbbc672df34ab, previous PID 49534. Independent compositor identification not established.
+Combined D1/ERVR acceptance evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D1-ERVR-acceptance-GsacgW.
+Acceptance manifest SHA-256: 1bb65584ad87977ea12efa987e928f000336cc637965dc6abe29a0d61f4b1d18.
+27 historical manifests/132 entries, 20 ERVR entries, nested D1 evidence, both reboot fixtures and 121 Fatekeeper files verified. Stable state unchanged, gate closed.

@@ -16,3 +16,8 @@ Manifest SHA-256: 1e12765d2f4b325b349bdd417be55c7340905d994b2cdd148b5b9c625dbea2
 
 Correction: manifest entries are relative to the recovery root, not the manifest directory. Future audits must resolve them accordingly.
 Pending: signed attestation, actual production durable removal and atomic state integration, configuration migration, gameplay compatibility, full KDE acceptance. Previous preview PID 49534 absent; no preview process or lifecycle lock observed. No independent compositor verification.
+
+## Player acceptance
+Player confirmed 10/10 KDE desktop checks at runtime 3e9b2b1c10fe51fd51007c82ce3b1bb9ca25e4b2, PID 56886, start November 26 01:40:23 PST. Process, worktree and exclusive lifecycle lock observed; independent compositor identity pending. Existing preview retained. No production activation or gameplay approval.
+Combined D1/ERVR acceptance manifest: ~/NAnnersVRhub-recovery/Dev5G-A6.7D1-ERVR-acceptance-GsacgW/acceptance-manifest.json.
+SHA-256: 1bb65584ad87977ea12efa987e928f000336cc637965dc6abe29a0d61f4b1d18.
