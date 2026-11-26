@@ -73,3 +73,14 @@ runtime checkpoint 82969fead4362ab63752858cccfdac870deb1e88, Qt-visible
 1630 x 1060 window. Previous PID 19893 absent before launch. Preview-only
 examples simulate diagnostics; no real recovery files modified.
 Independent compositor verification not established. Stable state unchanged.
+
+## A6.5-D final regression
+Full suite 1750 passed (76.105s), process 21276 exit 0, no skips/failures/errors.
+Seventeen prior manifests and both reboot fixture inventories verified.
+Stable state unchanged; global production gate closed. A/B/C desktop
+acceptance totals 25/25. No D runtime changes. Cross-game audit subsequently
+identified preview host XDG capture omission and BepInEx maintenance gaps;
+these are tracked separately and full regression does not imply feature parity.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.5D-evidence-C5zFC3.
+
+A6.5-D manifest SHA-256: b06aa413cdf45a753c379992abc896d8bb2cb4ce103cb52835af744fcc8710d0.
