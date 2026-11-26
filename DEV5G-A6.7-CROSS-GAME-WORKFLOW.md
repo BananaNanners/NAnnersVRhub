@@ -292,3 +292,10 @@ Corrected targeted 20/20 (16.791s); full 1870/1870 (97.294s), process 74377 exit
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D3D-corrected-cg0HWj.
 Manifest SHA-256: 3ad8f2b448c7b44bb41ec45f1457e3ac99e7c1e05dfd8880d2c1ecaabeca3559.
 D3 fixture validation complete. Limitations: injected process exits, not physical power-loss certification; schema-accurate synthetic records and disposable destinations, not live production repair authorization. No GUI change, live writes, push or release. D4 managed updates remain pending.
+
+## D4-A — Read-only managed update foundation
+Baseline ac8f1b813c8b49663040088465434106955806ff. Added scoped Subnautica/Valheim review model using existing release catalogs, download planner, archive comparison and installed provenance. Separates recorded installed identity, recipe pin and candidate identity; candidate bytes are rehashed using bounded immutable archive snapshots. No candidate approval or pin substitution. Thunderstore loader remains manual review.
+Four new fixture tests; initial targeted 41/41 (0.272s), repeated targeted 41/41 (0.273s), full 1874/1874 (100.168s), process 76126 exit 0. Source/test hashes, stable state and both recipe hashes verified. Historical audit: 36 manifests/197 entries, ERVR 20 entries, nested D1, two reboot fixtures, 121 Fatekeeper files; all recipe TOMLs unchanged. Gate closed.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D4A-full-WuBPSR.
+Manifest SHA-256: d89a64fc9e9eb42cbb8ee5fa72307a746e23d816220d68afb9eb3956b377c725.
+Limitations: simulated release metadata and candidate bytes, not actual newer upstream ZIPs; identity alone does not validate archive contents or compatibility. Installed provenance is historical, not current-byte verification. Thunderstore automated discovery, exact manifests, transaction integration and GUI integration remain pending. No production writes, pin changes, GUI changes, push or release.
