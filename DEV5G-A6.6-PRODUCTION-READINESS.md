@@ -1,0 +1,12 @@
+# Dev5G-A6.6 — Final production readiness
+
+## A6.6-A — Distribution audit
+Baseline d47e8e0375475360bad35d6752d9e977c61a291b, accepted runtime 18dfb4c. Clean Git export produced matching ZIP and TAR.GZ, 482 files, 7524339 expanded bytes. ZIP 3369543 bytes, TAR.GZ 2949884 bytes. Existing builder includes ignored artifacts outside its exclusion list; build only from clean tracked exports. Audit packages are version 0.5.4, not publication assets. Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.6-audit-1RcFJE. Managed inventory initially 154 files, omitted exact Hogwarts baseline JSON.
+
+## A6.6-B — Managed installer correction
+Include only vrhub/recipes/hogwarts-profile-v2.0.6.json in managed resource filter and require it when the Hogwarts update pilot module is present. Explicit source distribution manifest inclusion; existing setuptools package data already included it. No arbitrary JSON allowance. Two focused regression tests cover exact installed bytes, unrelated JSON exclusion, resource access independently of source, and missing resource refusal before installation. Original baseline unchanged (192 records).
+Targeted 60/60 (1.335s), full 1916/1916 (120.855s), process 36591 exit 0. No traceback, deleted-object or fatal Python errors detected. Actual custom ZIP extraction and real managed installer in disposable home with spaces, real dependency probes, exact 155-file installed manifest and byte comparison; all 482 archive entries match both formats and exported source, updater path/size validation passed. Installed resource loaded independently, fixture state unchanged. Audit packages remain 0.5.4; not a stable upgrade or release.
+Historical audit 48 manifests/296 entries, ERVR 20, nested D1, two reboot fixtures, 121 protected Fatekeeper files, four original pinned archives and four recovery copies. Stable state unchanged, recipe pins and production game transaction code unchanged, live gate closed.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.6B-full-oTKSM3.
+Manifest SHA-256: d3507d4226939e8ebc0937e2e9c028768b0e6453f8b6138b3992fe08c550d1f8.
+No GUI changes; existing accepted desktop runtime remains 18dfb4c (not the corrected installer code). Candidate version promotion, actual stable updater/rollback rehearsal, production authorization and release scope review, release documentation and final acceptance remain pending. No production installation, publication or push.

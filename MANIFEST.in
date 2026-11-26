@@ -7,3 +7,4 @@ recursive-include vrhub/assets *.png
 global-exclude *.pyc *.pyo
 recursive-include vrhub/recipes *.toml
 recursive-include vrhub/controls *.toml
+include vrhub/recipes/hogwarts-profile-v2.0.6.json
