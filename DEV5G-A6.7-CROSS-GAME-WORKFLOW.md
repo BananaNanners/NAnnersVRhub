@@ -20,3 +20,15 @@ Fresh independent process restarts and KDE acceptance remain pending.
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7A-evidence-FeHRcM.
 
 Manifest SHA-256: 87b047dd28c4f37606d3c6698fed47b31a9a1592dca6cda23a046a51a8c37a07.
+
+## A6.7-A final acceptance
+Three independent fresh processes (25566, 25567, 25568) resolved the actual
+Hogwarts game and Heroic prefix after preview isolation. Host XDG and
+Heroic metadata remained unchanged. Player confirmed all nine cross-game KDE
+checks passed on isolated preview PID 25571, runtime checkpoint
+0c4a07874aa20b53c748c8c432801d3aeef16577. Qt-visible 1630 x 1060;
+independent compositor inspection not established. SteamVR selected runtime,
+not proof of running service. Previous preview PID 20755 absent before launch.
+Stable Hub state unchanged, production gate closed. Original manifest retained.
+
+Acceptance manifest SHA-256: 3aa54c7d5eafc11d1a2f6445b552e9986d971cacdda2064641e4a2624df48c52.
