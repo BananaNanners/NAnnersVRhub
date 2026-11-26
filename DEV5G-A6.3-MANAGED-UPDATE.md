@@ -20,3 +20,13 @@ Full regression, interactive KDE acceptance, update interruption and historical
 artifact classification remain pending.
 Evidence directories: ~/NAnnersVRhub-recovery/Dev5G-A6.3A-evidence-omVZDP
 and ~/NAnnersVRhub-recovery/Dev5G-A6.3B-evidence-xcCduT.
+
+## A6.3-B5 interactive acceptance
+Player confirmed all eight KDE desktop checks on November 25, 2026.
+Runtime checkpoint 0663c3ececa6178cb9d7328686905a6d06d903b9.
+PID 13200, launch 18:46:44 PST; Qt visible 1630x1060, isolated preview
+state, stable state checksum unchanged. Process/worktree verified.
+No interactive obsolete dependency reproduction or compositor confirmation
+claimed; automated disposable compatibility tests passed. Gate closed.
+A6.3-A manifest 31ffe82befe57d112cc1b0994462718a1363c508b3a32d70ccaf66a3a0ab838d.
+A6.3-B manifest 2bbe9df174b7435e44c2468a64506937be266accc4d72d2898b86a2b0570d751.
