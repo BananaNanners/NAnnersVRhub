@@ -348,3 +348,8 @@ Initial 46/46 assertions (2.567s), process 24401 exit 0, but four deferred Qt sc
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D4D-corrected-ZTR8IV.
 Manifest SHA-256: 0adea5c106f93a463033272bd0473687f790e3cf9de8617650765ef8290790e9.
 Scope: read-only sampled evidence; real candidate compatibility and live update execution remain unapproved. Interactive KDE acceptance pending; no production writes, pin changes, push or release.
+
+### D4-D — KDE acceptance
+User explicitly reported all 14/14 desktop acceptance checks passed, no observations. Accepted runtime checkpoint 32c55a9816263b915ca0dcf310f312718c1fcac2. Conditional candidate checks are recorded as reported, not as proof of real upstream candidate availability or gameplay compatibility. Read-only integration accepted; production update execution remains blocked. Automated development baseline remains 1913/1913; acceptance commit is documentation only.
+Evidence: /home/bananananers/NAnnersVRhub-recovery/Dev5G-A6.7D4D-acceptance-Q0h2mX.
+Acceptance manifest SHA-256: 82e0242cabb3e158ffe065b29f66e6d8b466d4087c688820bb7fceede425cdab.
