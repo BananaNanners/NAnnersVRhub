@@ -299,3 +299,10 @@ Four new fixture tests; initial targeted 41/41 (0.272s), repeated targeted 41/41
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D4A-full-WuBPSR.
 Manifest SHA-256: d89a64fc9e9eb42cbb8ee5fa72307a746e23d816220d68afb9eb3956b377c725.
 Limitations: simulated release metadata and candidate bytes, not actual newer upstream ZIPs; identity alone does not validate archive contents or compatibility. Installed provenance is historical, not current-byte verification. Thunderstore automated discovery, exact manifests, transaction integration and GUI integration remain pending. No production writes, pin changes, GUI changes, push or release.
+
+## D4-B — Exact read-only managed update manifests
+Baseline 880437c6de90e6435a9cf71b54e21730637613d6. Complete synthetic baseline/candidate pairs mapped through existing archive mapper using a private mapping-only recipe copy. Fresh recognition supplies current bytes, historical ownership and backup evidence. Install/Replace/Preserve/Remove/Block rows include component, path, reason and old/current/new hashes. Both games test classifications, custom settings, unowned destination, changed binary, inconsistent ownership and tampered candidate refusal. No write or compatibility authorization.
+Initial targeted 2/2 (0.089s), expanded targeted 83/83 (0.957s), full 1876/1876 (97.326s), process 77217 exit 0. Historical audit 37 manifests/205 entries, ERVR 20, nested D1, two reboot fixtures, 121 Fatekeeper files; all recipe TOMLs unchanged. Stable state unchanged, gate closed.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D4B-full-LQe5HF.
+Manifest SHA-256: 8a4fcad6c3df0c5426b7fdaee50fd81fca3f7747076f512b07830532eba72a85.
+Safety review retained in safety-review.txt. Seal read-only scope only. Before D4-C require dedicated adversarial coverage for overlapping/case-colliding paths, file/directory collisions, historical originals, protected migration, conflicts and concurrent evidence drift. Global blocked status must supersede individual proposed rows. No sealed executable plan or atomic live snapshot. Actual candidate compatibility remains unverified. No production writes, pin changes, GUI integration, push or release.
