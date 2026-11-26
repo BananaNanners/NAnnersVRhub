@@ -646,6 +646,52 @@ class FatekeeperRehearsalTests(unittest.TestCase):
         self.assertEqual(self.maintenance_inventory(history), before)
         self.assertEqual(unknown.read_bytes(), b"preserve unknown evidence")
 
+    def test_production_history_publication_interruption_blocks_maintenance(self):
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
+        dest = tx._live_destination(None)
+        # Establish a recoverable repair transaction before interrupting
+        # publication of its history during a subsequent synthetic update.
+        tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        v2 = root / "profile-v2.zip"
+        with zipfile.ZipFile(v2, "w") as archive:
+            archive.writestr("config.txt", b"new defaults")
+            archive.writestr("plugins/test.dll", b"plugin v2")
+        recipe["archive_pins"]["profile"] = sha256(v2.read_bytes()).hexdigest()
+        archives = [self.archives[0], v2]
+        journal = dest.journal_dir / "fk4-journal.json"
+        original_journal = journal.read_bytes()
+        original_state = state.read_bytes()
+        original_backup = dest.journal_dir / json.loads(original_journal)["backup"]
+        backup_before = self.maintenance_inventory(original_backup)
+        prefix_before = self.maintenance_inventory(prefix)
+        write = tx._write
+        def interrupt(path, data, mode=0o600):
+            write(path, data, mode)
+            if any(part.startswith("history-") for part in path.parts):
+                raise OSError("simulated history publication interruption")
+        with patch.object(tx, "_write", side_effect=interrupt):
+            with self.assertRaisesRegex(OSError, "history publication interruption"):
+                tx.install_reviewed(review.build_plan(recipe, archives), verified_backend=self.asset)
+        self.assertEqual(journal.read_bytes(), original_journal)
+        self.assertEqual(state.read_bytes(), original_state)
+        self.assertEqual(self.maintenance_inventory(prefix), prefix_before)
+        self.assertEqual(self.maintenance_inventory(original_backup), backup_before)
+        history, = [h for h in dest.journal_dir.glob("history-*") if not (h / "fk4-journal.json").exists()]
+        self.assertFalse((history / "fk4-journal.json").exists())
+        before = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "Incomplete or unsafe"):
+            tx.install_reviewed(review.build_plan(recipe, archives), verified_backend=self.asset)
+        self.assertEqual(self.maintenance_inventory(root), before)
+        historical_before = self.maintenance_inventory(history)
+        tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertEqual(self.maintenance_inventory(history), historical_before)
+        self.assertEqual(self.maintenance_inventory(original_backup), backup_before)
+        self.assertEqual(json.loads(journal.read_bytes())["phase"], "rolled-back")
+        before = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "Incomplete or unsafe"):
+            tx.install_reviewed(review.build_plan(recipe, archives), verified_backend=self.asset)
+        self.assertEqual(self.maintenance_inventory(root), before)
+
     def test_managed_update_omitted_dependency_blocks_without_writes(self):
         from dataclasses import replace
         tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture(damage=False)

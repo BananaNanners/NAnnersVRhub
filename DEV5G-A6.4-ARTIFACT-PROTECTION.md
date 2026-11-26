@@ -59,3 +59,23 @@ stable state unchanged, gate closed. No GUI changes or live operations.
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.4C-evidence-L4Thmx.
 
 A6.4-C manifest SHA-256: a8425e8eaad1749dee5f8154a3bdaceada645b61faff1f22225db727da43dc1d.
+
+## A6.4-D — Interrupted history publication and final regression
+Baseline bf7954a526093f81095916975aa9a29c3c868b87.
+Integrated disposable test interrupts history publication during a synthetic
+update, preserves active journal, backup, prefix and state, refuses maintenance,
+allows independently safe active recovery, and continues to refuse maintenance
+while retaining incomplete history. Initial fixture contained modified files
+incompatible with active rollback; corrected by establishing a recoverable
+repair transaction first. No production safeguard changed.
+Corrected interruption test 1 passed (0.992s). Full regression 1741 passed
+(73.386s), process 17506 exit 0, no skips/errors/failures. Verified KHARVOX
+payload included. Thirteen previous Dev5G evidence manifests and both A5
+reboot fixtures verified; stable state unchanged; production gate closed.
+Simulated interruption is not a power-loss guarantee. History consistency
+does not authenticate coordinated same-user changes. Fresh staging retry
+retains artifacts; ambiguous leftovers block later managed maintenance.
+No GUI changes or live operations. A6.4 complete.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.4D-evidence-V0ku3M.
+
+A6.4-D manifest SHA-256: 48439627235a0d391fcfbdaae68f6942618bd07301f7cc61fb08b5824645622b.
