@@ -119,6 +119,106 @@ class RecognitionCases:
         self.assertFalse(result["write_authorized"])
         self.assertEqual((self.game/"winhttp.dll").read_bytes(),b"external change")
 
+    def test_exact_record_consistency(self):
+        self.assertEqual(self.scan()["ownership_record"], "unrecorded")
+        self.f.install()
+        self.assertEqual(self.scan()["ownership_record"], "consistent-record")
+        import copy
+        original = hub.state()
+        for field in ("files", "file_hashes", "packages", "keep", "installer"):
+            state = copy.deepcopy(original)
+            state[self.recipe["id"]][field] = None
+            hub._save_state(state)
+            self.assertEqual(self.scan()["ownership_record"], "inconsistent")
+        state = copy.deepcopy(original)
+        rec = state[self.recipe["id"]]
+        rec["packages"]["loader"]["files"].append(rec["packages"]["loader"]["files"][0])
+        hub._save_state(state)
+        self.assertEqual(self.scan()["ownership_record"], "inconsistent")
+        hub._save_state(original)
+        self.assertEqual(self.scan()["ownership_record"], "consistent-record")
+
+    def test_protected_binding_and_configuration(self):
+        self.f.install()
+        data = bepinex.policy(self.recipe)["data"]
+        name = data + "/StreamingAssets/SteamVR/bindings_oculus_touch.json"
+        (self.game/name).write_bytes(b"player custom binding")
+        row = next(r for r in self.scan()["rows"] if r["path"] == name)
+        self.assertEqual(row["status"], "modified-settings")
+        self.assertTrue(row["protected_setting"])
+        for name in ("BepInEx/config/custom.bin", data+"/StreamingAssets/SteamVR/custom.asset",
+                     "BepInEx/plugins/controller.asset"):
+            self.assertTrue(recognition.protected_setting(name))
+        self.assertFalse(recognition.protected_setting("BepInEx/core/BepInEx.dll"))
+
+    def test_reader_rejects_directory_replacement(self):
+        self.f.install()
+        original = recognition.installed_integrity._read_hash
+        changed = []
+        def swap(fd, rel, *args):
+            result = original(fd, rel, *args)
+            if not changed and len(rel.parts) > 1:
+                parent = self.game.joinpath(*rel.parts[:-1])
+                import shutil
+                old = parent.with_name(parent.name + "-old")
+                parent.rename(old)
+                shutil.copytree(old, parent)
+                changed.append(True)
+            return result
+        with patch.object(recognition.installed_integrity, "_read_hash", side_effect=swap):
+            result = recognition.recognize(self.recipe,self.archives,[self.f.fixture.steam])
+        self.assertTrue(changed)
+        self.assertEqual(result["status"], "Unknown")
+        self.assertFalse(result["write_authorized"])
+
+    def test_archive_links_and_replacement(self):
+        archive = self.archives[0]
+        other = archive.with_name("other.zip")
+        os.link(archive, other)
+        self.assertEqual(self.scan()["status"], "Unknown")
+        other.unlink()
+        other.symlink_to(archive)
+        self.assertEqual(self.scan([other, self.archives[1]])["status"], "Unknown")
+        other.unlink()
+        original = recognition.bepinex.archive_plan_stream
+        def swap(source, recipe, sha, path):
+            result = original(source, recipe, sha, path)
+            if path == archive:
+                content = path.read_bytes()
+                path.rename(other)
+                path.write_bytes(content)
+            return result
+        with patch.object(recognition.bepinex, "archive_plan_stream", side_effect=swap):
+            result = recognition.recognize(self.recipe,self.archives,[self.f.fixture.steam])
+        self.assertEqual(result["status"], "Unknown")
+
+    def test_backup_original_hash_and_path(self):
+        self.f.fixture.file(self.game/"winhttp.dll").write_bytes(b"original loader")
+        self.f.install()
+        result = self.scan()
+        self.assertEqual(result["backup_status"], "originals-match")
+        from pathlib import Path
+        record = hub.state()[self.recipe["id"]]
+        path = Path(record["backup"])/"files/winhttp.dll"
+        path.write_bytes(b"tampered")
+        self.assertEqual(self.scan()["backup_status"], "inconsistent")
+        path.unlink()
+        self.assertEqual(self.scan()["backup_status"], "unsafe")
+        path.symlink_to(self.game/"winhttp.dll")
+        self.assertEqual(self.scan()["backup_status"], "unsafe")
+
+    def test_backup_record_malformed_and_redirected(self):
+        self.f.install()
+        import copy
+        original = hub.state()
+        for key, value in (("originals", ["../escape"]), ("original_hashes", {"unexpected":"0"*64}),
+                           ("retired", ["foreign"]), ("backup", str(self.game))):
+            state = copy.deepcopy(original)
+            state[self.recipe["id"]][key] = value
+            hub._save_state(state)
+            self.assertIn(self.scan()["backup_status"], ("unsafe", "inconsistent"))
+        hub._save_state(original)
+
     def test_missing_windows_layout(self):
         (self.game/bepinex.policy(self.recipe)["exe"]).unlink()
         self.assertEqual(self.scan()["status"],"Unknown")

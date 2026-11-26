@@ -236,3 +236,10 @@ Player reported 12/12 KDE checks passed at runtime c91fd63b64312e0296c6221d7b4cb
 Combined D1/ERVR acceptance evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D1-ERVR-acceptance-GsacgW.
 Acceptance manifest SHA-256: 1bb65584ad87977ea12efa987e928f000336cc637965dc6abe29a0d61f4b1d18.
 27 historical manifests/132 entries, 20 ERVR entries, nested D1 evidence, both reboot fixtures and 121 Fatekeeper files verified. Stable state unchanged, gate closed.
+
+## D2-A — Read-only repair evidence
+Baseline 2d7489b981d1f2f827b34544d52115cd16137fff. Bounded ZIP snapshots bind pin hashing and member inspection to the same bytes; installed-file reads reuse descriptor-based integrity checks with before/after identities. Exact package/global inventories and hashes classify record consistency, not ownership authority. Configuration and binding paths receive conservative protection. Recorded originals checked against hashes; retired legacy trees lack trusted inventory and remain unverified. Production archive caller retains its existing behavior; no repair dispatch, pin change, or GUI change.
+Twelve additional tests, targeted 64/64, full 1824/1824 (80.885s), process 60685 exit 0. Three changed source/test hashes and stable state matched after regression. Preservation audit: 28 historical manifests/135 entries, ERVR 20 entries, nested D1, two reboot fixtures and 121 Fatekeeper files. Gate closed.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D2A-full-QrolJq.
+Manifest SHA-256: 1f7034bbeecceb0b880e8a3a200fbb009ed7d3fdf42fcd8e7aa2d6781c999dfc.
+Limitations: sampling cannot certify absence of concurrent changes; ancestor path reads and legacy backup provenance are not transaction authority; retired trees unverified. Backup validation is recorded-original evidence, not a complete backup inventory. D2-B exact repair manifest, D2-C UI, D2-D desktop acceptance pending. ERVR preview retained at runtime 3e9b2b1, not this new code.

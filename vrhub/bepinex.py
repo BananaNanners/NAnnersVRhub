@@ -111,12 +111,17 @@ def archive_plan(archive, recipe):
     if not archive.is_file() or archive.suffix.lower() != ".zip" or archive.stat().st_size > MAX_TOTAL:
         raise RuntimeError("Choose the downloaded pinned VR release ZIP(s).")
     sha = digest(archive)
+    return archive_plan_stream(archive, recipe, sha, archive)
+
+
+def archive_plan_stream(source, recipe, sha, archive):
+    """Shared archive mapping; caller binds stream bytes to supplied digest."""
     matches = [p for p in recipe["packages"] if p["sha256"] == sha]
     if len(matches) != 1:
         raise RuntimeError(f"{archive.name}: not a recognized pinned VR mod release ZIP. Download the exact version(s) linked in the guide; renamed files are accepted, modified or newer archives need recipe review.")
     package = matches[0]
     members, seen, total = {}, set(), 0
-    with zipfile.ZipFile(archive) as z:
+    with zipfile.ZipFile(source) as z:
         if len(z.infolist()) > 1000:
             raise RuntimeError("VR mod archive contains too many entries.")
         for item in z.infolist():
