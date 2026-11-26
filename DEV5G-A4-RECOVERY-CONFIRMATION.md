@@ -17,9 +17,11 @@ Stable state SHA-256 unchanged; A1-A3 evidence reverified. Global gate closed.
 No live recovery or installation. No new GUI controls. Approval binds transaction
 identity, not an authenticated same-UID security boundary. Backup integrity
 continues to be independently checked by the engine. CLI fingerprint is not
-a secret token. Interactive KDE acceptance pending.
+a secret token. Interactive KDE acceptance passed (8/8).
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A4-evidence-jW9JcY.
 Next: A5 storage identity and reboot verification; no reboot without separate
 player approval. Remaining managed update/repair and production readiness review.
 
 Evidence manifest SHA-256: d1bc6fef676c93548cf19966d06df9d5ff473efc482c701d352b1861b4016914.
+
+Player confirmed all eight KDE checks on November 25, 2026. Runtime checkpoint ad1180c8c8dbfea7479402151a301bf3bd8861dd, PID 14832, launch 17:36:56 PST. KWin verified one non-modal visible preview at 17:37:10 PST, 1630 x 1088. Previous preview absent. Stable state checksum matched before and after launch. Live dialog remains gated; acceptance is not production recovery authorization.
