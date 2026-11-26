@@ -600,6 +600,52 @@ class FatekeeperRehearsalTests(unittest.TestCase):
         self.assertEqual(list(incomplete.iterdir()), [])
         self.assertEqual(json.loads((dest.journal_dir / "fk4-journal.json").read_bytes())["phase"], "rolled-back")
 
+    def test_production_maintenance_refuses_history_damage_and_unknown_artifacts(self):
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
+        dest = tx._live_destination(None)
+        before_repair = self.maintenance_inventory(prefix)
+        original_state = state.read_bytes()
+        tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        history, = dest.journal_dir.glob("history-*")
+        historical_backup, = history.glob("fk4-backup*")
+        damaged = historical_backup / "state-new"
+        original = damaged.read_bytes()
+        active = json.loads((dest.journal_dir / "fk4-journal.json").read_bytes())
+        active_backup = dest.journal_dir / active["backup"]
+        active_file = active_backup / "state-new"
+        active_bytes = active_file.read_bytes()
+        unknown = dest.journal_dir / "unrecognized"
+        orphan = dest.journal_dir / ("fk4-backup-" + "a"*32)
+        incomplete = dest.journal_dir / ("history-" + "b"*32)
+
+        def refusal():
+            before = self.maintenance_inventory(root)
+            with self.assertRaises(RuntimeError):
+                tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+            self.assertEqual(self.maintenance_inventory(root), before)
+
+        self.assertEqual(tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset), [])
+        for path, data in ((damaged, original), (active_file, active_bytes)):
+            path.write_bytes(b"damaged")
+            refusal()
+            path.write_bytes(data)
+        for path in (orphan, incomplete):
+            path.mkdir(mode=0o700)
+            refusal()
+            path.rmdir()
+        unknown.write_bytes(b"preserve unknown evidence")
+        refusal()
+        backend.unlink()
+        refusal()
+        backend.write_bytes(self.asset)
+        damaged.write_bytes(b"damaged history")
+        before = self.maintenance_inventory(history)
+        tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertEqual(self.maintenance_inventory(prefix), before_repair)
+        self.assertEqual(state.read_bytes(), original_state)
+        self.assertEqual(self.maintenance_inventory(history), before)
+        self.assertEqual(unknown.read_bytes(), b"preserve unknown evidence")
+
     def test_managed_update_omitted_dependency_blocks_without_writes(self):
         from dataclasses import replace
         tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture(damage=False)

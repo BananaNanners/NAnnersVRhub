@@ -45,3 +45,17 @@ and storage. Full regression and maintenance policy integration pending.
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.4B-evidence-fY0pE6.
 
 A6.4-B evidence manifest SHA-256: 5f9407819e2a87e350ffb70f37158f6daf50d2c223a53dabbca7cc8c7dc1306f.
+
+## A6.4-C — Maintenance authorization
+Baseline edf1f4fca480e27185c9ed1db38874370f621bf4.
+Managed writes and no-op validate active backup membership/digests, history
+consistency and retained backup relationships under the state transaction
+lock. Unknown/incomplete evidence blocks maintenance; independently safe
+active recovery retains its existing authorization path. Fresh staging retry
+policy unchanged. Initial 130 tests passed (30.879s), integrated test passed
+(1.233s), staging tests 3 passed (2.093s), final targeted 131 passed (31.923s),
+process 17065 exit 0. Twelve historical manifests and both A5 fixtures verified,
+stable state unchanged, gate closed. No GUI changes or live operations.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.4C-evidence-L4Thmx.
+
+A6.4-C manifest SHA-256: a8425e8eaad1749dee5f8154a3bdaceada645b61faff1f22225db727da43dc1d.

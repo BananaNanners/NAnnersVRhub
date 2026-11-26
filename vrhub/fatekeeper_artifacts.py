@@ -252,3 +252,42 @@ def verify_history(destination, *, active_backup=None):
         if inventory(directory, active_backup=active_backup) != observed:
             raise RuntimeError("Recovery artifact inventory changed during history verification.")
     return tuple(result)
+
+
+def validate_maintenance(destination, record):
+    """Refuse unresolved artifacts before new writes or a managed no-op.
+
+    Active journal provenance must already be checked by the caller under
+    the state lock. Never use this policy to authorize active recovery.
+    """
+    from . import fatekeeper_commit as tx
+    active = record["backup"]
+    rows = inventory(destination.journal_dir, active_backup=active)
+    kinds = {row.name: row.kind for row in rows}
+    if kinds.get("fk4-journal.json") != "journal-candidate":
+        raise RuntimeError("Unsafe active Fatekeeper journal evidence.")
+    if kinds.get(active) != "active-backup-candidate":
+        raise RuntimeError("Unsafe active Fatekeeper backup evidence.")
+    expected = {str(i): row["old"] for i, row in enumerate(record["rows"])
+                if row["old"] is not None}
+    expected["state-new"] = record["rows"][-1]["new"]
+    actual = {row.name.split("/", 1)[1] for row in rows
+              if row.name.startswith(active + "/")}
+    if actual != set(expected):
+        raise RuntimeError("Unexpected or missing active Fatekeeper backup membership.")
+    for name, digest in expected.items():
+        data, mode = tx._read(destination.journal_dir / active / name)
+        if mode != 0o600 or tx._digest(data) != digest:
+            raise RuntimeError("Previous Fatekeeper backup verification failed; maintenance blocked.")
+    histories = verify_history(destination, active_backup=active)
+    retained = {h.backup for h in histories}
+    for row in rows:
+        if "/" in row.name:
+            continue
+        if row.kind in {"lock", "journal-candidate", "active-backup-candidate", "history-candidate"}:
+            continue
+        if row.kind == "orphan-backup-candidate" and row.name in retained:
+            continue
+        raise RuntimeError("Unresolved production recovery evidence; manual review required.")
+    if inventory(destination.journal_dir, active_backup=active) != rows:
+        raise RuntimeError("Recovery artifact inventory changed during maintenance verification.")

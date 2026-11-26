@@ -357,6 +357,8 @@ def validate_production_noop(destination):
     record = _ledger(scope)
     if record is None or record['staging'] or record['next'] is not None:
         raise RuntimeError('Pending production journal transition; manual review required.')
+    from . import fatekeeper_artifacts
+    fatekeeper_artifacts.validate_maintenance(destination, parsed)
 
 
 def production_authority(destination, *, provision=False):
@@ -454,6 +456,10 @@ def begin_production_staging(scope):
         raise RuntimeError('Recover the existing Fatekeeper transaction before retrying.')
     record = _ledger(scope)
     if digest is not None:
+        from . import fatekeeper_artifacts, fatekeeper_commit as tx
+        destination = tx.Destination(scope.root, scope.prefix, scope.injector,
+                                     scope.profile, scope.state, scope.journal_dir, production=True)
+        fatekeeper_artifacts.validate_maintenance(destination, previous)
         finalize_production_transition(scope, digest)
         return
     for entry in scope.journal_dir.iterdir():
