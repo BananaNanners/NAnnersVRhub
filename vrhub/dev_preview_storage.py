@@ -10,6 +10,7 @@ stable private preview directory. Sources are never moved or removed.
 from __future__ import annotations
 
 import json
+import fcntl
 import os
 import tempfile
 import stat
@@ -250,8 +251,35 @@ def prepare_shared_preview(home: Path | None = None, *,
     }
 
 
+# All desktop entry points using shared storage participate in the same
+# lifetime lock, including older launchers in this worktree.
+_desktop_locks = {}
+
+
+def acquire_desktop_preview_lock(home: Path | None = None):
+    path = (home or Path.home()) / ".cache/nannersvrhub-preview-lifecycle.lock"
+    path = path.absolute()
+    if path in _desktop_locks:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+            raise PreviewStorageError("Unsafe development preview lock.")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise PreviewStorageError("A development preview is already running.") from None
+    except BaseException:
+        os.close(fd)
+        raise
+    _desktop_locks[path] = fd
+
+
 def activate_desktop_preview(*, home: Path | None = None):
     """Point only this explicitly invoked dev preview at the shared store."""
+    acquire_desktop_preview_lock(home)
     prior_state = os.environ.get("VRHUB_STATE")
     result = prepare_shared_preview(
         home, previous_state=Path(prior_state) if prior_state else None)

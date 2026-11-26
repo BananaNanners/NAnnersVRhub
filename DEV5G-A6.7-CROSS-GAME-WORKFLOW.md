@@ -131,3 +131,42 @@ accepted checks. No push, release, live installation or recovery.
 
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7B-nexus-final-hobDWm.
 Manifest SHA-256: 0c3ad2528f857361e4e0dfd5625cd2cdbe00250dcf9196a749dde7710ef80dc9.
+
+## A6.7-B2 — Permanent development preview launcher
+
+Baseline 5178e3774aa175e6d3224940d33c4adafc33eab1.
+Explicit entry point: `python3 -B -m vrhub.dev_preview` from the clean
+development worktree. Refuses dirty trees and open production gate.
+Reuses shared read-only UI policy, isolated storage and private Nexus
+fallback; logs PID, checkpoint and state path. Normal Qt close handlers
+unchanged. Shared activation acquires a nonblocking Linux advisory lock
+before storage migration, held until process exit. Repeated activation
+in the same process is supported. Older launchers using current shared
+activation participate; historical source copies or nonparticipating
+launchers are not covered. Continue manual window/process identification
+per AGENTS.md; no forced close. No production authorization change.
+
+Targeted 20 passed (0.157s, process 35385). Full regression 1761 passed
+(77.859s, process 37229, exit 0), no failures/errors/skips, isolated
+Qt/XDG/state and private KHARVOX payload copy. Cross-process contention,
+lock reuse, legacy activation refusal before migration, open gate and
+dirty tree refusal tested. No new GUI startup acceptance implied.
+
+22 historical manifests / 104 entries verified against baseline docs.
+Both reboot fixtures matched 28 entries each and original checksums;
+A5.6 rollback report matched committed digest. E8 protected injector
+(11 files) and profile (110 files) matched membership, hashes and modes.
+Initial preservation script erroneously treated the E8 stable state file
+as a directory; recorded partial log retained. Independent follow-up
+confirmed stable state checksum matches current approved A6.7-B baseline
+and pre-regression checksum, not E8 (documented F3 metadata refresh).
+Production gate closed. No exhaustive all-game/save/prefix audit.
+
+KDE checklist: previous preview absence reported by player earlier;
+recheck before launch. Current window/PID/checkpoint, exactly one
+preview, stable Hub preservation during launch, normal close/relaunch,
+Nexus refresh and player acceptance remain pending. No live install,
+push or release. A6.7-C/D/E and A6.6 remain pending.
+
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7B2-regression-2fK3JJ.
+Manifest SHA-256: 4a9d883d2f4e876dc65c3982d1f8525ef828711c7489eb4d59432018eb4d01bc.
