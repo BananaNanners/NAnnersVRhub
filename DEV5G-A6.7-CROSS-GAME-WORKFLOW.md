@@ -207,3 +207,26 @@ by player; independently observed process/worktree/held lock. Preview remains
 running. Independent compositor identity and previous window absence remain
 unverified. Stable state unchanged; gate closed. Original manifest retained.
 Acceptance manifest SHA-256: a74be18042683fca5cd4f915eb8b2a44fdfd5c71c8afdf45c300f0ba78ab4f24.
+
+## A6.7-D1 — BepInEx dependency recognition
+Approved D1–D5 scope; baseline c60a9434e7895eaad450c349bc3d4b4924c7536a.
+Subnautica and Valheim only: complete pinned pair, current byte comparison,
+missing/different/modified-settings classifications, known conflicts, repeated
+sampling, unsafe targets rejected. No ownership, compatibility, gameplay or
+write authorization. Settings classification by extension is provisional.
+Existing Verify installed files control reused; historical integrity separate,
+no new controls or maintenance routing. Evidence cleared on selection/rescan.
+Cancellation discards results after sampling; per-file interruption not implemented.
+Disposable fixtures 66 passed including Elden Ring. Initial GUI 65/67 passed;
+two worker timeouts. Trace showed filesystem work; corrected configured Steam
+root discovery in recognition and historical package integrity, and test event
+wait. Contributions not independently isolated. Four focused runs 6/6 each,
+expanded targeted 116/116. Full 1787/1787 in 73.546s, unittest exit 0, no crash.
+Shell exit 1 from separate audit syntax error; corrected audit exit 0.
+Five source hashes verified before/after. 26 manifests, 122 entries, both
+28-entry reboot fixtures, 11 injector and 110 profile files preserved; stable
+state unchanged; production gate closed. Audit not a whole-game/save inventory.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D1-full-lodLGh.
+Manifest SHA-256: b3e1043e7de5dbe05c3213059468d28e4884b32c1b3f5e5895516b38b83a4f75.
+Earlier failed evidence referenced by checksum. Interactive KDE acceptance
+pending; no preview replacement performed by sealing.

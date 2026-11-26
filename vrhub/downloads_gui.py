@@ -118,6 +118,13 @@ class InstalledIntegrityWorker(QThread):
                 if self.cancel_flag.is_set():
                     self.cancelled.emit()
                     return
+            elif self.recipe.get("id") in ("subnautica", "valheim"):
+                from . import bepinex_recognition
+                result["bepinex_recognition"] = bepinex_recognition.recognize(
+                    self.recipe, self.recognition_archives)
+                if self.cancel_flag.is_set():
+                    self.cancelled.emit()
+                    return
             self.done.emit(result)
 
 
@@ -1047,10 +1054,14 @@ class GuidedDownloadsPage(QWidget):
             return
         if self.integrity_worker is not None:
             self.integrity_worker.cancel()
-        if self.recognition_result is not None:
+        if self.recognition_result is not None or (
+                self.recipe.get("id") in ("subnautica", "valheim") and
+                self._integrity_result is not None):
             self.recognition_result = None
+            self._integrity_result = None
             self.recognition_changed.emit()
             self.integrity_status.setText("Installed files: not checked.")
+            self.integrity_details.clear()
             self.integrity_details.hide()
         self._folder_feedback("")
         self.summary.setToolTip("")
@@ -1661,7 +1672,7 @@ class GuidedDownloadsPage(QWidget):
             return
         self.integrity_status.setText(
             "Checking installed dependencies (read-only). No game-file writes will occur…"
-            if self.recipe.get("id") == "fatekeeper" else
+            if self.recipe.get("id") in ("fatekeeper", "subnautica", "valheim") else
             "Reading recorded installation hashes (read-only). No game-file writes will occur…")
         # Any prior verification is now superseded by this in-progress job.
         self._integrity_result = None
@@ -1675,6 +1686,12 @@ class GuidedDownloadsPage(QWidget):
         self._update_review_action()
         if self.recipe.get("id") == "fatekeeper":
             from .fatekeeper_recognition import archives_from_rows
+            try:
+                worker.recognition_archives = archives_from_rows(self.recipe, self._fresh_review_rows() or [])
+            except (OSError, RuntimeError, ValueError):
+                pass
+        elif self.recipe.get("id") in ("subnautica", "valheim"):
+            from .bepinex_recognition import archives_from_rows
             try:
                 worker.recognition_archives = archives_from_rows(self.recipe, self._fresh_review_rows() or [])
             except (OSError, RuntimeError, ValueError):
@@ -1717,10 +1734,25 @@ class GuidedDownloadsPage(QWidget):
         if self.recognition_result is not None:
             from .fatekeeper_recognition import summary_text
             message = summary_text(self.recognition_result) + " Historical record integrity (separate): " + message
+        bep = result.get("bepinex_recognition")
+        if isinstance(bep, dict) and self.recipe.get("id") in ("subnautica", "valheim"):
+            from .bepinex_recognition import summary_text
+            message = summary_text(bep) + " Historical record integrity (separate): " + message
         self.integrity_status.setText(message + " No game-file writes performed.")
         self.recognition_changed.emit()
         self._update_review_action()
         lines = []
+        if isinstance(bep, dict) and self.recipe.get("id") in ("subnautica", "valheim"):
+            issues = [r for r in bep.get("rows", ()) if r["status"] != "matching"]
+            for row in issues[:48]:
+                lines.append(f"Current pinned dependency: {row['component']} / {row['path']} — {row['status'].replace('-', ' ')}; review required.")
+            if len(issues) > 48:
+                lines.append(f"{len(issues)-48} additional differences not displayed.")
+            conflicts = bep.get("conflicts", ())
+            for path in conflicts[:12]:
+                lines.append("Known conflicting plugin: " + path)
+            if len(conflicts) > 12:
+                lines.append(f"{len(conflicts)-12} additional known conflicts not displayed.")
         if self.recognition_result is not None:
             for component in self.recognition_result.get("components", ()):
                 for name, action in component["issues"][:installed_integrity.MAX_ISSUES_PER_COMPONENT]:

@@ -77,7 +77,8 @@ def _manifest_from_package(recipe, game):
     base = Path(keep)
     if _root(base) is None:
         return None, "Recorded game root is absent or unsafe."
-    actual = hub.game_path(recipe)
+    roots = [Path(p).expanduser() for p in os.environ.get("VRHUB_STEAM_ROOTS", "").split(":") if p] or None
+    actual = hub.game_path(recipe, roots)
     if not isinstance(actual, Path) or actual.resolve(strict=False) != base:
         return None, "Game root no longer matches the Hub installation record."
     found = {}
