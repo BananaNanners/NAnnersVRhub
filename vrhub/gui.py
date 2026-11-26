@@ -1328,7 +1328,12 @@ class HubWindow(QMainWindow):
         self.unprofile_btn.setEnabled(has_profile)
         # Do not show a nonsensical "Remove profile" control for games
         # with no UEVR profile workflow. Existing guarded behavior is intact.
-        self.unprofile_btn.setVisible(has_profile and not kharvox)
+        managed_fatekeeper = bool(r and r["id"] == "fatekeeper" and r.get("archive_pins"))
+        self.uninstall_btn.setText("Restore previous installation" if managed_fatekeeper else "Uninstall mod")
+        self.uninstall_btn.setToolTip(
+            "Review reversal of the latest managed installation, repair or update."
+            if managed_fatekeeper else "")
+        self.unprofile_btn.setVisible(has_profile and not kharvox and not managed_fatekeeper)
         self.bridge_log_btn.setVisible(bool(r and hub.game_bridge_log(r)))
         if r:
             self.bridge_log_btn.setText(
@@ -1804,8 +1809,9 @@ class HubWindow(QMainWindow):
 
             if not fatekeeper_commit.live_install_authorized():
                 QMessageBox.information(
-                    self, "Fatekeeper recovery",
-                    "Fatekeeper recovery is disabled in this preview. No files have been changed.")
+                    self, "Restore previous installation",
+                    "Restoring the latest managed Fatekeeper transaction is disabled in this preview. "
+                    "No files have been changed.")
                 return
             try:
                 roots = _roots()
@@ -1815,15 +1821,20 @@ class HubWindow(QMainWindow):
                 QMessageBox.warning(self, "Cannot review Fatekeeper recovery", str(exc))
                 return
             if QMessageBox.question(
-                    self, "Restore Fatekeeper dependencies",
-                    f"Restore the saved UEVR files, VR profile and Hub installation records?\n\n"
+                    self, "Restore previous installation",
+                    ("An interrupted installation or recovery will be reversed.\n\n"
+                     if review.phase in {"applying", "recovering"} else
+                     "Reverse the latest managed Fatekeeper installation, repair or update?\n\n")
+                    + "This restores the previous dependency files and Hub installation records. "
+                    "Files added by that transaction may be removed. This is not a full mod uninstall. "
+                    "The previous state may still need repair. Backups will be kept.\n\n"
                     f"Dependency files in transaction: {review.file_count}\n"
                     f"Recovery backup: {review.backup}\n"
                     f"Transaction reference: {review.journal_digest[:12]}\n\n"
-                    "If the transaction changes, the Hub will ask you to review it again.",
+                    "Keep the game closed. If the transaction changes, the Hub will ask you to review it again.",
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
                 self._run(lambda: fatekeeper_commit.recover_live(roots, approved_review=review), "Restored",
-                          lambda _: "Fatekeeper files and Hub records were restored.")
+                          lambda _: "Latest managed Fatekeeper transaction reversed. Previous files and Hub records restored; gameplay is not verified.")
             return
         if r.get("method") == "gameroot":
             try:

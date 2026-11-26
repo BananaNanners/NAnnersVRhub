@@ -20,3 +20,21 @@ runtime checkpoint 3ce8a05e5e998b4b8ec07e373ce489807f701962, isolated state,
 1630 x 1060 Qt-visible window. Prior PID 13200 exited normally before launch.
 Independent Wayland compositor inspection was not established.
 Stable state checksum unchanged; gate closed.
+
+## A6.5-B — Latest-transaction rollback wording
+Baseline 7e7d4ec5b978a43b38ebab2d8c78303db7c302e0.
+Pinned Fatekeeper uses Restore previous installation and hides its duplicate
+Remove profile button. Other games retain their controls. Confirmation
+explains latest transaction reversal, possible removal of newly added files,
+potentially damaged prior state, retained backups and closed game. Interrupted
+transactions have distinct wording. Captured review and default No unchanged.
+Initial regression 113 passed (23.204s), three dedicated tests passed (1.064s),
+final targeted regression 133 passed (24.827s), process 19578 exit 0.
+Actual disposable stale-approval refusal, cancellation, gate and game-switch
+visibility tested. Fifteen earlier manifests and both A5 fixture inventories
+verified; stable state unchanged; production gate closed.
+Interactive KDE acceptance pending. Existing accepted A6.5-A preview PID 19081
+must close normally before replacement; no new preview launched yet.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.5B-evidence-Cxl3g8.
+
+A6.5-B manifest SHA-256: 8aa117bb43fff426d957aa50a821e0c3272c4667cc8382c2a997dd586aaeb2d0.

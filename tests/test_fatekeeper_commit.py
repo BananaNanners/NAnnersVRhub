@@ -223,10 +223,58 @@ class FatekeeperCommitTests(unittest.TestCase):
                 patch.object(gui.QMessageBox, "question", return_value=gui.QMessageBox.Yes) as question:
             gui.HubWindow.uninstall(window)
         self.assertIn(approved.journal_digest[:12], question.call_args.args[2])
+        self.assertEqual(question.call_args.args[1], "Restore previous installation")
+        self.assertIn("not a full mod uninstall", question.call_args.args[2])
+        self.assertIn("Files added by that transaction may be removed", question.call_args.args[2])
+        self.assertIn("Backups will be kept", question.call_args.args[2])
+        self.assertEqual(question.call_args.args[-1], gui.QMessageBox.No)
         operation = window._run.call_args.args[0]
         with patch.object(transaction, "recover_live") as recover:
             operation()
         recover.assert_called_once_with(None, approved_review=approved)
+
+    def test_production_gui_gate_and_interrupted_confirmation(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from dataclasses import replace
+        from vrhub import gui
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        approved = transaction.review_live_recovery()
+        window = SimpleNamespace(current=lambda: hub.load_recipes()["fatekeeper"], _run=Mock())
+        with patch.object(transaction, "live_install_authorized", return_value=False), \
+                patch.object(transaction, "review_live_recovery") as capture, \
+                patch.object(gui.QMessageBox, "information") as info:
+            gui.HubWindow.uninstall(window)
+            capture.assert_not_called()
+            self.assertIn("No files have been changed", info.call_args.args[2])
+        window._run.assert_not_called()
+        for phase in ("applying", "recovering"):
+            with patch.object(transaction, "review_live_recovery", return_value=replace(approved, phase=phase)), \
+                    patch.object(gui, "_roots", return_value=None), \
+                    patch.object(gui.QMessageBox, "question", return_value=gui.QMessageBox.No) as question:
+                gui.HubWindow.uninstall(window)
+                self.assertIn("An interrupted installation or recovery will be reversed", question.call_args.args[2])
+                self.assertEqual(question.call_args.args[-1], gui.QMessageBox.No)
+        window._run.assert_not_called()
+
+    def test_production_gui_stale_captured_approval_refused(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from vrhub import gui
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        window = SimpleNamespace(current=lambda: hub.load_recipes()["fatekeeper"], _run=Mock())
+        with patch.object(gui, "_roots", return_value=None), \
+                patch.object(gui.QMessageBox, "question", return_value=gui.QMessageBox.Yes):
+            gui.HubWindow.uninstall(window)
+        operation = window._run.call_args.args[0]
+        transaction.recover_live(approved_review=transaction.review_live_recovery())
+        transaction.install_reviewed("review")
+        before = (state.read_bytes(), self.config.read_bytes(), (journal / "fk4-journal.json").read_bytes())
+        with self.assertRaisesRegex(RuntimeError, "review changed"):
+            operation()
+        self.assertEqual((state.read_bytes(), self.config.read_bytes(), (journal / "fk4-journal.json").read_bytes()), before)
 
     def test_production_gui_decline_does_not_execute(self):
         from types import SimpleNamespace
