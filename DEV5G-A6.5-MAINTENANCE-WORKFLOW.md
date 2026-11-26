@@ -38,3 +38,10 @@ must close normally before replacement; no new preview launched yet.
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.5B-evidence-Cxl3g8.
 
 A6.5-B manifest SHA-256: 8aa117bb43fff426d957aa50a821e0c3272c4667cc8382c2a997dd586aaeb2d0.
+
+## A6.5-B desktop acceptance
+Player confirmed all eight KDE checks passed. Previous PID 19081 exited;
+isolated preview PID 19893 loaded checkpoint 55d70f0bc17fb312fe8d226f49f2034ac1603a2c.
+Qt-visible 1630 x 1060 window, Fatekeeper Rollback selected, single restore
+control. Only its gate-disabled information action enabled; no live recovery.
+Independent compositor verification not established. Stable state unchanged.
