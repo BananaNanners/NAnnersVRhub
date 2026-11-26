@@ -33,6 +33,64 @@ class RecognitionGuiTests(RecognitionTests):
             QTest.qWait(10)
         self.assertIsNone(page.integrity_worker)
 
+    def test_maintenance_labels_and_stale_evidence(self):
+        page = self.page()
+        rows = self.rows()
+        page._last_plan = {"rows": rows}
+        with patch("vrhub.fatekeeper_commit.recovery_notice", return_value=""):
+            self.assertEqual(page._primary_action(), ("uevr-pair", "Review installation"))
+            page.recognition_result = self.scan()
+            self.assertEqual(page._primary_action(), ("uevr-pair", "Review verified dependencies"))
+            (self.injector / "UEVRBackend.dll").unlink()
+            page.recognition_result = self.scan()
+            self.assertEqual(page._primary_action(), ("uevr-pair", "Review repair"))
+            rows[0]["ambiguous"] = True
+            self.assertEqual(page._primary_action(), ("uevr-pair", "Choose archive"))
+            rows[0]["ambiguous"] = False
+            rows[0]["status"] = "Hash mismatch — do not install"
+            self.assertEqual(page._primary_action(), ("uevr-hash-review", "Review installation"))
+            rows[0]["status"] = "Pinned SHA-256 verified"
+            page.set_recipe(self.recipe)
+            page._last_plan = {"rows": rows}
+            self.assertIsNone(page.recognition_result)
+            self.assertEqual(page._primary_action(), ("uevr-pair", "Review installation"))
+
+    def test_maintenance_dialog_labels_preserve_gate(self):
+        from dataclasses import replace
+        plan = review.build_plan(self.recipe, self.archives)
+        dialog = DependencyReviewDialog(plan, install_action=lambda *_: self.fail("unexpected write"),
+                                        install_authorized=lambda: False)
+        self.addCleanup(dialog.close)
+        self.assertEqual(dialog.apply_button.text(), "No dependency changes needed")
+        self.assertIn("Recovery evidence is checked separately", dialog.blockers.text())
+        self.assertFalse(dialog.apply_button.isEnabled())
+        (self.profile / "plugin.dll").write_bytes(b"changed")
+        plan = review.build_plan(self.recipe, self.archives)
+        repair = DependencyReviewDialog(plan, install_action=lambda *_: self.fail("unexpected write"),
+                                        install_authorized=lambda: False)
+        self.addCleanup(repair.close)
+        self.assertEqual(repair.apply_button.text(), "Apply reviewed repair")
+        self.assertFalse(repair.apply_button.isEnabled())
+        repair.run_rehearsal()
+        self.assertFalse(repair.install_attempted)
+        blocked = replace(plan, compatibility_blockers=("obsolete",))
+        self.assertEqual(recognition.summarize_plan(blocked)["maintenance"], "blocked")
+        dialog = DependencyReviewDialog(blocked, install_authorized=lambda: True)
+        self.addCleanup(dialog.close)
+        self.assertEqual(dialog.apply_button.text(), "Compatibility review required")
+        self.assertFalse(dialog.apply_button.isEnabled())
+
+    def test_maintenance_cross_game_and_recovery_priority(self):
+        page = self.page()
+        page._last_plan = {"rows": self.rows()}
+        page.recognition_result = {"maintenance": "repair-review"}
+        with patch("vrhub.fatekeeper_commit.recovery_notice", return_value="pending"):
+            self.assertEqual(page._primary_action(), ("recovery-blocked", "Recovery required"))
+        page.set_recipe(hub.load_recipes()["hogwarts-legacy"])
+        page._last_plan = {"rows": self.rows()}
+        page.recognition_result = {"maintenance": "repair-review"}
+        self.assertEqual(page._primary_action(), ("uevr-pair", "Review installation"))
+
     def test_existing_review_noop_stays_disabled_and_reports_blockers(self):
         plan=review.build_plan(self.recipe,self.archives)
         dialog=DependencyReviewDialog(plan,install_action=lambda *_:self.fail('no writes'),install_authorized=lambda:True)

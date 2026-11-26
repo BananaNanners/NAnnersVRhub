@@ -1671,6 +1671,7 @@ class GuidedDownloadsPage(QWidget):
         worker = InstalledIntegrityWorker(self.recipe, self)
         self.recognition_result = None
         self.recognition_changed.emit()
+        self._update_review_action()
         if self.recipe.get("id") == "fatekeeper":
             from .fatekeeper_recognition import archives_from_rows
             try:
@@ -1717,6 +1718,7 @@ class GuidedDownloadsPage(QWidget):
             message = summary_text(self.recognition_result) + " Historical record integrity (separate): " + message
         self.integrity_status.setText(message + " No game-file writes performed.")
         self.recognition_changed.emit()
+        self._update_review_action()
         lines = []
         if self.recognition_result is not None:
             for component in self.recognition_result.get("components", ()):
@@ -1977,7 +1979,13 @@ class GuidedDownloadsPage(QWidget):
             return route, label
         if method == "uevr":
             if route == "uevr-pair":
-                return route, "Choose archive" if any(r.get("ambiguous") for r in rows) else label
+                if any(r.get("ambiguous") for r in rows):
+                    return route, "Choose archive"
+                if recipe.get("id") == "fatekeeper":
+                    from .fatekeeper_recognition import archives_from_rows, maintenance_label
+                    if archives_from_rows(recipe, rows):
+                        label = maintenance_label(self.recognition_result)
+                return route, label
             if route == "profile":
                 if not row.get("file"):
                     return "scan", "Scan local archives"

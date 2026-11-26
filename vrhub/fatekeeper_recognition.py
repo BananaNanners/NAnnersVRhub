@@ -70,8 +70,14 @@ def summarize_plan(plan):
             raise RuntimeError('Incomplete dependency review inventory.')
         total.update(counts)
         groups.append(dict(component=component, required=len(names), counts=dict(counts), issues=tuple(issues)))
+    # A fully missing pair is not necessarily fresh: historical state and
+    # other files may exist. Keep unknown/partial cases in a review workflow.
+    missing_all = total["missing"] == sum(len(names) for names in required.values())
+    maintenance = ("blocked" if plan.compatibility_blockers else
+                   "verified" if not (total["missing"] or total["different"]) else
+                   "install-review" if missing_all else "repair-review")
     return dict(unknown, status='Review' if total['missing'] or total['different'] else 'Verified existing dependencies',
-                sampled_at=datetime.now(timezone.utc).isoformat(), components=tuple(groups), counts={k:total[k] for k in ('matching','customizable','additional','missing','different')},
+                maintenance=maintenance, sampled_at=datetime.now(timezone.utc).isoformat(), components=tuple(groups), counts={k:total[k] for k in ('matching','customizable','additional','missing','different')},
                 detail='Current immutable files compared with pinned ZIP contents and the approved backend digest. Customizable files checked for presence only. No historical release or ownership attribution; no gameplay test.')
 
 
@@ -98,3 +104,11 @@ def archives_from_rows(recipe, rows):
             return ()
         result.append(Path(r['file']))
     return tuple(result)
+
+
+def maintenance_label(result):
+    """Presentation only; sampled evidence never authorizes installation."""
+    return {"verified": "Review verified dependencies",
+            "install-review": "Review installation",
+            "repair-review": "Review repair",
+            "blocked": "Review compatibility"}.get((result or {}).get("maintenance"), "Review installation")

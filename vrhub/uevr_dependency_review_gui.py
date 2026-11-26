@@ -114,7 +114,10 @@ class DependencyReviewDialog(QDialog):
                       if self.has_changes else
                       "No file or Hub record writes are needed.")
             from .fatekeeper_recognition import summarize_plan, summary_text
-            status = summary_text(summarize_plan(plan)) + "\n" + status
+            recognition = summarize_plan(plan)
+            status = summary_text(recognition) + "\n" + status
+            if not self.has_changes:
+                status += " Recovery evidence is checked separately before maintenance."
             if plan.blockers:
                 status += "\n" + "\n".join(plan.blockers)
             self.blockers = label(status)
@@ -153,9 +156,15 @@ class DependencyReviewDialog(QDialog):
         self.close_button.clicked.connect(self.reject)
         buttons.addWidget(self.close_button)
         buttons.addStretch()
-        self.apply_button = QPushButton("Install reviewed dependencies")
+        action_label = "Install reviewed dependencies"
+        if plan.file_decisions and not plan.verification_failed:
+            action_label = {"verified": "No dependency changes needed",
+                            "repair-review": "Apply reviewed repair",
+                            "blocked": "Compatibility review required"}.get(
+                                recognition.get("maintenance"), action_label)
+        self.apply_button = QPushButton(action_label)
         self.apply_button.setEnabled(False)
-        self.apply_button.setToolTip("Live UEVR dependency installation is not implemented or authorized.")
+        self.apply_button.setToolTip("Live UEVR dependency installation requires separate authorization.")
         buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
 
