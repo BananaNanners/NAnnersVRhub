@@ -27,7 +27,7 @@ def rehearsal(game_id):
     """Create synthetic ZIP pairs and schema-accurate ownership in private /tmp.
 
     The real read-only review is used on fixture paths only. A private recipe
-    copy supplies synthetic pins. No production dispatch or state publication.
+    copy supplies synthetic pins. No production dispatch or live state publication.
     """
     if game_id not in recognition.SUPPORTED:
         raise tx.TransactionBlocked("Unsupported managed update rehearsal.")
@@ -102,14 +102,33 @@ def rehearsal(game_id):
                 if {r["path"]:r["new_sha256"] for r in result["rows"] if r["action"] in ("Install","Replace")}!={n:tx._sha(v) for n,v in incoming.items()}:
                     raise tx.TransactionBlocked("Manifest and staged payload differ.")
             validate_review(reviewed)
+            updated=copy.deepcopy(state)
+            record=updated[game_id]
+            # Match the legacy installer contract: file_hashes describe the
+            # package payload, not customized current bytes. Never rebase a
+            # protected setting's expected hash to the player's edits.
+            record["file_hashes"]={r["path"]:r["new_sha256"] for r in reviewed["rows"]
+                                   if r["action"]!="Remove"}
+            record["files"]=[str(base/n) for n in sorted(record["file_hashes"])]
+            record["installed_at"]=2
+            with recognition._archive_snapshot(candidate) as (_, candidate_sha, _):
+                if candidate_sha != releases[1]["assets"][0]["digest"].removeprefix("sha256:"):
+                    raise tx.TransactionBlocked("Candidate identity changed before publication.")
+            record["packages"][role]={"archive":candidate.name,"sha256":candidate_sha,
+                "files":[str(base/r["path"]) for r in reviewed["rows"]
+                         if r["component"]==role and r["action"]!="Remove"],
+                "installed_at":2}
+            if set(record["originals"])-set(record["file_hashes"]):
+                raise tx.TransactionBlocked("Historical original ownership would be lost.")
+            tx._write(f,"incoming",state_name,tx._json(updated))
             plan=tx.build_plan(f)
-            if {r["path"]:r["action"] for r in plan.rows}!={changed:"replace",added:"add",removed:"delete"}:
+            if {r["path"]:r["action"] for r in plan.rows}!={changed:"replace",added:"add",removed:"delete",state_name:"replace"} or plan.rows[-1]["path"]!=state_name:
                 raise tx.TransactionBlocked("Transaction scope differs.")
             for row in reviewed["rows"]:
                 if row["current_sha256"] != plan.before.get(row["path"]):
                     raise tx.TransactionBlocked("Manifest current bytes differ from fixture plan.")
-            # No state publication in C1: exercise physical file transaction
-            # foundation independently before defining updated ownership.
+            if plan.after[state_name]!=tx._sha(tx._json(updated)):
+                raise tx.TransactionBlocked("Updated ownership bytes differ from plan.")
             def execute(*,fault=None):
                 fresh=sample()
                 validate_review(fresh)

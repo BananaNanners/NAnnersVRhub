@@ -442,7 +442,7 @@ def _plan_body(fixture):
     for rel in sorted(delete):
         rows.append({"path":rel,"old":before[rel],"new":None,"new_size":0,"action":"delete"})
         del after[rel]
-    for rel in sorted(names):
+    for rel in sorted(names, key=lambda n: (n == "hub/state.json", n)):
         current = _read(fixture, "installed", rel, optional=True)
         incoming = _read(fixture, "incoming", rel)
         if current is not None and rel not in before:
