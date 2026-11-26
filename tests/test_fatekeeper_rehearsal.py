@@ -600,6 +600,35 @@ class FatekeeperRehearsalTests(unittest.TestCase):
         self.assertEqual(list(incomplete.iterdir()), [])
         self.assertEqual(json.loads((dest.journal_dir / "fk4-journal.json").read_bytes())["phase"], "rolled-back")
 
+    def test_production_blocker_guidance_from_real_failures(self):
+        from vrhub.fatekeeper_guidance import failure_guidance
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
+        dest = tx._live_destination(None)
+        tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        history, = dest.journal_dir.glob("history-*")
+        historical_backup, = history.glob("fk4-backup*")
+        active = json.loads((dest.journal_dir / "fk4-journal.json").read_bytes())
+        active_backup = dest.journal_dir / active["backup"]
+        for target, expected in (
+            (historical_backup / "state-new", "Older backups need review"),
+            (active_backup / "state-new", "Manual review is required before restoration"),
+        ):
+            data = target.read_bytes()
+            target.write_bytes(b"damaged")
+            before = self.maintenance_inventory(root)
+            with self.assertRaises(RuntimeError) as error:
+                tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+            self.assertIn(expected, failure_guidance(str(error.exception)))
+            self.assertEqual(self.maintenance_inventory(root), before)
+            target.write_bytes(data)
+        # Actual active recovery refusal, not a guessed historical diagnosis.
+        (active_backup / "state-new").write_bytes(b"damaged active state")
+        before = self.maintenance_inventory(root)
+        with self.assertRaises(RuntimeError) as error:
+            tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertIn("Manual review is required before restoration", failure_guidance(str(error.exception)))
+        self.assertEqual(self.maintenance_inventory(root), before)
+
     def test_production_maintenance_refuses_history_damage_and_unknown_artifacts(self):
         tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
         dest = tx._live_destination(None)

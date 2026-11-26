@@ -33,6 +33,66 @@ class RecognitionGuiTests(RecognitionTests):
             QTest.qWait(10)
         self.assertIsNone(page.integrity_worker)
 
+    def test_worker_failure_guidance_and_original_details(self):
+        from dataclasses import replace
+        from vrhub.uevr_dependency_review_gui import InstallRehearsal
+        plan = review.build_plan(self.recipe, self.archives)
+        for detail, expected in (
+            ("Historical backup SHA-256 verification failed.", "Older backups need review"),
+            ("Unsafe active Fatekeeper backup evidence.", "Manual review is required before restoration"),
+            ("Recover the existing Fatekeeper transaction before retrying.", "The Hub must verify that restoration is safe"),
+            ("Unresolved production recovery evidence; manual review required.", "Do not retry installation"),
+            ("Fatekeeper storage identity changed.", "Reopen the review"),
+            ("Choose the official UEVR archive.", "Download the required version"),
+            ("Unexpected <b>failure</b>", "Installation did not complete"),
+        ):
+            with self.subTest(detail=detail):
+                dialog = DependencyReviewDialog(plan)
+                self.addCleanup(dialog.close)
+                def fail():
+                    raise RuntimeError(detail)
+                worker = InstallRehearsal(fail, dialog)
+                dialog.install_worker = worker
+                worker.result.connect(dialog.show_rehearsal_result)
+                worker.finished.connect(dialog._finish_install)
+                worker.start()
+                for _ in range(300):
+                    if dialog.install_worker is None:
+                        break
+                    QTest.qWait(10)
+                self.assertIsNone(dialog.install_worker)
+                self.assertIn(expected, dialog.status.text())
+                self.assertIn("Technical details: " + detail, dialog.status.text())
+                self.assertEqual(dialog.status.toolTip(), detail)
+                self.assertFalse(dialog.apply_button.isEnabled())
+                self.assertTrue(dialog.close_button.isEnabled())
+        blocked = replace(plan, compatibility_blockers=("obsolete.dll",), blockers=("obsolete.dll",))
+        dialog = DependencyReviewDialog(blocked, install_authorized=lambda: True)
+        self.addCleanup(dialog.close)
+        self.assertIn("This release needs compatibility review", dialog.blockers.text())
+        self.assertFalse(dialog.apply_button.isEnabled())
+
+    def test_recovery_guidance_preserves_diagnostic_and_blocks_route(self):
+        page = self.page()
+        page._last_plan = {"rows": self.rows()}
+        for detail, expected in (
+            ("Fatekeeper recovery pending. Installation blocked until the interrupted transaction is recovered.",
+             "The Hub must verify that restoration is safe"),
+            ("Fatekeeper recovery journal needs manual review. Installation blocked.",
+             "Do not retry installation or restore files manually"),
+        ):
+            with patch("vrhub.fatekeeper_commit.recovery_notice", return_value=detail):
+                page._update_backend_install_status()
+                page._update_review_action()
+                self.assertIn(expected, page.guidance.text())
+                self.assertIn(expected, page.backend_install_status.text())
+                self.assertEqual(page.guidance.toolTip(), detail)
+                self.assertIn(detail, page.backend_install_status.toolTip())
+                self.assertFalse(page.install_review_button.isEnabled())
+        with patch("vrhub.fatekeeper_commit.recovery_notice", return_value=""):
+            page._update_review_action()
+            self.assertEqual(page.guidance.toolTip(), "")
+
     def test_maintenance_labels_and_stale_evidence(self):
         page = self.page()
         rows = self.rows()

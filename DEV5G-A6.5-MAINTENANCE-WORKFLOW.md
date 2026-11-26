@@ -45,3 +45,24 @@ isolated preview PID 19893 loaded checkpoint 55d70f0bc17fb312fe8d226f49f2034ac16
 Qt-visible 1630 x 1060 window, Fatekeeper Rollback selected, single restore
 control. Only its gate-disabled information action enabled; no live recovery.
 Independent compositor verification not established. Stable state unchanged.
+
+## A6.5-C — Player-friendly blockers and recovery guidance
+Baseline 87981845d4dc3d111d28de66c617565e7dabf675.
+Existing status and review dialog distinguish interrupted transactions,
+historical evidence problems, unsafe active backups, unknown evidence,
+changed reviews and download failures. Compatibility blockers remain
+disabled. Original diagnostics retained in status text and tooltips.
+Worker returns original exception detail; initial generic-result wiring
+omission corrected before dedicated testing. Conservative fallback never
+asserts unchanged files or safe restoration. Prefix matching is presentation
+only, not structured error codes or full recovery health verification.
+Initial 42 passed (3.610s); dedicated 3 passed (1.050s); final targeted
+165 passed (39.223s), process 20469 exit 0, no skips/errors/failures.
+Real disposable corruption refusals preserve fixture inventory; simulated
+worker signals cover other guidance cases. Sixteen historical manifests
+and both A5 fixture inventories verified; stable state unchanged; gate closed.
+Previous accepted preview PID 19893 observed absent; interactive acceptance
+pending. No live operations or new controls.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.5C-evidence-XIFVqe.
+
+A6.5-C manifest SHA-256: 257285a94d86f4db2a5303fc493c82eba8a72d4f08711f9b0a8b568274b4acf1.

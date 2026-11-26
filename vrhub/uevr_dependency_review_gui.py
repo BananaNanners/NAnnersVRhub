@@ -22,7 +22,7 @@ class BackendVerification(QThread):
 
 
 class InstallRehearsal(QThread):
-    result = Signal(bool)
+    result = Signal(bool, str)
 
     def __init__(self, action, parent):
         super().__init__(parent)
@@ -31,10 +31,10 @@ class InstallRehearsal(QThread):
     def run(self):
         try:
             self.action()
-        except (OSError, RuntimeError, ValueError):
-            self.result.emit(False)
+        except Exception as exc:
+            self.result.emit(False, str(exc) or type(exc).__name__)
         else:
-            self.result.emit(True)
+            self.result.emit(True, "")
 
 
 class DependencyReviewDialog(QDialog):
@@ -118,6 +118,8 @@ class DependencyReviewDialog(QDialog):
             status = summary_text(recognition) + "\n" + status
             if not self.has_changes:
                 status += " Recovery evidence is checked separately before maintenance."
+            if plan.compatibility_blockers:
+                status += "\nThis release needs compatibility review before installation. Keep your existing files."
             if plan.blockers:
                 status += "\n" + "\n".join(plan.blockers)
             self.blockers = label(status)
@@ -240,7 +242,10 @@ class DependencyReviewDialog(QDialog):
         self.close_button.setEnabled(True)
         self.apply_button.setEnabled(self.disposable_rehearsal)
 
-    def show_rehearsal_result(self, passed):
+    def show_rehearsal_result(self, passed, detail=""):
+        from .fatekeeper_guidance import failure_guidance
+        self.status.setTextFormat(Qt.PlainText)
+        self.status.setToolTip(detail if not passed else "")
         if self.disposable_rehearsal:
             self.status.setText(
                 "Disposable installation and rollback passed. Live installation disabled." if passed else
@@ -249,5 +254,7 @@ class DependencyReviewDialog(QDialog):
         else:
             self.status.setText(
                 "Reviewed Fatekeeper installation completed. Local checks will refresh when you close this review; gameplay is not verified." if passed else
-                "Installation did not complete. Close this review and check recovery status before retrying."
+                failure_guidance(detail)
             )
+        if not passed and detail:
+            self.status.setText(self.status.text() + "\nTechnical details: " + detail)

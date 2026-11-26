@@ -864,7 +864,8 @@ class GuidedDownloadsPage(QWidget):
         result = check_backend(recipe)
         from .fatekeeper_commit import recovery_notice
         notice = recovery_notice()
-        self.backend_install_status.setText("\n".join(filter(None, (install_update_guidance(result), notice))))
+        from .fatekeeper_guidance import recovery_guidance
+        self.backend_install_status.setText("\n".join(filter(None, (install_update_guidance(result), recovery_guidance(notice)))))
         self.backend_install_status.setToolTip("\n".join(filter(None, (result.get("detail", ""), notice))))
         color = "#4FE39A" if result["status"] == "verified" and not notice else "#FFD21A"
         self.backend_install_status.setStyleSheet(
@@ -2076,7 +2077,9 @@ class GuidedDownloadsPage(QWidget):
         plan = self._last_plan or {}
         if route == "recovery-blocked":
             from .fatekeeper_commit import recovery_notice
-            message = recovery_notice() or "Recovery review required. Refresh the game before retrying."
+            from .fatekeeper_guidance import recovery_guidance
+            detail = recovery_notice()
+            message = recovery_guidance(detail) or "Recovery review required. Refresh the game before retrying."
         elif (self._last_plan or {}).get("warning"):
             message = "Scan incomplete: " + str(self._last_plan["warning"])
         elif route == "pinned-release-review":
@@ -2130,6 +2133,7 @@ class GuidedDownloadsPage(QWidget):
         if row.get("release_notice"):
             message += " " + row["release_notice"]
         self.guidance.setText(message)
+        self.guidance.setToolTip(detail if route == "recovery-blocked" else "")
 
     def _update_review_action(self):
         route, label = self._primary_action()
@@ -2151,7 +2155,7 @@ class GuidedDownloadsPage(QWidget):
             if route in ("kharvox-review", "kharvox-wait") else
             "Review the profile ZIP, where it will go and the backup of the entire profile folder. Nothing changes without confirmation."
             if route == "profile" else
-            "Review the interrupted Fatekeeper installation before continuing." if route == "recovery-blocked" else
+            "Review recovery status before continuing. Restoration must be checked separately." if route == "recovery-blocked" else
             "Review downloaded files and backups. Nothing changes without confirmation."
             if route != "blocked" else "Verification blocked. Obtain the correct archive and rescan.")
         self._update_workflow_guidance()

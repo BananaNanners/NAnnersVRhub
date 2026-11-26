@@ -172,7 +172,8 @@ class FatekeeperBackendDependencyTests(unittest.TestCase):
             page=GuidedDownloadsPage()
             try:
                 page.set_recipe(self.recipe)
-                self.assertIn("recovery pending",page.backend_install_status.text())
+                self.assertIn("Installation interrupted",page.backend_install_status.text())
+                self.assertIn("recovery pending",page.backend_install_status.toolTip())
                 self.assertEqual(page._primary_action(),("recovery-blocked","Recovery required"))
                 self.assertFalse(page.install_review_button.isEnabled())
                 self.assertIsNone(page._manual_review_route())
