@@ -45,6 +45,28 @@ class RecognitionGuiTests(RecognitionTests):
         dialog.run_rehearsal()
         self.assertFalse(dialog.install_attempted)
 
+    def test_compatibility_blocker_disables_all_install_paths(self):
+        from dataclasses import replace
+        plan = review.build_plan(self.recipe, self.archives)
+        blocker = "Profile: old.dll is no longer supplied. Preserved; compatibility review required."
+        plan = replace(plan, compatibility_blockers=(blocker,), blockers=(blocker,),
+                       file_decisions=tuple(("Replace", role, name) if (role, name)==("Profile", "plugin.dll") else (action, role, name) for action, role, name in plan.file_decisions),
+                       needs_backend_verification=True)
+        for disposable in (False, True):
+            with self.subTest(disposable=disposable):
+                with patch("vrhub.uevr_dependency_review_gui.BackendVerification") as worker:
+                    dialog = DependencyReviewDialog(plan, disposable_rehearsal=disposable,
+                        install_action=lambda *_: self.fail("blocked install invoked"), install_authorized=lambda: True)
+                    self.addCleanup(dialog.close)
+                    worker.assert_not_called()
+                self.assertIn(blocker, dialog.blockers.text())
+                self.assertFalse(dialog.apply_button.isEnabled())
+                dialog.show_backend_result(b"verified")
+                self.assertFalse(dialog.apply_button.isEnabled())
+                dialog.run_rehearsal()
+                self.assertIsNone(dialog.install_worker)
+                self.assertFalse(dialog.install_attempted)
+
     def test_real_verify_button_legacy_and_missing_backend(self):
         page=self.page(); before=self.state.read_bytes()
         with patch.object(page,'_fresh_review_rows',return_value=self.rows()), patch.object(hub,'verify',return_value={}):

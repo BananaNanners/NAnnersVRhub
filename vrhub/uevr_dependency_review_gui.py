@@ -159,7 +159,7 @@ class DependencyReviewDialog(QDialog):
         buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
 
-        if plan.verification_failed:
+        if plan.verification_failed or plan.compatibility_blockers:
             return
         if install_action is not None and not disposable_rehearsal:
             self.apply_button.setToolTip("Live installation requires separate authorization.")
@@ -179,7 +179,7 @@ class DependencyReviewDialog(QDialog):
     def show_backend_result(self, asset):
         if asset is not None:
             self.verified_asset = asset
-            self.apply_button.setEnabled(self.disposable_rehearsal or (self.has_changes and self.install_authorized()))
+            self.apply_button.setEnabled(not self.plan.compatibility_blockers and (self.disposable_rehearsal or (self.has_changes and self.install_authorized())))
             self.backend.setText(self.plan.backend_status + " Required UEVR file verified.")
         else:
             self.backend.setText(
@@ -198,7 +198,7 @@ class DependencyReviewDialog(QDialog):
             super().closeEvent(event)
 
     def run_rehearsal(self):
-        if self.plan.verification_failed or self.install_worker is not None or (self.install_attempted and not self.disposable_rehearsal):
+        if self.plan.verification_failed or self.plan.compatibility_blockers or self.install_worker is not None or (self.install_attempted and not self.disposable_rehearsal):
             return
         if not self.disposable_rehearsal and (not self.has_changes or not self.install_authorized()):
             return

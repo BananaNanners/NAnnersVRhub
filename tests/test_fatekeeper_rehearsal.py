@@ -205,7 +205,7 @@ class FatekeeperRehearsalTests(unittest.TestCase):
             self.assertEqual((injector / "UEVRInjector.exe").read_bytes(),
                              b"injector")
 
-    def managed_repair_fixture(self):
+    def managed_repair_fixture(self, *, damage=True):
         from vrhub import fatekeeper_commit as tx, profile_safety
         recipe = hub.load_recipes()["fatekeeper"]
         root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="nanners-a6-", dir=Path.home())))
@@ -227,7 +227,8 @@ class FatekeeperRehearsalTests(unittest.TestCase):
                                FATEKEEPER_BACKEND_SHA256=sha256(self.asset).hexdigest()))
         tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
         backend = injector / "UEVRBackend.dll"
-        backend.unlink()
+        if damage:
+            backend.unlink()
         (profile / "config.txt").write_bytes(b"custom settings")
         (profile / "extra.ini").write_bytes(b"manual file")
         return tx, recipe, root, prefix, state, backend, stopped
@@ -307,6 +308,134 @@ class FatekeeperRehearsalTests(unittest.TestCase):
             tx.install_reviewed(plan, verified_backend=self.asset)
         self.assertEqual(self.maintenance_inventory(root), before)
         self.assertFalse(backend.exists())
+
+    def test_managed_production_synthetic_version_transition(self):
+        from vrhub import fatekeeper_authorization as auth, installed_integrity
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture(damage=False)
+        dest = tx._live_destination(None)
+        journal = dest.journal_dir / "fk4-journal.json"
+        prior = journal.read_bytes()
+        backup = dest.journal_dir / json.loads(prior)["backup"]
+        evidence = self.maintenance_inventory(backup)
+        old_state = state.read_bytes()
+        old_pins = dict(recipe["archive_pins"])
+        old_records = json.loads(old_state)
+        save = prefix / "unrelated-save.bin"
+        save.write_bytes(b"save")
+        before = self.maintenance_inventory(prefix)
+        v2 = root / "profile-v2.zip"
+        with zipfile.ZipFile(v2, "w") as archive:
+            archive.writestr("config.txt", b"new defaults")
+            archive.writestr("plugins/test.dll", b"plugin v2")
+            archive.writestr("plugins/new.dll", b"new plugin")
+        archives = [self.archives[0], v2]
+        unchanged = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "checksum"):
+            review.build_plan(recipe, archives)
+        self.assertEqual(self.maintenance_inventory(root), unchanged)
+        # Only this test's in-memory recipe authorizes the synthetic v2.
+        recipe["archive_pins"] = {**old_pins, "profile": sha256(v2.read_bytes()).hexdigest()}
+        plan = review.build_plan(recipe, archives)
+        self.assertIn(("Replace", "Profile", "plugins/test.dll"), plan.file_decisions)
+        self.assertIn(("Install", "Profile", "plugins/new.dll"), plan.file_decisions)
+        self.assertIn(("Preserve", "Profile", "config.txt"), plan.file_decisions)
+        self.assertIn(("Preserve", "Profile", "extra.ini"), plan.file_decisions)
+        self.assertIn(("Preserve", "Injector", "UEVRBackend.dll"), plan.file_decisions)
+        self.assertIn(("Preserve", "Injector", "UEVRInjector.exe"), plan.file_decisions)
+        changed = dest.profile / "plugins/test.dll"
+        added = dest.profile / "plugins/new.dll"
+        self.assertEqual(set(tx.install_reviewed(plan, verified_backend=self.asset)), {changed, added})
+        self.assertEqual(changed.read_bytes(), b"plugin v2")
+        self.assertEqual(added.read_bytes(), b"new plugin")
+        after = self.maintenance_inventory(prefix)
+        self.assertEqual(set(after)-set(before), {str(added.relative_to(prefix))})
+        for name, value in before.items():
+            if name != str(changed.relative_to(prefix)):
+                self.assertEqual(after[name], value)
+        records = json.loads(state.read_bytes())
+        self.assertEqual(records["other"], old_records["other"])
+        self.assertEqual(records["fatekeeper"]["archive_sha256"], old_pins["uevr"])
+        self.assertEqual(records["fatekeeper:profile"]["archive_sha256"], recipe["archive_pins"]["profile"])
+        self.assertEqual(set(records["fatekeeper:profile"]["files"]),
+                         set(old_records["fatekeeper:profile"]["files"]) | {str(added)})
+        self.assertEqual(records["fatekeeper:profile"]["reviewed_dependencies"]["plugins/test.dll"]["sha256"],
+                         sha256(b"plugin v2").hexdigest())
+        self.assertEqual(installed_integrity.verify(recipe, state=records)["status"], "Verified")
+        history, = dest.journal_dir.glob("history-*")
+        self.assertEqual((history / "fk4-journal.json").read_bytes(), prior)
+        self.assertEqual(self.maintenance_inventory(backup), evidence)
+        self.assertEqual(self.maintenance_inventory(history / backup.name), evidence)
+        unchanged = self.maintenance_inventory(root)
+        self.assertEqual(tx.install_reviewed(review.build_plan(recipe, archives), verified_backend=self.asset), [])
+        self.assertEqual(self.maintenance_inventory(root), unchanged)
+        tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertEqual(self.maintenance_inventory(prefix), before)
+        self.assertEqual(state.read_bytes(), old_state)
+        self.assertEqual(self.maintenance_inventory(backup), evidence)
+        self.assertEqual(auth.production_journal(auth.production_authority(dest))[1]["phase"], "rolled-back")
+        # Old pins remain valid for old installed bytes; new pins do not
+        # magically turn restored v1 into a verified v2 installation.
+        self.assertNotEqual(installed_integrity.verify(recipe, state=json.loads(old_state))["status"], "Verified")
+        recipe["archive_pins"] = old_pins
+        self.assertEqual(installed_integrity.verify(recipe, state=json.loads(old_state))["status"], "Verified")
+
+    def test_managed_update_omitted_dependency_blocks_without_writes(self):
+        from dataclasses import replace
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture(damage=False)
+        dest = tx._live_destination(None)
+        v2 = root / "profile-v2.zip"
+        with zipfile.ZipFile(v2, "w") as archive:
+            archive.writestr("config.txt", b"new defaults")
+            archive.writestr("plugins/new.dll", b"new plugin")
+        recipe["archive_pins"]["profile"] = sha256(v2.read_bytes()).hexdigest()
+        archives = [self.archives[0], v2]
+        for missing in (False, True):
+            with self.subTest(missing=missing):
+                if missing:
+                    (dest.profile / "plugins/test.dll").unlink()
+                plan = review.build_plan(recipe, archives)
+                self.assertTrue(any("plugins/test.dll" in b for b in plan.compatibility_blockers))
+                self.assertFalse(any("extra.ini" in b for b in plan.compatibility_blockers))
+                if not missing:
+                    self.assertIn(("Preserve", "Profile", "plugins/test.dll"), plan.file_decisions)
+                before = self.maintenance_inventory(root)
+                # Even a forged review without the visible blocker is refreshed.
+                with self.assertRaisesRegex(RuntimeError, "compatibility review required"):
+                    tx.install_reviewed(replace(plan, compatibility_blockers=()), verified_backend=self.asset)
+                self.assertEqual(self.maintenance_inventory(root), before)
+
+    def test_managed_update_invalid_ownership_blocks_without_writes(self):
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture(damage=False)
+        original = state.read_bytes()
+        dest = tx._live_destination(None)
+        plan = review.build_plan(recipe, self.archives)
+        for field, value in (("root", str(root / "foreign")),
+                             ("files", [str(root / "foreign.dll")]),
+                             ("files", [str(dest.profile / "config.txt")] * 2),
+                             ("reviewed_dependencies", {"../escape": {"sha256": "a"*64, "size": 1}}),
+                             ("archive_sha256", "invalid")):
+            with self.subTest(field=field, value=value):
+                records = json.loads(original)
+                records["fatekeeper:profile"][field] = value
+                state.write_text(json.dumps(records))
+                before = self.maintenance_inventory(root)
+                refreshed = review.build_plan(recipe, self.archives)
+                self.assertTrue(refreshed.compatibility_blockers)
+                with self.assertRaisesRegex(RuntimeError, "compatibility review required"):
+                    tx.install_reviewed(plan, verified_backend=self.asset)
+                self.assertEqual(self.maintenance_inventory(root), before)
+        state.write_bytes(original)
+
+    def test_managed_compatibility_dependency_not_owned_and_ownership_only(self):
+        folder = Path("/synthetic/profile")
+        meta = {"sha256": "a"*64, "size": 1}
+        rec = {"installer": "fatekeeper-pair-fk4", "root": str(folder),
+               "archive_sha256": "b"*64, "reviewed_dependencies": {"config.txt": meta, "old.dll": meta},
+               "files": [str(folder / "owned-only.dll")]}
+        blocks = review.managed_compatibility({"fatekeeper:profile": rec}, folder, "Profile", {"config.txt"})
+        self.assertEqual(len(blocks), 2)
+        self.assertTrue(any("old.dll" in b for b in blocks))
+        self.assertTrue(any("owned-only.dll" in b for b in blocks))
 
     def test_managed_production_repair_cycle(self):
         from vrhub import fatekeeper_commit as tx, fatekeeper_authorization as auth

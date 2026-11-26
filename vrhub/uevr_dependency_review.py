@@ -47,6 +47,44 @@ def _file_decisions(component, incoming, snapshot):
     )
 
 
+def managed_compatibility(state, folder, component, incoming):
+    """Conservative maintenance check; never adopt or delete omitted files."""
+    import re
+    key = "fatekeeper" if component == "Injector" else "fatekeeper:profile"
+    record = state.get(key)
+    if not isinstance(record, dict) or record.get("installer") != "fatekeeper-pair-fk4":
+        return ()
+    def valid_name(name):
+        return (isinstance(name, str) and bool(name) and
+                not any(c in name for c in (chr(92), ":", chr(0))) and
+                all(part not in ("", ".", "..") for part in name.split("/")))
+    manifest = record.get("reviewed_dependencies")
+    owned = record.get("files")
+    if (record.get("root") != str(folder) or not isinstance(manifest, dict)
+            or not manifest or not isinstance(owned, list)
+            or not isinstance(record.get("archive_sha256"), str)
+            or not re.fullmatch("[0-9a-f]{64}", record["archive_sha256"])):
+        return (f"{component}: previous managed installation records need review.",)
+    names = set()
+    for name, meta in manifest.items():
+        if (not valid_name(name) or not isinstance(meta, dict)
+                or not isinstance(meta.get("sha256"), str)
+                or not re.fullmatch("[0-9a-f]{64}", meta["sha256"])
+                or type(meta.get("size")) is not int or meta["size"] < 0):
+            return (f"{component}: previous dependency records need review.",)
+        names.add(name)
+    seen = set()
+    for path in owned:
+        if not isinstance(path, str) or not path.startswith(str(folder) + "/"):
+            return (f"{component}: previous file ownership needs review.",)
+        name = path[len(str(folder)) + 1:]
+        if not valid_name(name) or name in seen:
+            return (f"{component}: previous file ownership needs review.",)
+        seen.add(name)
+    return tuple(f"{component}: {name} is no longer supplied. Preserved; compatibility review required."
+                 for name in sorted((names | seen) - set(incoming)))
+
+
 def stage_fatekeeper_backend(staging_directory: Path, asset: bytes) -> Path:
     """Replace the backend in a disposable injector staging directory."""
     if len(asset) != FATEKEEPER_BACKEND_SIZE or sha256(asset).hexdigest() != FATEKEEPER_BACKEND_SHA256:
@@ -91,6 +129,7 @@ class DependencyReview:
     file_decisions: tuple[tuple[str, str, str], ...] = ()
     verification_failed: bool = False
     failed_archives: tuple[str, ...] = ()
+    compatibility_blockers: tuple[str, ...] = ()
 
 
 def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
@@ -162,12 +201,16 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
     if pins and profile.archive_sha256 != pins.get("profile"):
         raise RuntimeError("Choose Fatekeeper VR Profile v1.0.4. Its checksum did not match.")
     decisions = ()
+    compatibility = ()
     if pins:
         with zipfile.ZipFile(paths[1]) as archive:
             profile_hashes = {}
             for entry, name in profile_safety._archive_entries(archive):
                 with archive.open(entry) as stream:
                     profile_hashes[name] = file_digest(stream, "sha256").hexdigest()
+        state = hub.state()
+        compatibility = (managed_compatibility(state, dest, "Injector", injector_hashes) +
+                         managed_compatibility(state, profile_dest, "Profile", profile_hashes))
         decisions = (_file_decisions("Injector", injector_hashes, snapshot) +
                      _file_decisions("Profile", profile_hashes, profile_safety._snapshot(profile_dest)))
     if profile.destination != str(profile_dest):
@@ -203,14 +246,14 @@ def build_plan(recipe, archives, steam_roots=None, *, evidence=None):
                 "decisions, backup and rollback. No manual DLL copying is needed."
             )
             needs_backend_verification = True
-    blockers = list(profile.blocked)
+    blockers = list(profile.blocked) + list(compatibility)
     if snapshot["exists"] or recipe["id"] in hub.state():
         blockers.append("Existing injector directory or Hub record requires separate recovery review. No injector backup or replacement is authorized.")
     if recipe["id"] == "hogwarts-legacy" and not set(tags[0]).intersection(tags[1]):
         blockers.append("Matching Hogwarts Legacy injector/profile release is not established. Do not mix release bundles without compatibility review.")
     return DependencyReview(recipe["name"], str(paths[0]), digest, str(dest), rels,
                             size, len(snapshot["files"]), len(snapshot["dirs"]),
-                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status, needs_backend_verification, snapshot, decisions)
+                            snapshot["bytes"], profile, tuple(tags), tuple(blockers), backend_status, needs_backend_verification, snapshot, decisions, compatibility_blockers=compatibility)
 
 
 def build_blocked_plan(recipe, rows, steam_roots=None):

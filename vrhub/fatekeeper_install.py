@@ -34,6 +34,9 @@ def prepare_reviewed_install(review, steam_roots=None, *, verified_backend=None)
         raise RuntimeError("Fatekeeper destinations overlap.")
     archives = (Path(review.injector_archive), Path(review.profile.archive))
     refreshed = uevr_dependency_review.build_plan(recipe, archives, steam_roots)
+    if refreshed.compatibility_blockers or review.compatibility_blockers:
+        raise RuntimeError("Fatekeeper compatibility review required: " +
+                           "; ".join(refreshed.compatibility_blockers or review.compatibility_blockers))
     if (refreshed.profile.fingerprint != review.profile.fingerprint or
             refreshed.injector_snapshot != review.injector_snapshot or
             refreshed.file_decisions != review.file_decisions):
@@ -79,6 +82,12 @@ def prepare_reviewed_install(review, steam_roots=None, *, verified_backend=None)
                                             subpath.as_posix() in uevr_dependency_review.FATEKEEPER_LOCAL_PROFILE_FILES}
         if action != "Preserve":
             writes[str(dest / subpath)] = data
+    for folder, component in ((injector, "Injector"), (profile, "Profile")):
+        incoming = {Path(name).relative_to(folder).as_posix()
+                    for name in dependencies if Path(name).is_relative_to(folder)}
+        blockers = uevr_dependency_review.managed_compatibility(state, folder, component, incoming)
+        if blockers:
+            raise RuntimeError("Fatekeeper compatibility review required: " + "; ".join(blockers))
     if len(writes) != sum(action != "Preserve" for action, _, _ in refreshed.file_decisions):
         raise RuntimeError("Staged Fatekeeper write set is incomplete.")
     if (profile_safety._snapshot(injector) != injector_before or
