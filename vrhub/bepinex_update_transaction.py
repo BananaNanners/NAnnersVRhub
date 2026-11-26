@@ -23,11 +23,12 @@ def _release(tag, day, path, name):
 
 
 @contextmanager
-def rehearsal(game_id):
+def rehearsal(game_id, *, pinned_archives=None):
     """Create synthetic ZIP pairs and schema-accurate ownership in private /tmp.
 
     The real read-only review is used on fixture paths only. A private recipe
-    copy supplies synthetic pins. No production dispatch or live state publication.
+    copy supplies synthetic pins in small mode. Full mode verifies genuine
+    baseline archives and generates only a synthetic candidate. No live writes.
     """
     if game_id not in recognition.SUPPORTED:
         raise tx.TransactionBlocked("Unsupported managed update rehearsal.")
@@ -40,6 +41,12 @@ def rehearsal(game_id):
     added="BepInEx/plugins/new-folder/new-test.dll"
     config="BepInEx/config/BepInEx.cfg"
     binding=cfg["data"]+"/StreamingAssets/SteamVR/bindings_oculus_touch.json"
+    if pinned_archives is not None:
+        pinned_archives=tuple(Path(p) for p in pinned_archives)
+        if len(pinned_archives)!=len(recipe["packages"]):
+            raise tx.TransactionBlocked("Complete pinned pair required.")
+        changed="BepInEx/plugins/"+("SubmersedVR.dll" if game_id=="subnautica" else "ValheimVRMod.dll")
+        removed=cfg["data"]+"/StreamingAssets/amplify_resources.manifest"
     with tempfile.TemporaryDirectory(prefix="nanners-update-archives-",dir="/tmp") as temp:
         root=Path(temp)
         candidate_folder=root/"candidate"
@@ -47,25 +54,49 @@ def rehearsal(game_id):
         oldpaths=[]
         payload={}
         packages={}
-        for pkg in recipe["packages"]:
-            rid=pkg["id"]
-            files={n:("synthetic pinned "+n).encode() for n in pkg["required_files"]}
-            if rid=="loader":
-                files[config]=b"default config"
-            if rid==role:
-                files.update({changed:b"old binary",removed:b"obsolete binary"})
-            if set(files)&set(payload):
-                raise tx.TransactionBlocked("Overlapping synthetic baseline.")
-            payload.update(files)
-            path=root/(rid+".zip")
-            _zip(path,files,"BepInExPack_Valheim/" if game_id=="valheim" and rid=="loader" else "")
-            pkg["sha256"]=tx._sha(path.read_bytes())
-            oldpaths.append(path)
-            packages[rid]=(path,dict(files))
+        if pinned_archives is not None:
+            seen=set()
+            for source_path in pinned_archives:
+                with recognition._archive_snapshot(source_path) as (source,sha,_):
+                    pkg,members=bepinex.archive_plan_stream(source,recipe,sha,source_path)
+                    rid=pkg["id"]
+                    if rid in packages or any(n.casefold() in seen for n in members.values()):
+                        raise tx.TransactionBlocked("Overlapping or duplicate pinned package.")
+                    with zipfile.ZipFile(source) as z:
+                        files={name:z.read(origin) for origin,name in members.items()}
+                    seen.update(n.casefold() for n in files)
+                    path=root/source_path.name
+                    source.seek(0)
+                    path.write_bytes(source.read())
+                    if tx._sha(path.read_bytes())!=sha:
+                        raise tx.TransactionBlocked("Pinned copy digest differs.")
+                    oldpaths.append(path)
+                    packages[rid]=(path,files)
+                    payload.update(files)
+            if set(packages)!={p["id"] for p in recipe["packages"]}:
+                raise tx.TransactionBlocked("Incomplete pinned pair.")
+            if len(payload)!={"subnautica":45,"valheim":135}[game_id]:
+                raise tx.TransactionBlocked("Pinned baseline inventory differs.")
+        else:
+            for pkg in recipe["packages"]:
+                rid=pkg["id"]
+                files={n:("synthetic pinned "+n).encode() for n in pkg["required_files"]}
+                if rid=="loader":
+                    files[config]=b"default config"
+                if rid==role:
+                    files.update({changed:b"old binary",removed:b"obsolete binary"})
+                if set(files)&set(payload):
+                    raise tx.TransactionBlocked("Overlapping synthetic baseline.")
+                payload.update(files)
+                path=root/(rid+".zip")
+                _zip(path,files,"BepInExPack_Valheim/" if game_id=="valheim" and rid=="loader" else "")
+                pkg["sha256"]=tx._sha(path.read_bytes())
+                oldpaths.append(path)
+                packages[rid]=(path,dict(files))
         oldpath, files=packages[role]
         incoming_payload=dict(files)
         del incoming_payload[removed]
-        incoming_payload.update({changed:b"new binary",added:b"new dependency"})
+        incoming_payload.update({changed:b"synthetic candidate replacement; not executable" if pinned_archives is not None else b"new binary",added:b"new dependency"})
         candidate=candidate_folder/filename
         _zip(candidate,incoming_payload)
         source=recipe["archive_releases"][role]
@@ -95,6 +126,8 @@ def rehearsal(game_id):
                 with patch.object(hub,"game_path",return_value=base),patch.object(hub,"state_file",return_value=base/state_name),patch.object(hub,"state",side_effect=lambda:json.loads(tx._read(f,"installed",state_name))):
                     return manifest.review(recipe,oldpaths,candidate_folder,fetch=fetch)
             reviewed=sample()
+            if pinned_archives is not None and len(reviewed["rows"])!=len(payload)+1:
+                raise tx.TransactionBlocked("Full manifest inventory differs.")
             expected={changed:"Replace",added:"Install",removed:"Remove"}
             def validate_review(result):
                 if result["status"]!="Review required" or result["blockers"] or result["write_authorized"] or {r["path"]:r["action"] for r in result["rows"] if r["action"]!="Preserve"}!=expected:
