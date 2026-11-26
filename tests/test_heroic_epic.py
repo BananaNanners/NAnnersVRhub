@@ -26,6 +26,39 @@ class HeroicDiscoveryTests(unittest.TestCase):
     def fixture(self, **kwargs):
         return fixtures.heroic_fixture(self.home, self.recipe, **kwargs)
 
+    def test_shared_preview_activation_preserves_heroic_across_repeated_initialization(self):
+        from vrhub import dev_preview_storage, launch_environment, runtime
+        root, game, prefix, files = self.fixture()
+        before = {p: p.read_bytes() for p in files}
+        host_config = self.home / "config"
+        manifests = host_config / "openxr/1"
+        manifests.mkdir(parents=True)
+        (manifests / "active_runtime.json").write_text(json.dumps({
+            "file_format_version": "1.0.0", "runtime": {"library_path": "libopenxr_wivrn.so"}}))
+        private = dev_preview_storage.shared_directory(self.home)
+        private.mkdir(parents=True)
+        (private / "state.json").write_text("{}")
+        with mock.patch.object(launch_environment, "_host", None), mock.patch.dict(os.environ):
+            os.environ.pop("XR_RUNTIME_JSON", None)
+            os.environ.pop("XDG_DATA_HOME", None)
+            os.environ["XDG_CACHE_HOME"] = str(self.home / "host-cache")
+            for _ in range(3):
+                dev_preview_storage.activate_desktop_preview()
+                # Legacy launchers may also call capture explicitly.
+                launch_environment.capture_host_xdg()
+                self.assertEqual(hub.game_path(self.recipe), game)
+                self.assertEqual(hub._pfx(self.recipe), prefix)
+                self.assertEqual(epic.context(self.recipe)["root"], root)
+                self.assertEqual(os.environ["XDG_CONFIG_HOME"], str(private / "config"))
+                self.assertEqual(os.environ["VRHUB_STATE"], str(private / "state.json"))
+                env = launch_environment.child_environment()
+                self.assertEqual(env["XDG_CONFIG_HOME"], str(host_config))
+                self.assertEqual(env["XDG_CACHE_HOME"], str(self.home / "host-cache"))
+                self.assertNotIn("XDG_DATA_HOME", env)
+                self.assertEqual(runtime.runtime_name(*runtime.active_runtime()), "WiVRn")
+            self.assertEqual(hub.profile_dir(self.recipe), prefix / hub.APPDATA / self.recipe["profile"]["dir"])
+        self.assertEqual({p: p.read_bytes() for p in files}, before)
+
     def test_native_heroic_uses_its_settings_and_never_steam(self):
         root, game, prefix, files = self.fixture()
         before = {p: p.read_bytes() for p in files}

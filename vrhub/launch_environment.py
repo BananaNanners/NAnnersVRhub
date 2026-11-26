@@ -7,8 +7,10 @@ _host = None
 
 
 def capture_host_xdg():
+    """Capture the original host environment once, before preview isolation."""
     global _host
-    _host = {key: os.environ.get(key) for key in _KEYS}
+    if _host is None:
+        _host = {key: os.environ.get(key) for key in _KEYS}
 
 
 def host_config_home():

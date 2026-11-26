@@ -255,6 +255,10 @@ def activate_desktop_preview(*, home: Path | None = None):
     prior_state = os.environ.get("VRHUB_STATE")
     result = prepare_shared_preview(
         home, previous_state=Path(prior_state) if prior_state else None)
+    # Discovery and game-launch subprocesses must retain host XDG paths.
+    # Repeated activation must never capture the redirected preview paths.
+    from . import launch_environment
+    launch_environment.capture_host_xdg()
     stable = result["root"]
     os.environ["VRHUB_STATE"] = str(result["state"])
     for key, sub in (("XDG_CONFIG_HOME", "config"),
