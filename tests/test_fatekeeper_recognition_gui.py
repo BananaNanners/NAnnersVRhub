@@ -215,19 +215,19 @@ class RecognitionGuiTests(RecognitionTests):
             win = HubWindow()
         self.addCleanup(win.close)
         win.show()
-        for game, label, profile_hidden in (
-                ("fatekeeper", "Restore previous installation", True),
-                ("hogwarts-legacy", "Uninstall mod", False),
-                ("subnautica", "Uninstall mod", True),
-                ("fatekeeper", "Restore previous installation", True)):
+        for game, label, profile_hidden, mod_visible in (
+                ("fatekeeper", "Restore previous installation", True, True),
+                ("hogwarts-legacy", "Review removal and restoration", False, False),
+                ("subnautica", "Review removal and restoration", True, True),
+                ("fatekeeper", "Restore previous installation", True, True)):
             with self.subTest(game=game):
                 idx = next(i for i, r in enumerate(win.rows) if r["recipe"]["id"] == game)
                 win.select_launcher_game(idx)
                 win.game_details_tabs.setCurrentWidget(win.rollback_page)
                 self.assertEqual(win.uninstall_btn.text(), label)
-                self.assertTrue(win.uninstall_btn.isVisible())
+                self.assertEqual(win.uninstall_btn.isVisible(), mod_visible)
                 self.assertEqual(win.unprofile_btn.isHidden(), profile_hidden)
-                self.assertEqual(win.unprofile_btn.text(), "Remove profile")
+                self.assertEqual(win.unprofile_btn.text(), "Restore original profile")
 
     def test_compatibility_sample_separate_and_cleared(self):
         with patch.object(HubWindow,'check_updates'), patch.object(HubWindow,'scan_setup'), patch.object(HubUpdateController,'startup'):

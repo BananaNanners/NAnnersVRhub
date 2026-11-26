@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QFile
                                QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget,
                                QScrollArea, QSizePolicy, QStyle)
 
-from . import launch_environment
+from . import launch_environment, game_capabilities
 from . import __version__, app_updates, compatibility, heroic_epic, hub, live_tests, log_diagnostics, runtime, support_report, system_scan, updates, game_saves
 from .handlers import get_handler
 from .cli import _roots
@@ -1334,14 +1334,15 @@ class HubWindow(QMainWindow):
         has_profile = bool(r and "profile" in r)
         self.profile_btn.setEnabled(has_profile)
         self.unprofile_btn.setEnabled(has_profile)
-        # Do not show a nonsensical "Remove profile" control for games
-        # with no UEVR profile workflow. Existing guarded behavior is intact.
-        managed_fatekeeper = bool(r and r["id"] == "fatekeeper" and r.get("archive_pins"))
-        self.uninstall_btn.setText("Restore previous installation" if managed_fatekeeper else "Uninstall mod")
-        self.uninstall_btn.setToolTip(
-            "Review reversal of the latest managed installation, repair or update."
-            if managed_fatekeeper else "")
-        self.unprofile_btn.setVisible(has_profile and not kharvox and not managed_fatekeeper)
+        # Presentation only: retain the existing operation handlers.
+        maintenance = game_capabilities.restoration_presentation(r)
+        self.uninstall_btn.setText(maintenance["mod_label"])
+        self.uninstall_btn.setToolTip(maintenance["mod_tip"])
+        self.uninstall_btn.setVisible(maintenance["mod_visible"])
+        self.uninstall_btn.setEnabled(self.uninstall_btn.isEnabled() and maintenance["mod_visible"])
+        self.unprofile_btn.setText(maintenance["profile_label"])
+        self.unprofile_btn.setVisible(maintenance["profile_visible"])
+        self.unprofile_btn.setEnabled(self.unprofile_btn.isEnabled() and maintenance["profile_visible"])
         self.bridge_log_btn.setVisible(bool(r and hub.game_bridge_log(r)))
         if r:
             self.bridge_log_btn.setText(
@@ -1409,7 +1410,8 @@ class HubWindow(QMainWindow):
             from .fatekeeper_commit import recovery_notice
             notice = recovery_notice()
         self.rollback_summary.setText(
-            f"{recipe['name']}\nMods: {mod_status}\nProfile: {profile_status}" + ("\n" + notice if notice else ""))
+            f"{recipe['name']}\nMods: {mod_status}\nProfile: {profile_status}" + "\n" + game_capabilities.maintenance_guidance(recipe["id"])
+            + ("\n" + notice if notice else ""))
 
     def refresh_compatibility(self):
         self.compat_report = None

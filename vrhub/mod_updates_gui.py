@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QUrl
 
 from .table_columns import enable_spreadsheet_columns
+from .game_capabilities import update_guidance
 
 
 GROUPS = ("update", "review", "later", "not_installed", "current")
@@ -219,10 +220,11 @@ class ModUpdatesPage(QWidget):
         root.addWidget(self.heading)
 
         top = QHBoxLayout()
-        self.explanation = QLabel(
+        self._version_explanation = (
             "Check for newer versions. Refreshing does not download, install, "
             "remove or mark mods as updated. Recent GitHub "
             "results may be reused for 15 minutes.")
+        self.explanation = QLabel(self._version_explanation)
         self.explanation.setObjectName("modUpdatesExplanation")
         self.explanation.setWordWrap(True)
         top.addWidget(self.explanation, 1)
@@ -276,6 +278,8 @@ class ModUpdatesPage(QWidget):
 
     def set_recipe(self, recipe, items):
         recipe_id = recipe.get("id") if recipe else None
+        self.explanation.setText(
+            self._version_explanation + (" " + update_guidance(recipe_id) if recipe else ""))
         if recipe_id != self._last_id:
             self._last_id = recipe_id
             # Preserve a user's expansion within one game, but start each

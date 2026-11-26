@@ -178,3 +178,24 @@ Running checkpoint/PID, compositor window and left-open verification remain
 pending; do not represent player confirmation as independent observation.
 Stable state unchanged, gate closed. Original regression manifest retained.
 Acceptance manifest SHA-256: 06cdd533782bdd91a911c00bbe07baab24a4a26a184c26a82be8e7232fbd0e65.
+
+## A6.7-C — Shared maintenance presentation
+Baseline 389d4f62dc0a05452957c72753fb5399c91d9c1c.
+Capability inventory drives existing restoration controls and Updates explanation.
+Fatekeeper latest rollback, Hogwarts original profile, five generic removal/
+restoration routes, KHARVOX guidance and external Skyrim maintenance remain distinct.
+No new controls, handler changes, or authorization. Existing install/repair review
+labels and version detection retained. Nine-game normal/preview switching and
+unknown capability tests passed; targeted regression 72 passed.
+Two full suites reported 1764 passing assertions but exited 139 during native
+Qt/PySide cleanup. Focused reproduction exited 0, 139, 134. Explicit close,
+deleteLater and deferred-delete processing added only to new test widgets.
+Five subsequent focused runs (28 tests each) exited 0; full corrected regression
+1764 passed (74.645s), process 44065 exit 0. Exact defective object not proven.
+Both failed logs retained and hashed. Source hashes captured at sealing.
+24 historical manifests / 110 entries, two 28-entry reboot fixtures, 11 injector
+and 110 profile files reverified; stable state unchanged; production gate closed.
+Audit covers recorded protected inventory, not every game file or save.
+Interactive KDE acceptance pending; no preview launched by this step.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7C-corrected-tsPKzB.
+Manifest SHA-256: ce6a850788b9123e2a7785a4a1de55737e75ed0d07818e0b82316b0efe13ef80.
