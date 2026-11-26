@@ -597,7 +597,44 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
     return [Path(name) for name in prepared.writes]
 
 
-def recover_live(steam_roots=None, *, scoped_root=None, scoped_token=None):
+@dataclass(frozen=True)
+class RecoveryReview:
+    destination: Destination
+    journal_digest: str
+    phase: str
+    backup: str
+    file_count: int
+    authority_identity: tuple
+
+    @property
+    def fingerprint(self):
+        from dataclasses import asdict
+        return _digest(json.dumps(asdict(self), default=str, sort_keys=True,
+                                  separators=(",", ":")).encode())
+
+
+def _production_recovery_review(destination):
+    from . import fatekeeper_authorization as auth
+    scope = auth.production_authority(destination)
+    binding, record = auth.production_journal(scope)
+    if record is None or record["phase"] == "rolled-back":
+        raise RuntimeError("No authorized recoverable Fatekeeper transaction exists.")
+    return RecoveryReview(destination, binding, record["phase"], record["backup"],
+                          len(record["rows"]) - 1, scope.authority_identity)
+
+
+def review_live_recovery(steam_roots=None):
+    """Capture the exact trusted journal before asking for confirmation."""
+    destination = _live_destination(steam_roots)
+    from . import state_transaction
+    with state_transaction.locked(destination.state):
+        if _live_destination(steam_roots) != destination:
+            raise RuntimeError("Fatekeeper recovery destination changed.")
+        return _production_recovery_review(destination)
+
+
+def recover_live(steam_roots=None, *, scoped_root=None, scoped_token=None,
+                 approved_review=None):
     """Restore the exact authorized journal; ordinary recovery stays gated."""
     if scoped_root is not None or scoped_token is not None:
         from . import fatekeeper_authorization as auth
@@ -629,12 +666,18 @@ def recover_live(steam_roots=None, *, scoped_root=None, scoped_token=None):
         return
     from . import fatekeeper_authorization as auth
     destination = _live_destination(steam_roots)
+    if not isinstance(approved_review, RecoveryReview):
+        raise RuntimeError("Confirm the exact Fatekeeper recovery review before restoring.")
+    if destination != approved_review.destination:
+        raise RuntimeError("Fatekeeper recovery destination changed. Reopen the review.")
     with _locked(destination):
+        if _live_destination(steam_roots) != destination:
+            raise RuntimeError("Fatekeeper recovery destination changed. Reopen the review.")
+        current = _production_recovery_review(destination)
+        if current != approved_review:
+            raise RuntimeError("Fatekeeper recovery review changed. Reopen the review.")
         scope = auth.production_authority(destination)
-        binding, record = auth.production_journal(scope)
-        if record is None or record["phase"] == "rolled-back":
-            raise RuntimeError("No authorized recoverable Fatekeeper transaction exists.")
-
+        binding = current.journal_digest
         auth.finalize_production_transition(scope, binding)
 
         def guard():

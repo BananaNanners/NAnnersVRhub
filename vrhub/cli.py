@@ -77,9 +77,12 @@ def main(argv=None) -> int:
                    help="SHA-256 review fingerprint from review-profile")
     p.add_argument("--yes", action="store_true",
                    help="explicitly confirm reviewed UEVR profile replacement")
+    p = sub.add_parser("review-recovery", help="review the exact Fatekeeper dependency recovery")
+    p.add_argument("game")
     p = sub.add_parser("uninstall-profile", help="restore ONLY unchanged managed UEVR profiles")
     p.add_argument("game")
     p.add_argument("--yes", action="store_true", help="explicitly confirm checksum-protected restore")
+    p.add_argument("--approve-recovery", help="exact fingerprint from review-recovery (Fatekeeper)")
     sub.add_parser("mark-current", help="record that your install is the latest release").add_argument("game")
     sub.add_parser("launch-injector", help="run the UEVR injector for a game").add_argument("game")
     sub.add_parser("launch-tool", help="launch a game-specific tool such as MO2").add_argument("game")
@@ -206,10 +209,33 @@ def main(argv=None) -> int:
                                         approved_fingerprint=a.approve_fingerprint,
                                         confirmed=a.yes)
             print(f"Installed {len(files)} reviewed UEVR profile files. Persistent original backup retained.")
+        elif a.cmd == "review-recovery":
+            from . import fatekeeper_commit as tx
+            if a.game != "fatekeeper":
+                raise RuntimeError("This recovery review is for Fatekeeper only.")
+            review = tx.review_live_recovery(_roots())
+            print(f"Dependency destination: {review.destination.prefix}")
+            print(f"Transaction phase: {review.phase}; dependency files: {review.file_count}")
+            print(f"Backup: {review.backup}")
+            print(f"Recovery fingerprint: {review.fingerprint}")
+            print("After reviewing, use uninstall-profile fatekeeper --yes --approve-recovery with this fingerprint.")
         elif a.cmd == "uninstall-profile":
             if not a.yes:
                 raise RuntimeError("Use --yes only after reviewing checksum-protected UEVR restoration.")
-            print(f"Restored verified UEVR profile; {len(hub.uninstall(a.game + ':profile', profile_confirm=True))} files checked.")
+            if a.game == "fatekeeper":
+                from . import fatekeeper_commit as tx
+                if not a.approve_recovery:
+                    raise RuntimeError("Review Fatekeeper recovery first; --approve-recovery is required.")
+                roots = _roots()
+                review = tx.review_live_recovery(roots)
+                if review.fingerprint != a.approve_recovery:
+                    raise RuntimeError("Fatekeeper recovery review changed. Reopen the review.")
+                tx.recover_live(roots, approved_review=review)
+                print("Restored reviewed Fatekeeper dependencies and Hub records.")
+            else:
+                if a.approve_recovery:
+                    raise RuntimeError("--approve-recovery is for Fatekeeper only.")
+                print(f"Restored verified UEVR profile; {len(hub.uninstall(a.game + ':profile', profile_confirm=True))} files checked.")
         elif a.cmd == "mark-current":
             done = hub.mark_current(r)
             print(f"Marked as up to date: {', '.join(done)}" if done else "Nothing installed through the hub to mark.")

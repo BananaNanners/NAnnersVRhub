@@ -1807,11 +1807,22 @@ class HubWindow(QMainWindow):
                     self, "Fatekeeper recovery",
                     "Fatekeeper recovery is disabled in this preview. No files have been changed.")
                 return
+            try:
+                roots = _roots()
+                roots = tuple(roots) if roots is not None else None
+                review = fatekeeper_commit.review_live_recovery(roots)
+            except (RuntimeError, OSError, ValueError) as exc:
+                QMessageBox.warning(self, "Cannot review Fatekeeper recovery", str(exc))
+                return
             if QMessageBox.question(
                     self, "Restore Fatekeeper dependencies",
-                    "Restore the saved UEVR files, VR profile and Hub installation records from the verified backup?",
+                    f"Restore the saved UEVR files, VR profile and Hub installation records?\n\n"
+                    f"Dependency files in transaction: {review.file_count}\n"
+                    f"Recovery backup: {review.backup}\n"
+                    f"Transaction reference: {review.journal_digest[:12]}\n\n"
+                    "If the transaction changes, the Hub will ask you to review it again.",
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
-                self._run(lambda: fatekeeper_commit.recover_live(_roots()), "Restored",
+                self._run(lambda: fatekeeper_commit.recover_live(roots, approved_review=review), "Restored",
                           lambda _: "Fatekeeper files and Hub records were restored.")
             return
         if r.get("method") == "gameroot":

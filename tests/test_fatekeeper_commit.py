@@ -102,7 +102,7 @@ class FatekeeperCommitTests(unittest.TestCase):
             self.assertTrue((storage / "fatekeeper-recovery/fk4-journal.json").is_file())
             authority = home / ".local/share/nannersvrhub-transaction-authority"
             self.assertEqual(len(list(authority.glob("*.json"))), 1)
-            hub.uninstall("fatekeeper:profile", profile_confirm=True)
+            hub.uninstall("fatekeeper:profile", profile_confirm=True, recovery_review=transaction.review_live_recovery())
             self.assertEqual(state_path.read_bytes(), original)
             self.assertEqual(self.config.read_bytes(), b"old configuration")
             stopped.assert_called_with("fatekeeper")
@@ -148,6 +148,100 @@ class FatekeeperCommitTests(unittest.TestCase):
                 self.assertEqual(transaction.install_reviewed("review"), [])
         self.assertEqual(inventory(), before)
 
+    def test_production_recovery_requires_exact_approval(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        with self.assertRaisesRegex(RuntimeError, "Confirm the exact"):
+            transaction.recover_live()
+        with self.assertRaisesRegex(RuntimeError, "Confirm the exact"):
+            hub.uninstall("fatekeeper:profile", profile_confirm=True)
+        self.assertEqual({p: p.read_bytes() for p in before}, before)
+
+    def test_production_recovery_rejects_changed_trusted_transaction(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        approved = transaction.review_live_recovery()
+        dest = transaction._live_destination(None)
+        path = journal / "fk4-journal.json"
+        raw = path.read_bytes()
+        changed = json.dumps(dict(json.loads(raw), phase="recovering")).encode()
+        with transaction._locked(dest):
+            scope = auth.production_authority(dest)
+            auth._save_ledger(scope, transaction._digest(raw), transaction._digest(changed))
+            transaction._write(path, changed)
+        before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        with self.assertRaisesRegex(RuntimeError, "review changed"):
+            transaction.recover_live(approved_review=approved)
+        self.assertEqual({p: p.read_bytes() for p in before}, before)
+        transaction.recover_live(approved_review=transaction.review_live_recovery())
+
+    def test_production_recovery_rejects_changed_destination(self):
+        from dataclasses import replace
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        approved = transaction.review_live_recovery()
+        wrong = replace(approved, destination=replace(approved.destination,
+                        prefix=self.root / "another-prefix"))
+        with self.assertRaisesRegex(RuntimeError, "destination changed"):
+            transaction.recover_live(approved_review=wrong)
+        self.assertEqual(self.config.read_bytes(), b"new configuration")
+
+    def test_production_cli_requires_review_fingerprint(self):
+        from vrhub import cli
+        from contextlib import redirect_stdout, redirect_stderr
+        from io import StringIO
+        state, journal, authority = self.production_fixture()
+        original = state.read_bytes()
+        transaction.install_reviewed("review")
+        before = state.read_bytes()
+        with redirect_stdout(StringIO()) as output, redirect_stderr(StringIO()):
+            self.assertEqual(cli.main(["review-recovery", "fatekeeper"]), 0)
+            fingerprint = transaction.review_live_recovery().fingerprint
+            self.assertIn(fingerprint, output.getvalue())
+            self.assertEqual(cli.main(["uninstall-profile", "fatekeeper", "--yes"]), 1)
+            self.assertEqual(cli.main(["uninstall-profile", "fatekeeper", "--yes",
+                                      "--approve-recovery", "0"*64]), 1)
+            self.assertEqual(cli.main(["uninstall-profile", "fatekeeper",
+                                      "--approve-recovery", fingerprint]), 1)
+            self.assertEqual(state.read_bytes(), before)
+            self.assertEqual(cli.main(["uninstall-profile", "fatekeeper", "--yes",
+                                      "--approve-recovery", fingerprint]), 0)
+        self.assertEqual(state.read_bytes(), original)
+
+    def test_production_gui_confirms_captured_review_not_new_transaction(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from vrhub import gui
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        approved = transaction.review_live_recovery()
+        window = SimpleNamespace(current=lambda: hub.load_recipes()["fatekeeper"],
+                                 _run=Mock())
+        with patch.object(gui, "_roots", return_value=None), \
+                patch.object(gui.QMessageBox, "question", return_value=gui.QMessageBox.Yes) as question:
+            gui.HubWindow.uninstall(window)
+        self.assertIn(approved.journal_digest[:12], question.call_args.args[2])
+        operation = window._run.call_args.args[0]
+        with patch.object(transaction, "recover_live") as recover:
+            operation()
+        recover.assert_called_once_with(None, approved_review=approved)
+
+    def test_production_gui_decline_does_not_execute(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from vrhub import gui
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        window = SimpleNamespace(current=lambda: hub.load_recipes()["fatekeeper"],
+                                 _run=Mock())
+        with patch.object(gui, "_roots", return_value=None), \
+                patch.object(gui.QMessageBox, "question", return_value=gui.QMessageBox.No):
+            gui.HubWindow.uninstall(window)
+        window._run.assert_not_called()
+        self.assertEqual(self.config.read_bytes(), b"new configuration")
+
     def test_production_noop_legacy_creates_no_authority(self):
         state, journal, authority = self.production_fixture()
         self.production_noop(state)
@@ -164,7 +258,7 @@ class FatekeeperCommitTests(unittest.TestCase):
         state, journal, authority = self.production_fixture()
         transaction.install_reviewed("review")
         self.production_noop(state)
-        transaction.recover_live()
+        transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.production_noop(state)
 
     def test_production_noop_missing_finalized_journal(self):
@@ -244,7 +338,7 @@ class FatekeeperCommitTests(unittest.TestCase):
             auth._save_ledger(scope, transaction._digest(old), "1"*64)
         ledger = next(authority.glob("*.json"))
         before = ledger.read_bytes(), state.read_bytes(), self.config.read_bytes()
-        for call in (lambda: transaction.install_reviewed("review"), transaction.recover_live):
+        for call in (lambda: transaction.install_reviewed("review"), lambda: transaction.recover_live(approved_review=transaction.review_live_recovery())):
             with self.assertRaisesRegex(RuntimeError, "Pending production journal transition"):
                 call()
             self.assertEqual((ledger.read_bytes(), state.read_bytes(), self.config.read_bytes()), before)
@@ -263,7 +357,7 @@ class FatekeeperCommitTests(unittest.TestCase):
             scope = auth.production_authority(dest)
             auth._save_ledger(scope, transaction._digest(old), transaction._digest(next_raw))
             transaction._write(path, next_raw)
-        transaction.recover_live()
+        transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.assertEqual(state.read_bytes(), original)
         self.assertEqual(self.config.read_bytes(), b"old configuration")
         self.assertEqual(json.loads(path.read_bytes())["phase"], "rolled-back")
@@ -304,7 +398,7 @@ class FatekeeperCommitTests(unittest.TestCase):
         self.assertEqual(self.config.read_bytes(), b"old configuration")
         transaction.install_reviewed("review")
         self.assertEqual(backup.read_bytes(), retained)
-        transaction.recover_live()
+        transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.assertEqual(state.read_bytes(), original)
         self.assertEqual(self.config.read_bytes(), b"old configuration")
         self.assertEqual((self.profile / "custom.ini").read_bytes(), b"player customisation")
@@ -321,7 +415,7 @@ class FatekeeperCommitTests(unittest.TestCase):
                 transaction.install_reviewed("review")
         self.assertFalse(state.exists())
         transaction.install_reviewed("review")
-        transaction.recover_live()
+        transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.assertFalse(state.exists())
         self.assertFalse(self.injector.exists())
         self.assertFalse(self.profile.exists())
@@ -332,7 +426,7 @@ class FatekeeperCommitTests(unittest.TestCase):
         next(authority.glob("*.json")).unlink()
         before = state.read_bytes()
         with self.assertRaisesRegex(RuntimeError, "provenance"):
-            transaction.recover_live()
+            transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.assertEqual(state.read_bytes(), before)
         self.assertEqual(self.config.read_bytes(), b"new configuration")
 
@@ -341,7 +435,7 @@ class FatekeeperCommitTests(unittest.TestCase):
         transaction.install_reviewed("review")
         next(authority.glob("*.json")).write_bytes(b"bad JSON")
         with self.assertRaisesRegex(RuntimeError, "provenance"):
-            transaction.recover_live()
+            transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.assertEqual(self.config.read_bytes(), b"new configuration")
 
     def test_production_redirected_authority_refuses_recovery(self):
@@ -351,7 +445,7 @@ class FatekeeperCommitTests(unittest.TestCase):
         authority.rename(saved)
         authority.symlink_to(saved)
         with self.assertRaisesRegex(RuntimeError, "storage"):
-            transaction.recover_live()
+            transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.assertEqual(self.config.read_bytes(), b"new configuration")
 
     def test_production_finalized_replay_refused(self):
@@ -359,10 +453,10 @@ class FatekeeperCommitTests(unittest.TestCase):
         transaction.install_reviewed("review")
         path = journal / "fk4-journal.json"
         old = path.read_bytes()
-        transaction.recover_live()
+        transaction.recover_live(approved_review=transaction.review_live_recovery())
         path.write_bytes(old)
         with self.assertRaisesRegex(RuntimeError, "provenance"):
-            transaction.recover_live()
+            transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.assertEqual(self.config.read_bytes(), b"old configuration")
 
     def test_production_foreign_staging_evidence_refused(self):
@@ -466,7 +560,7 @@ with (patch("pathlib.Path.home", return_value=root / "home"),
             assert action == "install", "unexpected installation success"
     else:
         try:
-            tx.recover_live()
+            tx.recover_live(approved_review=tx.review_live_recovery())
         except RuntimeError as exc:
             if not ((action == "reject-terminal" and "Pending production journal transition" in str(exc)) or (action == "reject-atomic-recover" and "Interrupted atomic publication evidence" in str(exc))):
                 raise

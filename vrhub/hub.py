@@ -779,7 +779,7 @@ def install_profile(recipe: dict, zip_file: Path, steam_roots=None, *,
         approved_fingerprint=approved_fingerprint, confirmed=confirmed)
 
 
-def uninstall(recipe_id: str, *, profile_confirm: bool = False) -> list[Path]:
+def uninstall(recipe_id: str, *, profile_confirm: bool = False, recovery_review=None) -> list[Path]:
     """Remove what we installed under this key (use '<game>:profile' for a profile)."""
     from . import state_transaction
     with state_transaction.locked(state_file()):
@@ -792,7 +792,7 @@ def uninstall(recipe_id: str, *, profile_confirm: bool = False) -> list[Path]:
             if paired or fatekeeper_commit.recovery_notice():
                 if not profile_confirm:
                     raise RuntimeError("Confirm recovery of the complete Fatekeeper dependency pair.")
-                fatekeeper_commit.recover_live()
+                fatekeeper_commit.recover_live(approved_review=recovery_review)
                 return []
             # Historical profile-2 records are independently recoverable only
             # for the older, unpinned recipe. The current pinned pair must never
