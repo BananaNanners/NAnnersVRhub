@@ -66,3 +66,10 @@ pending. No live operations or new controls.
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.5C-evidence-XIFVqe.
 
 A6.5-C manifest SHA-256: 257285a94d86f4db2a5303fc493c82eba8a72d4f08711f9b0a8b568274b4acf1.
+
+## A6.5-C desktop acceptance
+Player confirmed all nine KDE checks passed. Isolated preview PID 20755,
+runtime checkpoint 82969fead4362ab63752858cccfdac870deb1e88, Qt-visible
+1630 x 1060 window. Previous PID 19893 absent before launch. Preview-only
+examples simulate diagnostics; no real recovery files modified.
+Independent compositor verification not established. Stable state unchanged.
