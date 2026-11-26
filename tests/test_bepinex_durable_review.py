@@ -10,7 +10,7 @@ CHILD = """
 import os, sys
 from pathlib import Path
 from vrhub import offline_transaction as tx
-f = tx.Fixture(Path(sys.argv[1]), sys.argv[2])
+f = tx.Fixture(Path(sys.argv[1]), sys.argv[2], sys.argv[5] == "large")
 try:
     if sys.argv[3] == 'apply':
         tx.execute(f, tx.build_plan(f), fault=sys.argv[4])
@@ -27,19 +27,27 @@ os._exit(0)
 
 
 class Cases:
+    def rehearsal(self):
+        return adapter.rehearsal(self.game)
+
+    def backup_faults(self):
+        return ("after_backup_file:1", "after_backup_file:7")
+
+    def original_backup(self, f):
+        return "hub/backups/original/files/winhttp.dll"
+
     def child(self, f, operation, fault, expected):
         result = subprocess.run(
             [sys.executable, "-B", "-c", CHILD, str(f.root), f.token,
-             operation, fault], capture_output=True, text=True, timeout=30)
+             operation, fault, "large" if f.uevr_payload else "small"], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, expected, (result.stdout, result.stderr))
 
     def test_process_exit_each_phase(self):
-        for point in ("after_prepare_start", "after_backup_file:1",
-                      "after_backup_file:7", "after_stage_file:1",
+        for point in ("after_prepare_start", *self.backup_faults(), "after_stage_file:1",
                       "after_stage_file:2", "after_backup",
                       "after_replace:1", "after_replace:2",
                       "after_all_files", "after_inventory"):
-            with self.subTest(point=point), adapter.rehearsal(self.game) as (f, p, _):
+            with self.subTest(point=point), self.rehearsal() as (f, p, _):
                 before, owners = snapshot(f), tx._inventory(f)
                 self.child(f, "apply", point, 37)
                 if point.startswith(("after_prepare", "after_backup", "after_stage")):
@@ -51,11 +59,17 @@ class Cases:
                 self.assertEqual(snapshot(f), before)
                 self.assertFalse(tx.status(f)["authorized_live_install"])
 
+    def expected_new_dirs(self):
+        return ["BepInEx/core"]
+
     def test_recovery_process_exit_then_resume(self):
-        for point in ("after_rollback:1", "after_rollback:2",
-                      "after_directory_cleanup:1"):
-            with self.subTest(point=point), adapter.rehearsal(self.game) as (f, p, _):
+        points = ("after_rollback:1", "after_rollback:2")
+        if self.expected_new_dirs():
+            points += ("after_directory_cleanup:1",)
+        for point in points:
+            with self.subTest(point=point), self.rehearsal() as (f, p, _):
                 before, owners = snapshot(f), tx._inventory(f)
+                self.assertEqual(tx._verify_plan(f, p)["new_dirs"], self.expected_new_dirs())
                 self.child(f, "apply", "after_all_files", 37)
                 self.child(f, "recover", point, 37)
                 self.child(f, "recover", "", 0)
@@ -68,19 +82,21 @@ class Cases:
             ("installed", "BepInEx/config/BepInEx.cfg"),
             ("installed", "prefix/save.dat"),
             ("installed", "hub/state.json"),
-            ("installed", "hub/backups/original/files/winhttp.dll"),
+            ("installed", "original-backup"),
             ("transaction", "backup/winhttp.dll"),
             ("transaction", "journal.json"),
         ):
-            with self.subTest(section=section, name=name), adapter.rehearsal(self.game) as (f, p, _):
+            with self.subTest(section=section, name=name), self.rehearsal() as (f, p, _):
                 self.child(f, "apply", "after_all_files", 37)
+                if name == "original-backup":
+                    name = self.original_backup(f)
                 tx._write(f, section, name, b"unexpected external edit")
                 before = snapshot(f)
                 self.child(f, "recover", "", 39 if name == "journal.json" else 38)
                 self.assertEqual(snapshot(f), before)
 
     def test_committed_transaction_requires_explicit_rollback(self):
-        with adapter.rehearsal(self.game) as (f, p, _):
+        with self.rehearsal() as (f, p, _):
             before = snapshot(f)
             self.child(f, "apply", "", 0)
             committed = snapshot(f)
