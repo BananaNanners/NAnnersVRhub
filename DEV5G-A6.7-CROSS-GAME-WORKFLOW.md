@@ -277,3 +277,10 @@ Initial targeted run had two malformed-journal assertion failures: engine correc
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D3B-corrected-zaQaJf.
 Manifest SHA-256: 48c1941222e501ce48435feccda82c07bf2ccc665f9e1ed2928e5e45730947b2.
 Limitations: synthetic fixtures and injected process exits, not physical power-loss/reboot certification. Full real archive and production ownership schema validation remain pending. No desktop replacement, live writes, push or release.
+
+## D3-C — Complete pinned archive repair and rollback rehearsal
+Baseline 2b446b706c9c4bf4fe44b2166ba8f5ccc3dd9eca. Four original ZIPs and four retained copies match existing recipe SHA-256 pins. Complete mapped payloads (Subnautica 45, Valheim 135 files) use shared archive mapping, actual recognition and review, and schema-accurate disposable Hub records. Existing larger bounded fixture mode reused without engine changes. Verified backups cover 49 and 139 present fixture files respectively; two proposed repair actions per game, custom settings/bindings, unrelated sentinels, historical originals and state preserved; byte/mode/topology rollback and inconsistent record rejection verified.
+Four new tests; initial 4/4, expanded targeted 59/59 (4.908s), full 1858/1858 (84.422s), process 73093 exit 0. Two source/test hashes, stable state, eight archive hashes verified. Historical preservation: 34 manifests/176 entries, ERVR 20 entries, nested D1, two reboot fixtures, 121 Fatekeeper files. Gate closed.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D3C-full-8Nl3LY.
+Manifest SHA-256: 4106c6743001ee1686faeffb357659c79e2f58903e1df8e9802e5fd53ae87f32.
+Limitations: actual pinned archive bytes, but synthetic game layout, customizations, original backups and schema-accurate records. Recognition discovery/state location patched only for fixture; no production installer invocation. Historical ownership record remains unchanged, engine inventory is fixture snapshot coverage, not production authority. D3-B process interruption matrix uses smaller synthetic fixtures, not these full inventories; no physical power-loss certification. No GUI change, live write, push or release.
