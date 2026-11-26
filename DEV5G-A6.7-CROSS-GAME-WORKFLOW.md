@@ -263,3 +263,10 @@ Limitations: offscreen GUI tests only; interactive KDE readability and acceptanc
 Player reported 14/14 interactive KDE checks passed at runtime e0c9aa045d398438b3cac865b1b6f86823b5e80d, PID 66532. Independent compositor identification not established. 31 historical manifests/160 entries verified; stable state unchanged; gate closed. Evidence: /home/bananananers/NAnnersVRhub-recovery/Dev5G-A6.7D2D-acceptance-YbMNu9.
 Manifest SHA-256: a240a561fc07fd06a9ca024e9cff3122eabdd3df988c512d6e4b3d78a32fafc2.
 D3 backup and transaction development pending.
+
+## D3-A — Synthetic repair backup and transaction adapter
+Baseline faffb1d8b2fc0601aac10318a8168f585b721d98. Fixture-only Subnautica/Valheim adapter uses existing offline transaction engine with synthetic recognition evidence and simplified historical record distinct from the complete present-fixture snapshot inventory. Changed binary replaced, missing binary restored; protected settings, bindings, unrelated mod/save sentinels, historical backup and record preserved. Verified pre-apply backup and explicit rollback restore fixture bytes, modes and topology including prior absence. Stale current/incoming bytes rejected. No production dispatch or caller-supplied destination paths.
+Seven new tests; targeted 47/47; full 1846/1846 (81.687s), process 71490 exit 0. Two source/test hashes and stable state matched after regression. Historical audit: 32 manifests/163 entries, ERVR 20 entries, nested D1, two reboot fixtures, 121 Fatekeeper files. Gate closed.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D3A-full-5vQe9X.
+Manifest SHA-256: cb2b8487e1aa83b08ce9b8fa1a9d00c06c8529ae70801521eabc3ed28a73404a.
+Limitations: synthetic package subset and manually constructed recognition evidence, simplified ownership record, not complete real archive or production schema validation. Engine inventory represents fixture snapshot coverage, not real ownership. Comprehensive interruption, persistent recovery, and actual schema validation remain pending. No desktop replacement, live writes, push or release.
