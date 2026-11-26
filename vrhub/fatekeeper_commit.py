@@ -65,6 +65,7 @@ class Destination:
     profile: Path
     state: Path
     journal_dir: Path
+    production: bool = False
 
 
 def _fixture_destination(root):
@@ -92,7 +93,7 @@ def _live_destination(steam_roots):
             or state.is_relative_to(prefix) or journal_dir.is_relative_to(prefix)):
         raise RuntimeError("Fatekeeper transaction destinations overlap.")
     profile_safety._assert_game_stopped("fatekeeper")
-    return Destination(root, prefix, injector, profile, state, journal_dir)
+    return Destination(root, prefix, injector, profile, state, journal_dir, production=True)
 
 
 def _target(destination, name):
@@ -142,7 +143,11 @@ def _identity(destination):
         info = anchor.stat()
         if not stat.S_ISDIR(info.st_mode):
             raise RuntimeError("Unsafe Fatekeeper destination directory.")
-        result[key] = [str(path), info.st_dev, info.st_ino]
+        if destination.production:
+            from . import fatekeeper_authorization as auth
+            result[key] = [str(path), auth._persistent_anchor(anchor)]
+        else:
+            result[key] = [str(path), info.st_dev, info.st_ino]
     return result
 
 
@@ -152,7 +157,7 @@ def _assert_identity(destination, expected):
 
 
 def _journal(path, phase, rows, directories, backup_name, identity, *, provenance=None):
-    raw = json.dumps({"schema": 2, "phase": phase, "rows": rows,
+    raw = json.dumps({"schema": 3 if len(identity["root"]) == 2 else 2, "phase": phase, "rows": rows,
                       "directories": directories, "backup": backup_name,
                       "identity": identity}).encode()
     digest = _digest(raw)
@@ -178,7 +183,7 @@ def _parse_journal(destination, raw):
         record = json.loads(raw, object_pairs_hook=unique)
     except (ValueError, UnicodeError, RecursionError) as exc:
         raise RuntimeError("Invalid Fatekeeper recovery journal.") from exc
-    if not isinstance(record, dict) or set(record) != {"schema", "phase", "rows", "directories", "backup", "identity"} or record["schema"] != 2:
+    if not isinstance(record, dict) or set(record) != {"schema", "phase", "rows", "directories", "backup", "identity"} or record["schema"] != (3 if destination.production else 2):
         raise RuntimeError("Unbound or invalid Fatekeeper recovery journal; manual review required.")
     if record["phase"] not in ("applying", "committed", "recovering", "rolled-back"):
         raise RuntimeError("Unknown Fatekeeper transaction phase.")
@@ -270,7 +275,7 @@ def recovery_notice(state_path=None):
         if raw is None:
             return ""
         record = _state_mapping(raw)
-        if record.get("schema") != 2 or record.get("phase") not in ("applying", "recovering", "committed", "rolled-back"):
+        if record.get("schema") not in (2, 3) or record.get("phase") not in ("applying", "recovering", "committed", "rolled-back"):
             raise RuntimeError("Unrecognized recovery journal")
         if record["phase"] in ("applying", "recovering"):
             return "Fatekeeper recovery pending. Installation blocked until the interrupted transaction is recovered."
@@ -572,6 +577,7 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
     from . import fatekeeper_authorization as auth
     destination = _live_destination(steam_roots)
     initial_storage = auth.production_storage_identity(destination, auth._production_authority_path(destination))
+    initial_persistent = auth.production_storage_identity(destination, auth._production_authority_path(destination), persistent=True)
     with state_transaction.locked(destination.state):
         if auth.production_storage_identity(destination, auth._production_authority_path(destination)) != initial_storage:
             raise RuntimeError("Fatekeeper storage identity changed.")
@@ -583,6 +589,8 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
             (Path(name) for name in set(prepared.writes) | set(prepared.dependencies)))
         if auth.production_storage_identity(destination, auth._production_authority_path(destination)) != initial_storage:
             raise RuntimeError("Fatekeeper storage identity changed.")
+        if auth.production_storage_identity(destination, auth._production_authority_path(destination), persistent=True) != initial_persistent:
+            raise RuntimeError("Fatekeeper persistent storage identity changed.")
         # Never create authority for an unreviewed no-op. A pending journal
         # still blocks it, even when no new files are required.
         if not prepared.writes:
@@ -590,7 +598,7 @@ def install_reviewed(review, steam_roots=None, *, verified_backend=None,
             return []
         with _locked(destination):
             scope = auth.production_authority(destination, provision=True)
-            if scope.storage_identity != initial_storage:
+            if scope.runtime_identity != initial_storage or scope.storage_identity != initial_persistent:
                 raise RuntimeError("Fatekeeper storage identity changed.")
             auth.begin_production_staging(scope)
 
@@ -621,15 +629,15 @@ class RecoveryReview:
                                   separators=(",", ":")).encode())
 
 
-def _production_recovery_review(destination):
+def _production_recovery_review(destination, *, scope=None):
     from . import fatekeeper_authorization as auth
-    scope = auth.production_authority(destination)
+    scope = auth.production_authority(destination) if scope is None else scope
     binding, record = auth.production_journal(scope)
     if record is None or record["phase"] == "rolled-back":
         raise RuntimeError("No authorized recoverable Fatekeeper transaction exists.")
     return RecoveryReview(destination, binding, record["phase"], record["backup"],
                           len(record["rows"]) - 1, scope.authority_identity,
-                          _digest(json.dumps(scope.storage_identity, sort_keys=True).encode()))
+                          _digest(json.dumps([scope.storage_identity, scope.runtime_identity], sort_keys=True).encode()))
 
 
 def review_live_recovery(steam_roots=None):
@@ -684,10 +692,10 @@ def recover_live(steam_roots=None, *, scoped_root=None, scoped_token=None,
     with _locked(destination):
         if _live_destination(steam_roots) != destination:
             raise RuntimeError("Fatekeeper recovery destination changed. Reopen the review.")
-        current = _production_recovery_review(destination)
+        scope = auth.production_authority(destination)
+        current = _production_recovery_review(destination, scope=scope)
         if current != approved_review:
             raise RuntimeError("Fatekeeper recovery review changed. Reopen the review.")
-        scope = auth.production_authority(destination)
         binding = current.journal_digest
         auth.finalize_production_transition(scope, binding)
 

@@ -242,6 +242,125 @@ class FatekeeperCommitTests(unittest.TestCase):
         window._run.assert_not_called()
         self.assertEqual(self.config.read_bytes(), b"new configuration")
 
+    def test_production_persistent_btrfs_identity_across_simulated_boot(self):
+        from vrhub import fatekeeper_authorization as auth
+        from uuid import uuid4
+        original = self.production_child_fixture()
+        state = self.state
+        home = self.root / "home"
+        self.enterContext(patch("pathlib.Path.home", return_value=home))
+        self.enterContext(patch.multiple(hub, _pfx=lambda *_: self.prefix,
+            _uevr_dir=lambda *_: self.injector, profile_dir=lambda *_: self.profile,
+            state_file=lambda: state))
+        self.enterContext(patch.object(profile_safety, "_assert_game_stopped"))
+        self.enterContext(patch.object(transaction, "live_install_authorized", return_value=True))
+        prepared = PreparedInstall(self.prefix, profile_safety._snapshot(self.injector),
+            profile_safety._snapshot(self.profile), hub._load_state(path=state),
+            {str(self.config): b"new configuration"})
+        self.enterContext(patch("vrhub.fatekeeper_install.prepare_reviewed_install", return_value=prepared))
+        # The real disk-backed fixture uses the actual filesystem ioctls.
+        dest = transaction._live_destination(None)
+        identity = auth._persistent_anchor(self.prefix)
+        if identity[0] != "btrfs-v1":
+            # Other filesystems must retain their boot-bound guard.
+            transaction.install_reviewed("review")
+            with patch.object(auth, "_boot_id", return_value=str(uuid4())):
+                with self.assertRaisesRegex(RuntimeError, "provenance|identity"):
+                    transaction.review_live_recovery()
+            return
+        transaction.install_reviewed("review")
+        approved = transaction.review_live_recovery()
+        authority = auth._production_authority_path(dest)
+        ledger = next(authority.glob("*.json"))
+        journal = state.parent / "fatekeeper-recovery/fk4-journal.json"
+        old_ledger, old_journal = ledger.read_bytes(), journal.read_bytes()
+        self.assertEqual(json.loads(old_ledger)["schema"], 2)
+        self.assertEqual(json.loads(old_journal)["schema"], 3)
+        records = auth._mount_records()
+        changed = [(m, "0:999", r, f, s) if self.prefix.is_relative_to(m)
+                   else (m, d, r, f, s) for m, d, r, f, s in records]
+        with patch.object(auth, "_boot_id", return_value=str(uuid4())), \
+                patch.object(auth, "_mount_records", return_value=changed):
+            fresh = transaction.review_live_recovery()
+            self.assertNotEqual(approved.fingerprint, fresh.fingerprint)
+            self.assertEqual(approved.journal_digest, fresh.journal_digest)
+            self.assertEqual((ledger.read_bytes(), journal.read_bytes()), (old_ledger, old_journal))
+            with self.assertRaisesRegex(RuntimeError, "review changed"):
+                transaction.recover_live(approved_review=approved)
+            transaction.recover_live(approved_review=fresh)
+        self.assertEqual(state.read_bytes(), original)
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+
+    def test_production_persistent_filesystem_and_subvolume_substitution(self):
+        from vrhub import fatekeeper_authorization as auth
+        from uuid import uuid4
+        state, journal, authority = self.production_fixture()
+        # Inject deterministic persistent identities while retaining real
+        # path, inode, runtime guards and transaction/ledger operations.
+        fsid, subid = str(uuid4()), str(uuid4())
+        identity = ["btrfs-v1", fsid, subid, 257]
+        def persistent(path, fs, info):
+            return identity + [info.st_ino]
+        with patch.object(auth, "_persistent_directory", side_effect=persistent):
+            transaction.install_reviewed("review")
+            approved = transaction.review_live_recovery()
+            before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+            for index, replacement in ((1, str(uuid4())), (2, str(uuid4())), (3, 258)):
+                with self.subTest(field=index):
+                    old = identity[index]
+                    identity[index] = replacement
+                    with self.assertRaisesRegex(RuntimeError, "provenance|identity"):
+                        transaction.review_live_recovery()
+                    with self.assertRaisesRegex(RuntimeError, "provenance|identity"):
+                        transaction.recover_live(approved_review=approved)
+                    self.assertEqual({p: p.read_bytes() for p in before}, before)
+                    identity[index] = old
+            transaction.recover_live(approved_review=approved)
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+
+    def test_production_runtime_guard_rejects_change_after_review(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        approved = transaction.review_live_recovery()
+        original = auth.production_journal
+        records = auth._mount_records()
+        changed = [(m, "0:999", r, f, s) if self.prefix.is_relative_to(m)
+                   else (m, d, r, f, s) for m, d, r, f, s in records]
+        observed = [records]
+        def read_journal(scope):
+            result = original(scope)
+            observed[0] = changed
+            return result
+        before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        with patch.object(auth, "_mount_records", side_effect=lambda: observed[0]), \
+                patch.object(auth, "production_journal", side_effect=read_journal):
+            with self.assertRaisesRegex(RuntimeError, "identity changed"):
+                transaction.recover_live(approved_review=approved)
+        self.assertEqual({p: p.read_bytes() for p in before}, before)
+
+    def test_production_persistent_identity_unavailable_fails_closed(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        with patch.object(auth, "_persistent_directory",
+                          side_effect=RuntimeError("Cannot verify persistent Btrfs identity")):
+            with self.assertRaisesRegex(RuntimeError, "Cannot verify persistent"):
+                transaction.install_reviewed("review")
+        self.assertFalse(authority.exists())
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+
+    def test_production_legacy_authority_not_adopted(self):
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        ledger = next(authority.glob("*.json"))
+        raw = json.loads(ledger.read_bytes())
+        raw["schema"] = 1
+        ledger.write_text(json.dumps(raw))
+        before = ledger.read_bytes(), state.read_bytes(), self.config.read_bytes()
+        with self.assertRaisesRegex(RuntimeError, "provenance"):
+            transaction.review_live_recovery()
+        self.assertEqual((ledger.read_bytes(), state.read_bytes(), self.config.read_bytes()), before)
+
     def test_production_storage_changed_during_noop_preflight(self):
         from vrhub import fatekeeper_authorization as auth
         state, journal, authority = self.production_fixture()
@@ -295,7 +414,7 @@ class FatekeeperCommitTests(unittest.TestCase):
                    else (m, d, r, f, s) for m, d, r, f, s in records]
         before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         with patch.object(auth, "_mount_records", return_value=changed):
-            with self.assertRaisesRegex(RuntimeError, "provenance|identity"):
+            with self.assertRaisesRegex(RuntimeError, "provenance|identity|review changed"):
                 transaction.recover_live(approved_review=approved)
         self.assertEqual({p: p.read_bytes() for p in before}, before)
 
@@ -321,7 +440,7 @@ class FatekeeperCommitTests(unittest.TestCase):
         state, journal, authority = self.production_fixture()
         records = auth._mount_records()
         with patch.object(auth, "_mount_records", return_value=records +
-                          [(self.root, "0:99", "/subvol", "btrfs", "/dev/test")]):
+                          [(self.root, "0:99", "/subvol", "tmpfs", "tmpfs")]):
             transaction.install_reviewed("review")
             transaction.recover_live(approved_review=transaction.review_live_recovery())
         self.assertEqual(self.config.read_bytes(), b"old configuration")

@@ -7,6 +7,10 @@ an application safety guard, not a security boundary against same-UID code.
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 import json
+import fcntl
+import struct
+import platform
+from uuid import UUID
 import os
 from pathlib import Path
 import stat
@@ -156,6 +160,8 @@ class ProductionScope:
     authority: Path
     authority_identity: tuple
     storage_identity: dict
+    runtime_identity: dict
+    persistent_authority_identity: tuple
 
 
 def _production_authority_path(destination):
@@ -192,7 +198,42 @@ def _mount_records():
     return records
 
 
-def production_storage_identity(destination, authority):
+def _boot_id():
+    return str(UUID(Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
+
+
+def _persistent_directory(path, fs, info):
+    """Versioned directory identity; unsupported filesystems stay boot-bound."""
+    if not stat.S_ISDIR(info.st_mode):
+        raise RuntimeError("Unsafe persistent storage directory.")
+    if fs != 'btrfs':
+        return ['boot-bound-v1', _boot_id(), info.st_dev, info.st_ino]
+    if platform.machine() not in ('x86_64', 'aarch64'):
+        raise RuntimeError('Unsupported Btrfs identity ioctl architecture.')
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        current = os.fstat(fd)
+        if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+            raise RuntimeError('Production storage identity changed during query.')
+        fsinfo, sub = bytearray(1024), bytearray(504)
+        lookup = bytearray(4096)
+        struct.pack_into('=QQ', lookup, 0, 0, 256)
+        fcntl.ioctl(fd, 0x8400941f, fsinfo, True)
+        fcntl.ioctl(fd, 0x81f8943c, sub, True)
+        fcntl.ioctl(fd, 0xd0009412, lookup, True)
+        fsid = UUID(bytes=bytes(fsinfo[16:32]))
+        subid = UUID(bytes=bytes(sub[296:312]))
+        tree = struct.unpack_from('=Q', sub)[0]
+        if not fsid.int or not subid.int or not tree or tree != struct.unpack_from('=Q', lookup)[0]:
+            raise RuntimeError('Unverifiable persistent Btrfs identity.')
+        return ['btrfs-v1', str(fsid), str(subid), tree, info.st_ino]
+    except OSError as exc:
+        raise RuntimeError('Cannot verify persistent Btrfs identity.') from exc
+    finally:
+        os.close(fd)
+
+
+def production_storage_identity(destination, authority, *, persistent=False):
     """Bind stable ancestors and backing mounts, not boot-local mount IDs.
 
     The prefix, state parent and authority parent must exist. Dependency
@@ -223,9 +264,29 @@ def production_storage_identity(destination, authority):
             if len(nearest) != 1:
                 raise RuntimeError('Ambiguous production mount topology.')
             mount, device, root, fs, source = nearest[0]
-            result[str(path)] = [info.st_dev, info.st_ino, str(mount),
-                                 device, root, fs, source]
+            if persistent:
+                result[str(path)] = [_persistent_directory(path, fs, info), str(mount), root, fs]
+            else:
+                result[str(path)] = [info.st_dev, info.st_ino, str(mount),
+                                     device, root, fs, source]
+    if not persistent:
+        result['boot_id'] = _boot_id()
+        # Mount IDs are runtime-only; capture the kernel topology, including
+        # same-device remounts, without putting it into persistent evidence.
+        with open('/proc/self/mountinfo', encoding='utf-8') as stream:
+            result['mountinfo'] = sha256(stream.read().encode()).hexdigest()
     return result
+
+
+def _persistent_anchor(path):
+    candidates = [m for m in _mount_records() if path.is_relative_to(m[0])]
+    if not candidates:
+        raise RuntimeError('Cannot verify production mount topology.')
+    depth = max(len(m[0].parts) for m in candidates)
+    nearest = [m for m in candidates if len(m[0].parts) == depth]
+    if len(nearest) != 1:
+        raise RuntimeError('Ambiguous production mount topology.')
+    return _persistent_directory(path, nearest[0][3], path.lstat())
 
 
 def _refuse_atomic_residue(path):
@@ -308,7 +369,8 @@ def production_authority(destination, *, provision=False):
         raise RuntimeError('Explicit live Fatekeeper authorization is required.')
     authority = _production_authority_path(destination)
     parent = authority.parent
-    storage_identity = production_storage_identity(destination, authority)
+    runtime_identity = production_storage_identity(destination, authority)
+    storage_identity = production_storage_identity(destination, authority, persistent=True)
     if provision and not authority.exists() and not authority.is_symlink():
         authority.mkdir(mode=0o700)
         tx._sync(parent)
@@ -322,17 +384,22 @@ def production_authority(destination, *, provision=False):
                 (not path.is_file() or path.stat().st_uid != os.getuid()
                  or path.stat().st_nlink != 1)):
             raise RuntimeError('Unsafe production transaction evidence.')
+    identity = tx._identity(destination)
+    authority_identity = _directory(authority, authority)
+    persistent_authority = tuple(_persistent_anchor(authority))
+    if production_storage_identity(destination, authority) != runtime_identity:
+        raise RuntimeError('Production storage identity changed during query.')
     return ProductionScope(destination.root, destination.prefix, destination.state,
                            destination.injector, destination.profile, destination.journal_dir,
-                           tx._identity(destination), authority, _directory(authority, authority),
-                           storage_identity)
+                           identity, authority, authority_identity,
+                           storage_identity, runtime_identity, persistent_authority)
 
 
 def _assert_scope(scope):
     if isinstance(scope, ProductionScope):
         from . import fatekeeper_commit as tx
         destination = tx.Destination(scope.root, scope.prefix, scope.injector,
-                                     scope.profile, scope.state, scope.journal_dir)
+                                     scope.profile, scope.state, scope.journal_dir, production=True)
         current = production_authority(destination)
     else:
         current = resolve_scope(scope.root)
@@ -344,7 +411,7 @@ def production_journal(scope):
     """Validate existing provenance before a new install or any recovery."""
     from . import fatekeeper_commit as tx
     destination = tx.Destination(scope.root, scope.prefix, scope.injector,
-                                 scope.profile, scope.state, scope.journal_dir)
+                                 scope.profile, scope.state, scope.journal_dir, production=True)
     validate_production_atomic_evidence(destination)
     raw, _ = tx._read(scope.journal_dir / 'fk4-journal.json')
     record = _ledger(scope)
@@ -416,7 +483,11 @@ def _ledger_path(scope):
 
 
 def _scope_binding(scope):
-    return json.loads(json.dumps(asdict(scope), default=str))
+    result = asdict(scope)
+    if isinstance(scope, ProductionScope):
+        result.pop('runtime_identity')
+        result['authority_identity'] = result.pop('persistent_authority_identity')
+    return json.loads(json.dumps(result, default=str))
 
 
 def _ledger(scope):
@@ -447,7 +518,7 @@ def _ledger(scope):
             raise RuntimeError('Corrupted scoped provenance evidence.') from exc
     if (not isinstance(record, dict) or
             set(record) != {'schema', 'scope', 'current', 'next', 'staging'} or
-            record['schema'] != 1 or record['scope'] != _scope_binding(scope) or
+            record['schema'] != (2 if isinstance(scope, ProductionScope) else 1) or record['scope'] != _scope_binding(scope) or
             any(value is not None and (not isinstance(value, str) or
                 not re.fullmatch('[0-9a-f]{64}', value))
                 for value in (record['current'], record['next'])) or
@@ -462,7 +533,7 @@ def _save_ledger(scope, current, next_digest, *, staging=False):
     from . import fatekeeper_commit as tx
     _assert_scope(scope)
     tx._write(_ledger_path(scope), json.dumps({
-        'schema': 1, 'scope': _scope_binding(scope),
+        'schema': 2 if isinstance(scope, ProductionScope) else 1, 'scope': _scope_binding(scope),
         'current': current, 'next': next_digest, 'staging': staging,
     }, sort_keys=True).encode())
 
