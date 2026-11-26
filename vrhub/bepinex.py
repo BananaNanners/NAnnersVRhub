@@ -198,6 +198,9 @@ def install(recipe, archives, steam_roots=None):
         if not game or not (game / cfg["exe"]).is_file() or not (game / cfg["data"]).is_dir():
             raise RuntimeError(f"Launch the Windows Steam copy of {cfg['title']} once with Proton; {cfg['exe']} and {cfg['data']} must be present.")
         base = game.resolve()
+        if recipe["id"] == "elden-ring":
+            from . import elden_ring
+            elden_ring.require_supported_install_version(game)
         bad = conflicts(base, recipe)
         if bad:
             raise RuntimeError("Remove the conflicting or duplicate VR plugin using its existing installer before continuing: incompatible install at " + ", ".join(str(p) for p in bad))

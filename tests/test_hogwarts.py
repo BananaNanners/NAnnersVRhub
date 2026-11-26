@@ -69,13 +69,42 @@ class HogwartsWorkflowTests(unittest.TestCase):
         return path
 
     def install(self):
-        hub.install(self.recipe, self.injector, [self.fixture.steam])
+        # Historical installed-injector fixture; no longer a public install route.
+        injector = self.prefix / "drive_c/uevr"
+        injector.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(self.injector) as archive:
+            written = []
+            for name in archive.namelist():
+                target = injector / name
+                target.write_bytes(archive.read(name))
+                written.append(str(target))
+        self.fixture.record("hogwarts-legacy", {"files": written, "root": str(injector), "installed_at": 1234})
         plan = hub.review_profile_install(self.recipe, self.profile, [self.fixture.steam])
         with mock.patch("vrhub.profile_safety._assert_game_stopped"), mock.patch(
                 "vrhub.profile_safety._assert_execution_gate"):
             return hub.install_profile(
                 self.recipe, self.profile, [self.fixture.steam],
                 approved_fingerprint=plan.fingerprint, confirmed=True)
+
+    def test_legacy_injector_entry_points_refuse_and_preserve(self):
+        from vrhub import cli
+        injector = self.prefix / "drive_c/uevr"
+        injector.mkdir(parents=True)
+        backend = injector / "UEVRBackend.dll"
+        backend.write_bytes(b"working original")
+        self.fixture.record("hogwarts-legacy", {"files": [str(backend)], "root": str(injector)})
+        before = self.fixture.state.read_bytes()
+        for action in (lambda: hub.install(self.recipe, self.injector),
+                       lambda: hub.install_many(self.recipe, [self.injector]),
+                       lambda: hub._install_uevr(self.recipe, self.injector),
+                       lambda: hub.uninstall("hogwarts-legacy")):
+            with self.assertRaisesRegex(RuntimeError, "disabled"):
+                action()
+        self.assertEqual(cli.main(["install", "hogwarts-legacy", "--file", str(self.injector)]), 1)
+        self.assertEqual(cli.main(["uninstall", "hogwarts-legacy"]), 1)
+        self.assertEqual(self.fixture.state.read_bytes(), before)
+        self.assertEqual(backend.read_bytes(), b"working original")
+        self.assertEqual(list(injector.iterdir()), [backend])
 
     def report(self):
         return compatibility.report(self.recipe, [self.fixture.steam])

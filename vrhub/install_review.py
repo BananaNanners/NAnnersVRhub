@@ -169,6 +169,9 @@ def _pinned_package_plan(recipe, files, base):
     if not (base / cfg["exe"]).is_file() or not (base / cfg["data"]).is_dir():
         raise PlanRejected(
             "Launch the Windows game with Proton once and confirm its EXE/data folder.")
+    if recipe["id"] == "elden-ring":
+        from . import elden_ring
+        elden_ring.require_supported_install_version(base)
     if hub._load_state().get(recipe["id"]):
         raise PlanRejected(
             "The Hub already has an installation inventory. Remove/review it "

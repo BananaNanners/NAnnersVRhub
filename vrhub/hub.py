@@ -175,6 +175,8 @@ def install(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
     """Install a mod from a .pak file, or from a .zip containing one (or a UEVR zip)."""
     if recipe.get("id") == "fatekeeper" and recipe.get("archive_pins"):
         raise RuntimeError("Use Review installation for the verified Fatekeeper dependency pair.")
+    if recipe.get("id") == "hogwarts-legacy":
+        raise RuntimeError("Standalone Hogwarts UEVR installation is disabled; use the dependency review and setup guide.")
     from . import state_transaction
     with state_transaction.locked(state_file()):
         if not get_handler(recipe).install_supported(recipe):
@@ -226,6 +228,8 @@ def install(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
 
 def _install_uevr(recipe: dict, mod_file: Path, steam_roots=None) -> list[Path]:
     """Unpack a UEVR zip into the game's Proton prefix (drive_c/uevr)."""
+    if recipe.get("id") == "hogwarts-legacy":
+        raise RuntimeError("Standalone Hogwarts UEVR installation is disabled; use the dependency review and setup guide.")
     if mod_file.suffix.lower() != ".zip":
         raise RuntimeError("Expected a UEVR .zip file.")
     dest = _uevr_dir(recipe, steam_roots)
@@ -781,6 +785,8 @@ def install_profile(recipe: dict, zip_file: Path, steam_roots=None, *,
 
 def uninstall(recipe_id: str, *, profile_confirm: bool = False, recovery_review=None) -> list[Path]:
     """Remove what we installed under this key (use '<game>:profile' for a profile)."""
+    if recipe_id == "hogwarts-legacy":
+        raise RuntimeError("Legacy Hogwarts injector removal is disabled; verified original backups are unavailable. Review manually.")
     from . import state_transaction
     with state_transaction.locked(state_file()):
         state = _load_state()

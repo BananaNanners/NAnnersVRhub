@@ -91,6 +91,17 @@ def file_version(path):
         return None
 
 
+def require_supported_install_version(game):
+    """Reuse the reviewed executable versions; never authorize a new release."""
+    exe = Path(game) / "Game/eldenring.exe"
+    version = None if exe.is_symlink() or exe.parent.is_symlink() else file_version(exe)
+    if version not in SUPPORTED:
+        raise RuntimeError(
+            f"ERVR 0.4.0 requires a reviewed game executable (2.6.2.0 / 2.7.1.0); "
+            f"found {version or 'unknown'}. Installation blocked.")
+    return version
+
+
 def configuration(game):
     path = game / 'Game/ERVR/ERVR.ini'
     if not path.is_file() or path.is_symlink() or not path.resolve().is_relative_to(game.resolve()) or path.stat().st_size > 1024 * 1024:

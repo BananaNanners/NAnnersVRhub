@@ -77,6 +77,41 @@ class EldenRingTests(unittest.TestCase):
         for data in [b'',b'MZ',pe()[:0x250],b'NOT A PE'+pe(),pe()[:0x80]+b'BAD!'+pe()[0x84:]]:
             self.exe.write_bytes(data);self.assertIsNone(elden_ring.file_version(self.exe))
 
+    def test_install_and_review_refuse_unsupported_and_unknown_versions(self):
+        from vrhub import install_review, cli
+        before = self.f.state.read_bytes()
+        for data in (pe((9,9,9,9)), b"unknown executable"):
+            self.exe.write_bytes(data)
+            with mock.patch.object(hub, "load_recipes", return_value={"elden-ring": self.recipe}):
+                with mock.patch.object(cli, "_roots", return_value=[self.f.steam]):
+                    self.assertEqual(cli.main(["install", "elden-ring", "--file", str(self.archive)]), 1)
+            for action in (self.install, lambda: hub.install_many(self.recipe, [self.archive], [self.f.steam]),
+                           lambda: install_review.build_install_plan(self.recipe, [self.archive], [self.f.steam])):
+                with self.assertRaisesRegex(RuntimeError, "reviewed game executable"):
+                    action()
+            self.assertEqual(self.f.state.read_bytes(), before)
+            self.assertFalse((self.game / "Game/dxgi.dll").exists())
+        self.exe.write_bytes(pe())
+        self.preserved()
+
+    def test_supported_review_stale_version_and_removal_after_game_update(self):
+        from vrhub import install_review
+        self.exe.write_bytes(pe((2,6,2,0)))
+        plan = install_review.build_install_plan(self.recipe, [self.archive], [self.f.steam])
+        self.assertTrue(plan.approved_for_review)
+        self.exe.write_bytes(pe((9,9,9,9)))
+        with self.assertRaises(RuntimeError):
+            install_review.revalidate(plan, self.recipe, [self.f.steam])
+        self.exe.write_bytes(pe())
+        self.install()
+        updated = pe((9,9,9,9))
+        self.exe.write_bytes(updated)
+        hub.uninstall("elden-ring")
+        self.assertEqual(self.exe.read_bytes(), updated)
+        self.assertFalse((self.game / "Game/dxgi.dll").exists())
+        self.exe.write_bytes(pe())
+        self.preserved()
+
     def test_installs_ten_normalized_files_and_reports_without_gameplay_claim(self):
         installed=self.install();self.assertEqual(len(installed),10)
         for name,data in self.entries.items():
