@@ -101,3 +101,33 @@ push, live install or recovery. A6.7-C/D/E and A6.6 readiness remain pending.
 
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7B-evidence-MbSbDx.
 Manifest SHA-256: 789b490c51999ec77dbea8a10b64fa4c825edc3eb5832725ab25c0f542628ffa.
+
+## A6.7-B — Nexus preview correction and player acceptance
+
+Player accepted ten original KDE checks (PID 29005) and four authenticated
+Nexus checks (PID 29718), both at runtime b498ed068ff30a96553033d984b7319f9e0af513.
+The original launcher omitted the existing read-only credential fallback;
+corrected launcher proved the workflow before permanent centralization.
+Shared desktop activation now uses captured host XDG configuration for the
+read-only default host key and explicitly isolates the writable key path.
+No credential copy, disclosure, or change; existing fallback validates regular
+private user-owned source and rejects symlinks. Missing key is not fatal.
+Custom host XDG, repeated activation, isolated write/delete and insecure/missing
+source regression added. Explicit host key-file overrides are not inherited
+as writable preview targets; environment API key precedence is unchanged.
+
+Targeted 30 passed (1.254s, PID 30422); authenticated live check PID 30454
+exit 0 (4.19s): Cyberpunk 15 rows (6 update, 7 current, 1 not installed,
+1 unknown); Ready or Not 1 current. Credential bytes/mode/mtime and both
+state files unchanged during live check. Full regression 1757 passed
+(77.799s, PID 30517, exit 0), no errors/failures/skips, verified private
+KHARVOX payload included (11 integration tests).
+21 previous manifests/92 entries, both reboot fixtures (28 entries each),
+121 Fatekeeper regular-file members/hashes/modes and stable state verified.
+No comprehensive all-game/save/prefix audit. Production gate closed.
+Previous preview PID 29718 absent. Fresh KDE verification and player
+confirmation of permanent source correction remain separate from 14 prior
+accepted checks. No push, release, live installation or recovery.
+
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7B-nexus-final-hobDWm.
+Manifest SHA-256: 0c3ad2528f857361e4e0dfd5625cd2cdbe00250dcf9196a749dde7710ef80dc9.

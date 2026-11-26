@@ -260,6 +260,14 @@ def activate_desktop_preview(*, home: Path | None = None):
     from . import launch_environment
     launch_environment.capture_host_xdg()
     stable = result["root"]
+    # Desktop previews may read the existing private host credential, but
+    # must never direct credential writes at the host configuration.
+    # Use captured host XDG on every activation, not the redirected value.
+    host_config = launch_environment.host_config_home()
+    host_key = (Path(host_config).expanduser() if host_config else
+                (home or Path.home()) / ".config") / "vrhub" / "nexus_key"
+    os.environ["VRHUB_NEXUS_READONLY_KEY_FILE"] = str(host_key)
+    os.environ["VRHUB_NEXUS_KEY_FILE"] = str(stable / "config/vrhub/nexus_key")
     os.environ["VRHUB_STATE"] = str(result["state"])
     for key, sub in (("XDG_CONFIG_HOME", "config"),
                      ("XDG_CACHE_HOME", "cache"),

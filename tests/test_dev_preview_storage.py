@@ -252,5 +252,40 @@ class SharedPreviewPersistenceTests(unittest.TestCase):
                  if f.is_file()}
         self.assertEqual(before, after)
 
+    def test_activation_preserves_host_nexus_source_and_isolates_writes(self):
+        from vrhub import launch_environment, updates
+        host_config = self.home / "custom-config"
+        source = host_config / "vrhub/nexus_key"
+        source.parent.mkdir(parents=True)
+        source.write_text("fixture-host-key")
+        source.chmod(0o600)
+        before = source.read_bytes(), source.stat().st_mtime_ns
+        with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(host_config),
+                "NEXUS_API_KEY": "", "VRHUB_NEXUS_KEY_FILE": str(source)}),                 mock.patch.object(launch_environment, "_host", None):
+            for _ in range(3):
+                report = store.activate_desktop_preview(home=self.home)
+                self.assertEqual(updates.get_key(), "fixture-host-key")
+                self.assertEqual(updates.key_path(),
+                                 report["root"] / "config/vrhub/nexus_key")
+                self.assertFalse(updates.key_path().exists())
+            updates.set_key("fixture-preview-key")
+            self.assertEqual(updates.get_key(), "fixture-preview-key")
+            updates.clear_key()
+            self.assertEqual(updates.get_key(), "fixture-host-key")
+            source.chmod(0o644)
+            self.assertIsNone(updates.get_key())
+            source.chmod(0o600)
+            self.assertEqual((source.read_bytes(), source.stat().st_mtime_ns), before)
+
+    def test_activation_missing_host_nexus_key_is_not_required(self):
+        from vrhub import launch_environment, updates
+        with mock.patch.dict(os.environ, {"NEXUS_API_KEY": ""}),                 mock.patch.object(launch_environment, "_host", None):
+            os.environ.pop("XDG_CONFIG_HOME", None)
+            report = store.activate_desktop_preview(home=self.home)
+            self.assertEqual(updates.key_path(),
+                             report["root"] / "config/vrhub/nexus_key")
+            self.assertIsNone(updates.get_key())
+            self.assertFalse(updates.key_path().exists())
+
 if __name__ == "__main__":
     unittest.main()
