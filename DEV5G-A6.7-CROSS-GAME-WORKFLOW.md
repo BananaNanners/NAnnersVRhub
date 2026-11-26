@@ -170,3 +170,11 @@ push or release. A6.7-C/D/E and A6.6 remain pending.
 
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7B2-regression-2fK3JJ.
 Manifest SHA-256: 4a9d883d2f4e876dc65c3982d1f8525ef828711c7489eb4d59432018eb4d01bc.
+
+### A6.7-B2 player acceptance record
+All ten desktop checks explicitly passed by player. Subsequent independent
+inspection found no matching preview process or held lifecycle lock.
+Running checkpoint/PID, compositor window and left-open verification remain
+pending; do not represent player confirmation as independent observation.
+Stable state unchanged, gate closed. Original regression manifest retained.
+Acceptance manifest SHA-256: 06cdd533782bdd91a911c00bbe07baab24a4a26a184c26a82be8e7232fbd0e65.
