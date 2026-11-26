@@ -4,6 +4,7 @@ from collections import Counter
 from pathlib import Path
 import copy
 import hashlib
+import stat
 import zipfile
 from . import bepinex, bepinex_recognition as recognition, bepinex_update_review, hub
 
@@ -40,6 +41,27 @@ def _inventory(recipe, paths, identities):
     return rows
 
 
+def _target_sample(base, names):
+    """Bounded target/ancestor identity sample, including absent targets."""
+    result = {}
+    for name in sorted(names):
+        path = bepinex.target(base, name)
+        chain = [base]
+        for part in Path(name).parts:
+            chain.append(chain[-1] / part)
+        for node in chain:
+            if node in result:
+                continue
+            try:
+                identity = recognition._identity(node)
+            except FileNotFoundError:
+                identity = None
+            if identity is not None and node != path and not stat.S_ISDIR(identity[2]):
+                raise RuntimeError("Unsafe target ancestor.")
+            result[node] = identity
+    return result
+
+
 def review(recipe, pinned_archives, folder, *, fetch=None, steam_roots=None):
     """Fresh candidate discovery, exact inventory and current target evidence.
 
@@ -54,7 +76,7 @@ def review(recipe, pinned_archives, folder, *, fetch=None, steam_roots=None):
         pins = {p["sha256"]:p["id"] for p in recipe["packages"]}
         pinned_archives = tuple(Path(p) for p in pinned_archives)
         old = _inventory(recipe, pinned_archives, pins)
-        state = hub.state()
+        state = copy.deepcopy(hub.state())
         discovery = bepinex_update_review.review(recipe, folder, state, fetch=fetch)
         candidates = {r["id"]:r["candidate"] for r in discovery["rows"] if r["candidate"]}
         if not candidates:
@@ -70,7 +92,10 @@ def review(recipe, pinned_archives, folder, *, fetch=None, steam_roots=None):
                 raise RuntimeError("Candidate digest overlaps a package identity.")
             ids[candidate["sha256"]] = role
         new = _inventory(recipe, paths.values(), ids)
-        if len({n.casefold() for n in old.keys() | new.keys()}) != len(old.keys() | new.keys()):
+        names = old.keys() | new.keys()
+        prefixes = {"/".join(n.split("/")[:i]) for n in names
+                    for i in range(1, len(n.split("/"))+1)}
+        if len({n.casefold() for n in prefixes}) != len(prefixes):
             raise RuntimeError("Case-only target rename requires manual review.")
         # Existing mapper is role/hash bound; also require exact candidate hash
         # per selected role on a second read, not a fallback to pinned bytes.
@@ -94,6 +119,15 @@ def review(recipe, pinned_archives, folder, *, fetch=None, steam_roots=None):
         if evidence["conflicts"]:
             blockers.append("Conflicting plugins require review.")
         base = Path(evidence["root"])
+        before_targets = _target_sample(base, names)
+        archive_samples = {}
+        for role, path in paths.items():
+            with recognition._archive_snapshot(path) as (_, sha, ident):
+                expected = candidates[role]["sha256"] if role in candidates else next(
+                    p["sha256"] for p in recipe["packages"] if p["id"] == role)
+                if sha != expected:
+                    raise RuntimeError("Selected package changed.")
+                archive_samples[path] = (sha, ident)
         originals = set(state.get(recipe["id"], {}).get("originals", [])) if not blockers else set()
         rows = []
         for name in sorted(old.keys() | new.keys(), key=lambda n:(n.casefold(),n)):
@@ -107,6 +141,8 @@ def review(recipe, pinned_archives, folder, *, fetch=None, steam_roots=None):
                 reason = "Missing managed file; review repair first."
             elif protected and prior:
                 action, reason = "Preserve", "Protected setting or binding; migration needs review."
+                if incoming != prior:
+                    blockers.append("Protected payload migration requires explicit review: " + name)
             elif prior and current != prior[1]:
                 reason = "Managed binary differs from pinned bytes."
             elif prior and not incoming and name in originals:
@@ -125,13 +161,26 @@ def review(recipe, pinned_archives, folder, *, fetch=None, steam_roots=None):
                     reason = "Parent path is not a directory."
                 else:
                     action, reason = "Install", "New absent target; review only."
-            if blockers and action in ("Install","Replace","Remove"):
-                action, reason = "Block", "Resolve ownership or backup blockers first."
             rows.append(dict(path=name, component=(incoming or prior)[0], action=action,
                              reason=reason, old_sha256=prior[1] if prior else None,
                              current_sha256=current, new_sha256=incoming[1] if incoming else None))
         if any(r["action"]=="Block" for r in rows):
             blockers.append("One or more file changes require manual review.")
+        # Re-sample actual bytes/ownership and all proposed target identities.
+        after = recognition.recognize(recipe, pinned_archives, steam_roots)
+        keys = ("status", "root", "ownership_record", "backup_status", "conflicts", "rows")
+        if any(after.get(k) != evidence.get(k) for k in keys) or hub.state() != state:
+            blockers.append("Installed or ownership evidence changed during review.")
+        for path, expected in archive_samples.items():
+            with recognition._archive_snapshot(path) as (_, sha, ident):
+                if (sha, ident) != expected:
+                    blockers.append("Selected archive changed during review.")
+        if _target_sample(base, names) != before_targets:
+            blockers.append("Target identities changed during review.")
+        if blockers:
+            for row in rows:
+                if row["action"] in ("Install", "Replace", "Remove"):
+                    row.update(action="Block", reason="Global manifest blocker: " + row["reason"])
         return dict(result, rows=tuple(rows), counts=dict(Counter(r["action"] for r in rows)),
                     blockers=tuple(blockers), status="Blocked" if blockers else "Review required",
                     outside_inventory="Leave untouched; not inventoried or certified.")

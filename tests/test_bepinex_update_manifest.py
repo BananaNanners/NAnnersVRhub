@@ -84,6 +84,8 @@ class ManifestTests(unittest.TestCase):
                     result=manifest.review(recipe,oldpaths,candidate,fetch=fetch)
                 self.assertEqual(snapshot(),before)
                 self.assertFalse(result["write_authorized"])
+                if result["status"] == "Blocked":
+                    self.assertFalse({r["action"] for r in result["rows"]} & {"Install","Replace","Remove"})
                 return result
             result=review()
             self.assertEqual(result["status"],"Review required",result)
@@ -101,6 +103,93 @@ class ManifestTests(unittest.TestCase):
             record["file_hashes"][changed]="0"*64
             self.assertEqual(review()["status"],"Blocked")
             record["file_hashes"][changed]=sha(b"old")
+            # Candidate payload attacks use freshly matching simulated official digests.
+            original_payload = dict(nextpayload)
+            def candidate_payload(data):
+                with zipfile.ZipFile(target,"w") as z:
+                    for n,v in data.items():
+                        z.writestr(n,v)
+                latest.update(release(tag,2,target.read_bytes(),filename))
+            for label, data in (
+                ("overlap", {**original_payload, config:b"foreign"}),
+                ("case rename", {str(Path(n).with_name(Path(n).name.upper())) if n==changed else n:v for n,v in original_payload.items()}),
+                ("file directory collision", {**original_payload, added+"/child.dll":b"child"}),
+                ("protected addition", {**original_payload,"BepInEx/config/new.cfg":b"new"}),
+            ):
+                with self.subTest(game=game, attack=label):
+                    candidate_payload(data)
+                    self.assertEqual(review()["status"],"Blocked")
+            candidate_payload({**original_payload, "BepInEx/plugins/new-test.dll":b"new",
+                               "BepInEx/Plugins/other.dll":b"case parent"})
+            self.assertEqual(review()["status"],"Blocked")
+            binding=cfg["data"]+"/StreamingAssets/SteamVR/bindings_oculus_touch.json"
+            candidate_payload({**original_payload,binding:b"changed binding"})
+            result=review()
+            self.assertEqual(result["status"],"Blocked")
+            self.assertTrue(any("migration" in b.lower() for b in result["blockers"]))
+            candidate_payload(original_payload)
+            (base/binding).unlink()
+            self.assertEqual(review()["status"],"Blocked")
+            (base/binding).write_bytes(b"old:"+binding.encode())
+            # Existing case twin, symlink and known conflicting plugin.
+            # Keep parent spelling unchanged to exercise target collision.
+            twin=(base/added).with_name(Path(added).name.upper())
+            twin.write_bytes(b"foreign")
+            self.assertEqual(review()["status"],"Blocked")
+            twin.unlink()
+            (base/added).symlink_to(root/"absent")
+            self.assertEqual(review()["status"],"Blocked")
+            (base/added).unlink()
+            conflict=base/"BepInEx/plugins"/("vrenhancements.dll" if game=="subnautica" else "nested/ValheimVRMod.dll")
+            conflict.parent.mkdir(parents=True,exist_ok=True)
+            conflict.write_bytes(b"conflict")
+            self.assertEqual(review()["status"],"Blocked")
+            conflict.unlink()
+            record["originals"]=[removed]
+            record["original_hashes"]={removed:sha(b"historical")}
+            original=backup/"files"/removed
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"historical")
+            self.assertEqual(review()["status"],"Blocked")
+            record["originals"]=[]
+            record["original_hashes"]={}
+            # Detect changing state even when provider returns the same dict.
+            real_recognize=manifest.recognition.recognize
+            calls=0
+            def drifting(*args,**kwargs):
+                nonlocal calls
+                result=real_recognize(*args,**kwargs)
+                calls+=1
+                if calls==2:
+                    state["unrelated"]={"changed":True}
+                return result
+            with patch.object(manifest.recognition,"recognize",side_effect=drifting):
+                self.assertEqual(review()["status"],"Blocked")
+            state.pop("unrelated")
+            # Inject drift after the second recognition sample. Snapshot the
+            # external mutation separately; the reviewer itself never writes.
+            def drift_review(mutate):
+                calls=0
+                def drifting(*args,**kwargs):
+                    nonlocal calls
+                    result=real_recognize(*args,**kwargs)
+                    calls+=1
+                    if calls==2:
+                        mutate()
+                    return result
+                with patch.object(hub,"game_path",return_value=base),patch.object(hub,"state_file",return_value=statepath),patch.object(hub,"state",return_value=state),patch.object(manifest.recognition,"recognize",side_effect=drifting):
+                    result=manifest.review(recipe,oldpaths,candidate,fetch=fetch)
+                self.assertEqual(calls,2)
+                self.assertEqual(result["status"],"Blocked")
+                self.assertFalse({r["action"] for r in result["rows"]}&{"Install","Replace","Remove"})
+                self.assertFalse(result["write_authorized"])
+            drift_review(lambda:(base/added).write_bytes(b"external"))
+            self.assertEqual((base/added).read_bytes(),b"external")
+            (base/added).unlink()
+            saved=target.read_bytes()
+            drift_review(lambda:target.write_bytes(b"external archive edit"))
+            self.assertEqual(target.read_bytes(),b"external archive edit")
+            target.write_bytes(saved)
             target.write_bytes(b"tampered")
             self.assertEqual(review()["status"],"Blocked")
 
