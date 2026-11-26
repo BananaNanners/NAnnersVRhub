@@ -473,6 +473,133 @@ class FatekeeperRehearsalTests(unittest.TestCase):
             tx.install_reviewed(plan, verified_backend=self.asset)
         self.assertEqual(self.maintenance_inventory(root), before)
 
+    def test_production_history_verifier_preserves_originals(self):
+        from vrhub.fatekeeper_artifacts import verify_history
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
+        dest = tx._live_destination(None)
+        tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        active = json.loads((dest.journal_dir / "fk4-journal.json").read_bytes())
+        before = self.maintenance_inventory(root)
+        history, = verify_history(dest, active_backup=active["backup"])
+        self.assertEqual(history.phase, "committed")
+        self.assertEqual(history.backup, "fk4-backup")
+        self.assertEqual(self.maintenance_inventory(root), before)
+        retained = dest.journal_dir / history.name / history.backup
+        original = dest.journal_dir / history.backup
+        journal = retained.parent / "fk4-journal.json"
+        raw = journal.read_bytes()
+        for location in (retained, original):
+            file = location / "state-new"
+            data = file.read_bytes()
+            file.write_bytes(b"corruption")
+            before = self.maintenance_inventory(root)
+            with self.assertRaisesRegex(RuntimeError, "SHA-256"):
+                verify_history(dest, active_backup=active["backup"])
+            self.assertEqual(self.maintenance_inventory(root), before)
+            file.write_bytes(data)
+            file.unlink()
+            before = self.maintenance_inventory(root)
+            with self.assertRaisesRegex(RuntimeError, "Missing"):
+                verify_history(dest, active_backup=active["backup"])
+            self.assertEqual(self.maintenance_inventory(root), before)
+            file.write_bytes(data)
+            file.chmod(0o600)
+            extra = location / "999"
+            extra.write_bytes(b"extra")
+            extra.chmod(0o600)
+            before = self.maintenance_inventory(root)
+            with self.assertRaisesRegex(RuntimeError, "membership"):
+                verify_history(dest, active_backup=active["backup"])
+            self.assertEqual(self.maintenance_inventory(root), before)
+            extra.unlink()
+        for field, value, error in (("schema", 1, "journal"),
+                                    ("identity", {}, "identity"),
+                                    ("phase", "applying", "Nonterminal"),
+                                    ("backup", "../foreign", "backup location")):
+            record = json.loads(raw)
+            record[field] = value
+            journal.write_text(json.dumps(record))
+            before = self.maintenance_inventory(root)
+            with self.assertRaisesRegex(RuntimeError, error):
+                verify_history(dest, active_backup=active["backup"])
+            self.assertEqual(self.maintenance_inventory(root), before)
+        journal.write_bytes(raw)
+        self.assertEqual(len(verify_history(dest, active_backup=active["backup"])), 1)
+        # Historical verification does not replace the active recovery entry point.
+        tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertFalse(backend.exists())
+
+    def test_production_history_multiple_generations_and_conflict(self):
+        import shutil
+        from vrhub.fatekeeper_artifacts import verify_history
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
+        dest = tx._live_destination(None)
+        for _ in range(2):
+            tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+            tx.recover_live(approved_review=tx.review_live_recovery())
+        tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        active = json.loads((dest.journal_dir / "fk4-journal.json").read_bytes())
+        before = self.maintenance_inventory(root)
+        histories = verify_history(dest, active_backup=active["backup"])
+        self.assertEqual(len(histories), 3)
+        self.assertEqual(len({h.backup for h in histories}), 3)
+        self.assertEqual(sorted(h.phase for h in histories), ["committed", "rolled-back", "rolled-back"])
+        self.assertEqual(self.maintenance_inventory(root), before)
+        source = dest.journal_dir / histories[0].name
+        duplicate = dest.journal_dir / ("history-" + "f"*32)
+        shutil.copytree(source, duplicate)
+        journal = duplicate / "fk4-journal.json"
+        record = json.loads(journal.read_bytes())
+        record["phase"] = "rolled-back" if record["phase"] == "committed" else "committed"
+        journal.write_text(json.dumps(record))
+        before = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "Conflicting historical journals"):
+            verify_history(dest, active_backup=active["backup"])
+        self.assertEqual(self.maintenance_inventory(root), before)
+
+    def test_production_history_unsafe_artifacts_and_independent_recovery(self):
+        from vrhub.fatekeeper_artifacts import verify_history
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
+        dest = tx._live_destination(None)
+        old_prefix = self.maintenance_inventory(prefix)
+        old_state = state.read_bytes()
+        tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        active = json.loads((dest.journal_dir / "fk4-journal.json").read_bytes())
+        history, = verify_history(dest, active_backup=active["backup"])
+        folder = dest.journal_dir / history.name
+        retained = folder / history.backup
+        incomplete = dest.journal_dir / ("history-" + "e"*32)
+        incomplete.mkdir(mode=0o700)
+        before = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "Incomplete or unsafe"):
+            verify_history(dest, active_backup=active["backup"])
+        self.assertEqual(self.maintenance_inventory(root), before)
+        incomplete.rmdir()
+        for path, mode in ((folder, 0o755), (retained, 0o755),
+                           (folder / "fk4-journal.json", 0o644),
+                           (retained / "state-new", 0o644)):
+            prior = path.stat().st_mode & 0o777
+            path.chmod(mode)
+            before = self.maintenance_inventory(root)
+            with self.assertRaisesRegex(RuntimeError, "Incomplete or unsafe"):
+                verify_history(dest, active_backup=active["backup"])
+            self.assertEqual(self.maintenance_inventory(root), before)
+            path.chmod(prior)
+        (retained / "state-new").write_bytes(b"damaged historical copy")
+        incomplete.mkdir(mode=0o700)
+        historical_before = self.maintenance_inventory(folder)
+        original_before = self.maintenance_inventory(dest.journal_dir / history.backup)
+        with self.assertRaises(RuntimeError):
+            verify_history(dest, active_backup=active["backup"])
+        tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertEqual(self.maintenance_inventory(prefix), old_prefix)
+        self.assertEqual(state.read_bytes(), old_state)
+        self.assertEqual(self.maintenance_inventory(folder), historical_before)
+        self.assertEqual(self.maintenance_inventory(dest.journal_dir / history.backup), original_before)
+        self.assertTrue(incomplete.is_dir())
+        self.assertEqual(list(incomplete.iterdir()), [])
+        self.assertEqual(json.loads((dest.journal_dir / "fk4-journal.json").read_bytes())["phase"], "rolled-back")
+
     def test_managed_update_omitted_dependency_blocks_without_writes(self):
         from dataclasses import replace
         tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture(damage=False)

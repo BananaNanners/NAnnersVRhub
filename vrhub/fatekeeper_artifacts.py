@@ -134,3 +134,121 @@ def inventory(directory, *, active_backup=None, staging=False):
         return tuple(sorted(rows, key=lambda row: row.name))
     finally:
         os.close(fd)
+
+
+@dataclass(frozen=True)
+class HistoryEvidence:
+    name: str
+    backup: str
+    journal_sha256: str
+    phase: str
+
+
+def verify_history(destination, *, active_backup=None):
+    """Check historical copies and originals, not historical authority.
+
+    Caller must hold the transaction lock for a maintenance decision.
+    Existing active provenance and storage checks are independent. Returns
+    evidence of consistency only; a mutually rewritten history and original
+    cannot be authenticated by this legacy format.
+    """
+    from . import fatekeeper_commit as tx
+    from hashlib import sha256
+    from contextlib import ExitStack
+
+    directory = destination.journal_dir
+    observed = inventory(directory, active_backup=active_backup)
+    kinds = {row.name: row.kind for row in observed}
+    histories = [row.name for row in observed if "/" not in row.name
+                 and row.kind == "history-candidate"]
+    if any(_HISTORY.fullmatch(row.name) and row.kind != "history-candidate"
+           for row in observed):
+        raise RuntimeError("Incomplete or unsafe Fatekeeper historical evidence.")
+    if not histories:
+        return ()
+    remaining = 2 * 1024**3
+
+    def open_dir(stack, parent, name, private=True):
+        fd = os.open(name, _FLAGS, dir_fd=parent)
+        stack.callback(os.close, fd)
+        info = os.fstat(fd)
+        if private and (info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700):
+            raise RuntimeError("Unsafe historical evidence directory.")
+        return fd
+
+    def read_file(fd, name, *, capture=False):
+        nonlocal remaining
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+        with os.fdopen(os.open(name, flags, dir_fd=fd), "rb") as stream:
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
+                    or before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600
+                    or before.st_size > 64 * 1024**2 or before.st_size > remaining):
+                raise RuntimeError("Unsafe or oversized historical evidence file.")
+            digest = sha256()
+            data = bytearray()
+            total = 0
+            while block := stream.read(1024**2):
+                total += len(block)
+                if total > before.st_size or total > remaining:
+                    raise RuntimeError("Historical evidence file changed or exceeded limit.")
+                digest.update(block)
+                if capture:
+                    data.extend(block)
+            remaining -= total
+            after = os.fstat(stream.fileno())
+            current = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            def identity(info):
+                return (info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+                        info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+            if total != before.st_size or identity(before) != identity(after) or identity(after) != identity(current):
+                raise RuntimeError("Historical evidence changed during verification.")
+            return digest.hexdigest(), bytes(data)
+
+    def exact_members(fd, expected):
+        with os.scandir(fd) as scan:
+            seen = set()
+            for item in scan:
+                if item.name not in expected or len(seen) >= len(expected):
+                    raise RuntimeError("Unexpected historical backup membership.")
+                seen.add(item.name)
+        if seen != expected:
+            raise RuntimeError("Missing historical backup evidence.")
+
+    result = []
+    by_backup = {}
+    with ExitStack() as stack:
+        root = open_dir(stack, None, "/", private=False)
+        for part in directory.parts[1:]:
+            root = open_dir(stack, root, part, private=False)
+        info = os.fstat(root)
+        if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+            raise RuntimeError("Unsafe recovery evidence directory.")
+        for name in histories:
+            with ExitStack() as local:
+                history = open_dir(local, root, name)
+                digest, raw = read_file(history, "fk4-journal.json", capture=True)
+                record = tx._parse_journal(destination, raw)
+                if record["phase"] not in {"committed", "rolled-back"}:
+                    raise RuntimeError("Nonterminal historical Fatekeeper journal.")
+                backup = record["backup"]
+                exact_members(history, {"fk4-journal.json", backup})
+                if kinds.get(backup) not in {"active-backup-candidate", "orphan-backup-candidate"}:
+                    raise RuntimeError("Missing or unsafe retained original backup.")
+                if backup in by_backup and by_backup[backup] != digest:
+                    raise RuntimeError("Conflicting historical journals for retained backup.")
+                by_backup[backup] = digest
+                expected = {str(i): row["old"] for i, row in enumerate(record["rows"])
+                            if row["old"] is not None}
+                expected["state-new"] = record["rows"][-1]["new"]
+                for parent in (history, root):
+                    folder = open_dir(local, parent, backup)
+                    exact_members(folder, set(expected))
+                    for leaf, wanted in expected.items():
+                        actual, _ = read_file(folder, leaf)
+                        if actual != wanted:
+                            raise RuntimeError("Historical backup SHA-256 verification failed.")
+                result.append(HistoryEvidence(name, backup, digest, record["phase"]))
+        if inventory(directory, active_backup=active_backup) != observed:
+            raise RuntimeError("Recovery artifact inventory changed during history verification.")
+    return tuple(result)
