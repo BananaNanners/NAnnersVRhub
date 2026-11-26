@@ -258,3 +258,8 @@ Original evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D2C-full-yu6ib1.
 Combined evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D2C-corrected-Ts6f6j.
 Manifest SHA-256: c4ad9b2cd3a97a3da1cd9b2dd7485f79968d48d3b99526be02cfdd8fca402e51.
 Limitations: offscreen GUI tests only; interactive KDE readability and acceptance pending D2-D. Read-only review is not repair authority; sampling and legacy backup provenance restrictions remain. No preview replacement, push or release.
+
+## D2-D — Player desktop acceptance
+Player reported 14/14 interactive KDE checks passed at runtime e0c9aa045d398438b3cac865b1b6f86823b5e80d, PID 66532. Independent compositor identification not established. 31 historical manifests/160 entries verified; stable state unchanged; gate closed. Evidence: /home/bananananers/NAnnersVRhub-recovery/Dev5G-A6.7D2D-acceptance-YbMNu9.
+Manifest SHA-256: a240a561fc07fd06a9ca024e9cff3122eabdd3df988c512d6e4b3d78a32fafc2.
+D3 backup and transaction development pending.
