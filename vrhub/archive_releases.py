@@ -74,7 +74,9 @@ def asset_catalog(source, releases):
               and source.get("asset_family") == "kharvox-versioned-zip")
     submersed = (source.get("repo") == "Okabintaro/SubmersedVR"
                  and source.get("asset_family") == "submersedvr-versioned-zip")
-    target = None if family or submersed else source["asset"]
+    ervr = (source.get("repo") == "IlyaMez/EldenringVR"
+            and source.get("asset_family") == "ervr-versioned-zip")
+    target = None if family or submersed or ervr else source["asset"]
     fixed = source.get("fixed_tag")
     found = []
     for item in releases[:MAX_RELEASES]:
@@ -94,7 +96,9 @@ def asset_catalog(source, releases):
         exact = [a for a in assets if isinstance(a, dict) and (
             kharvox_asset_name(a.get("name")) if family else
             bool(re.fullmatch(r"SubmersedVR_[0-9]+(?:[.][0-9]+){1,3}[.]zip", str(a.get("name", ""))))
-            if submersed else a.get("name") == target)]
+            if submersed else (bool(re.fullmatch(r"v[0-9]+[.][0-9]+[.][0-9]+", tag))
+                               and a.get("name") == f"ERVR-{tag}.zip")
+            if ervr else a.get("name") == target)]
         if len(exact) != 1:
             continue
         a = exact[0]
@@ -109,6 +113,10 @@ def asset_catalog(source, releases):
     pinned = next((a for a in found if a["tag"] == source.get("pinned_tag")), None)
     newer = bool(pinned and expected and expected["when"] > pinned["when"]
                  and expected["tag"] != pinned["tag"])
+    if ervr and expected and not fixed:
+        old = updates._release_version(source.get("pinned_tag", ""))
+        new = updates._release_version(expected["tag"])
+        newer = old is not None and new is not None and updates._ordered_numeric(old, new) < 0
     return {"assets": found, "expected": expected["tag"] if expected else "",
             "fixed": bool(fixed), "newer_than_pin": newer}
 

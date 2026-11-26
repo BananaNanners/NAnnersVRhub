@@ -4,12 +4,12 @@ steam_appid = 1245620
 method = "ervr"
 handler = "elden-ring-vr"
 manual_download = true
-mod_page = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
+mod_page = "https://github.com/IlyaMez/EldenringVR/releases"
 
 setup = [
   "Experimental Linux VR setup, not yet gameplay-tested. Launch the Steam game once using Proton. Only patch 1.16.2 or 1.17.1 is accepted by this workflow; other builds need review.",
   "Back up saves and use offline-only play for this Hub workflow. Set the game's startup network setting to offline, quit, and put Steam in offline mode. Do not use online play or launch with Easy Anti-Cheat enabled.",
-  "Download ERVR 0.4.0 from the author's Nexus Files page. Scan local archives and choose Install verified dependencies when the correct ZIP is verified. Review backups before approval.",
+  "The Hub installer currently accepts only ERVR 0.4.0 from the legacy Nexus Files page. Newer GitHub releases require review. Scan local archives and choose Install verified dependencies when the correct ZIP is verified. Review backups before approval.",
   "Remove conflicting ReShade, other VR frameworks or existing loader files using their original removal instructions. The Hub blocks conflicting files rather than overwriting them.",
   "Copy the Hub launch options into Steam Properties > General. Keep your existing Proton selection. Connect WiVRn before launch.",
 ]
@@ -34,6 +34,9 @@ label = "ERVR 0.4.0 downloads"
 url = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
 
 [[links]]
+label = "ERVR current releases (review required)"
+url = "https://github.com/IlyaMez/EldenringVR/releases"
+[[links]]
 label = "ERVR author guide and controls"
 url = "https://www.nexusmods.com/eldenring/mods/10711"
 [[links]]
@@ -43,12 +46,23 @@ url = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
 label = "Proton WineOpenXR bridge (upstream)"
 url = "https://github.com/ValveSoftware/Proton/tree/proton_11.0/wineopenxr"
 
+[[updates]]
+name = "ERVR"
+github = "IlyaMez/EldenringVR"
+review_baseline = "v0.4.0"
+dependency_type = "Mod"
+
 [[packages]]
 id = "ervr"
 name = "ERVR 0.4.0 + bundled ReShade 6.8.0"
 page = "https://www.nexusmods.com/eldenring/mods/10711?tab=files"
 sha256 = "851221c337d2a365df547b34435246486f4e390a77999b1fe712e764ef33a21a"
 required_files = ["Game/dxgi.dll", "Game/dinput8.dll", "Game/ReShade.ini", "Game/LICENSE-ReShade.txt", "Game/ERVR/ERVR.dll", "Game/ERVR/ERVR.ini", "Game/ERVR/README.md", "Game/ERVR/CHANGELOG.md", "Game/ERVR/LICENSE.txt", "Game/ERVR/THIRD_PARTY.md"]
+
+[archive_releases.ervr]
+repo = "IlyaMez/EldenringVR"
+asset_family = "ervr-versioned-zip"
+pinned_tag = "v0.4.0"
 
 [launch]
 args = ""

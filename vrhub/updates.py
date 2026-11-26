@@ -343,6 +343,17 @@ def check_recipe(recipe: dict, state: dict, fetch=None, nexus_fetch=None, nexus_
                                 f"reported Nexus version {tag}; verify manually.")
             out.append(item)
             continue
+        if u.get("review_baseline") and "github" in u:
+            # Compare against the supported archive, never an install timestamp.
+            baseline = str(u["review_baseline"])
+            old, new = _release_version(baseline), _release_version(tag)
+            newer = old is not None and new is not None and _ordered_numeric(old, new) < 0
+            item.update(status="unknown", newer_release=newer,
+                        detail=f"Hub installer supports {baseline}; latest GitHub release: {tag} ({day}). "
+                               "Installed version not established. "
+                               "New archives require compatibility review before installation.")
+            out.append(item)
+            continue
         if u.get("tested_version") and u.get("tested_release_published"):
             # The KHARVOX launch baseline is not an installed-version record.
             baseline = str(u["tested_version"])

@@ -236,12 +236,12 @@ def _mkdir_for(fixture, section, rel):
     return path
 
 
-def _write(fixture, section, rel, data):
+def _write(fixture, section, rel, data, *, mode=None):
     if not isinstance(data, bytes) or len(data) > fixture.file_bytes:
         raise TransactionBlocked("Only bounded fixture bytes can be written.")
     parent = _mkdir_for(fixture, section, rel)
     dest = _target(fixture, section, rel)
-    original_mode = _mode(fixture, section, rel) if dest.exists() else 0o600
+    original_mode = mode if mode is not None else (_mode(fixture, section, rel) if dest.exists() else 0o600)
     fd, tmp = tempfile.mkstemp(prefix=".offline-", dir=parent)
     try:
         with os.fdopen(fd, "wb") as out:
@@ -313,7 +313,7 @@ def _journal(fixture):
 
 @contextmanager
 def fixture_sandbox(installed: dict[str, bytes], incoming: dict[str, bytes],
-                    *, managed: tuple[str, ...] | None = None, uevr_payload=False, state=None):
+                    *, managed: tuple[str, ...] | None = None, uevr_payload=False, state=None, delete=()):
     """Create and destroy an explicitly synthetic, private temporary game."""
     bounds = Fixture(Path("/tmp"), "", uevr_payload)
     if state is not None:
@@ -322,10 +322,15 @@ def fixture_sandbox(installed: dict[str, bytes], incoming: dict[str, bytes],
         installed = {**installed, "hub/state.json": (json.dumps(state, indent=2) + "\n").encode()}
     _check_names(installed, bounds.file_limit)
     _check_names(incoming, bounds.file_limit)
-    if not incoming:
+    _check_names(delete, bounds.file_limit)
+    if len(set(delete)) != len(delete) or set(delete) & set(incoming):
+        raise TransactionBlocked("Overlapping removal intent.")
+    if not incoming and not delete:
         raise TransactionBlocked("Fixture needs at least one proposed payload.")
     owned = tuple(installed) if managed is None else tuple(managed)
     _check_names(owned, bounds.file_limit)
+    if not set(delete).issubset(owned):
+        raise TransactionBlocked("Removal requires recorded ownership.")
     if not set(owned).issubset(installed):
         raise TransactionBlocked("Owned file list is not present in fixture.")
     if any(not isinstance(data, bytes) or len(data) > bounds.file_bytes
@@ -351,6 +356,9 @@ def fixture_sandbox(installed: dict[str, bytes], incoming: dict[str, bytes],
             _write(fixture, "incoming", name, data)
         inventory = {name: _sha(installed[name]) for name in sorted(owned)}
         _save_inventory(fixture, inventory)
+        if delete:
+            doc={"delete":sorted(delete)}
+            _save_doc(fixture,"transaction","removal.json",{**doc,"seal":_seal(doc,fixture.token)})
         yield fixture
 
 
@@ -390,7 +398,17 @@ def _plan_body(fixture):
             rel = (Path(parent) / filename).relative_to(incoming_dir).as_posix()
             names.append(rel)
     _check_names(names, fixture.file_limit)
-    if not names:
+    intent=_load_doc(fixture,"transaction","removal.json",optional=True)
+    delete=[]
+    if intent is not None:
+        seal=intent.pop("seal",None)
+        delete=intent.get("delete")
+        if seal!=_seal(intent,fixture.token):
+            raise TransactionBlocked("Removal intent seal mismatch.")
+        _check_names(delete,fixture.file_limit)
+        if not set(delete).issubset(before) or set(delete)&set(names):
+            raise TransactionBlocked("Removal ownership or destinations inconsistent.")
+    if not names and not delete:
         raise TransactionBlocked("No synthetic incoming files.")
     if len(before) + len(names) > fixture.file_limit:
         raise TransactionBlocked("Too many fixture files.")
@@ -421,6 +439,9 @@ def _plan_body(fixture):
     rows = []
     total = 0
     after = dict(before)
+    for rel in sorted(delete):
+        rows.append({"path":rel,"old":before[rel],"new":None,"new_size":0,"action":"delete"})
+        del after[rel]
     for rel in sorted(names):
         current = _read(fixture, "installed", rel, optional=True)
         incoming = _read(fixture, "incoming", rel)
@@ -514,6 +535,8 @@ def _prepare(fixture, body, fault=None):
         if fault == f"after_backup_file:{number}":
             raise SimulatedCrash("Interrupted during backup creation.")
     for number, row in enumerate(body["rows"], 1):
+        if row["action"]=="delete":
+            continue
         data = _read(fixture, "incoming", row["path"])
         if len(data) != row["new_size"] or _sha(data) != row["new"]:
             raise TransactionBlocked("Incoming fixture changed during staging.")
@@ -566,6 +589,11 @@ def _verify_journal(fixture, journal, *, require_backups=True):
         generated = dict(before)
         for row in rows:
             rel = row["path"]
+            if row.get("action")=="delete":
+                if rel not in before or row.get("old")!=before[rel] or row.get("new") is not None or row.get("new_size")!=0:
+                    raise RecoveryBlocked("Invalid removal journal row.")
+                del generated[rel]
+                continue
             if (not _check_sha(row.get("new")) or
                     row.get("old") != before.get(rel) or
                     row.get("action") != ("replace" if rel in before else "add") or
@@ -614,10 +642,10 @@ def _preflight_recovery(fixture, journal, before, after, rows):
     for name in planned & set(existing):
         if existing[name] != 0o700:
             raise RecoveryBlocked("New fixture directory permissions changed.")
-    for rel in after:
+    for rel in before.keys() | after.keys():
         data = _read(fixture, "installed", rel, optional=True)
         current = None if data is None else _sha(data)
-        if current not in {before.get(rel), after[rel]}:
+        if current not in {before.get(rel), after.get(rel)}:
             raise RecoveryBlocked("Unexpected manual modification; recovery preserves file.")
         if data is not None:
             expected_mode = journal["modes_before"].get(rel, 0o600)
@@ -682,7 +710,10 @@ def _restore(fixture, journal, fault=None):
             restored = _read(fixture, "transaction", "backup/" + rel)
             if _sha(restored) != original:
                 raise RecoveryBlocked("Fresh backup changed during rollback.")
-            _write(fixture, "installed", rel, restored)
+            if data is None:
+                _write(fixture, "installed", rel, restored, mode=journal["modes_before"][rel])
+            else:
+                _write(fixture, "installed", rel, restored)
         count += 1
         if fault == f"after_rollback:{count}":
             raise SimulatedCrash("Simulated interruption during rollback.")
@@ -748,16 +779,25 @@ def execute(fixture, plan, *, fault=None):
                 expected = row["old"]
                 if (None if current is None else _sha(current)) != expected:
                     raise TransactionBlocked("Installed fixture changed during update.")
-                staged = _read(fixture, "transaction", "stage/" + rel)
-                if _sha(staged) != row["new"]:
-                    raise TransactionBlocked("Staged fixture payload changed.")
-                _write(fixture, "installed", rel, staged)
+                if row["action"]=="delete":
+                    path=_target(fixture,"installed",rel)
+                    path.unlink()
+                    _fsync_directory(path.parent)
+                else:
+                    staged = _read(fixture, "transaction", "stage/" + rel)
+                    if _sha(staged) != row["new"]:
+                        raise TransactionBlocked("Staged fixture payload changed.")
+                    _write(fixture, "installed", rel, staged)
                 journal["progress"] = i
                 _save_journal(fixture, journal)
                 if fault == f"after_replace:{i}":
                     raise SimulatedCrash("Simulated interrupted replacement.")
             if fault == "after_all_files":
                 raise SimulatedCrash("Simulated interruption before inventory commit.")
+            _check_live(fixture,body["after"])
+            for row in body["rows"]:
+                if row["action"]=="delete" and _read(fixture,"installed",row["path"],optional=True) is not None:
+                    raise TransactionBlocked("Removed file reappeared.")
             _save_inventory(fixture, body["after"])
             if fault == "after_inventory":
                 raise SimulatedCrash("Simulated interruption during commit.")

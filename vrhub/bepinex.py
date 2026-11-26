@@ -308,7 +308,8 @@ def uninstall(recipe_id):
             saved = target(backup, "user-modified/" + name)
             saved.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(paths[name], saved)
-        snapshots = {name: p.read_bytes() if p.is_file() else None for name, p in paths.items()}
+        snapshots = {name: (p.read_bytes(), stat.S_IMODE(p.stat().st_mode)) if p.is_file() else None
+                     for name, p in paths.items()}
         restored = []
         try:
             for name, path in paths.items():
@@ -329,7 +330,9 @@ def uninstall(recipe_id):
                 if data is None:
                     paths[name].unlink(missing_ok=True)
                 else:
-                    paths[name].write_bytes(data)
+                    content, mode = data
+                    paths[name].write_bytes(content)
+                    paths[name].chmod(mode)
             raise
         return list(paths.values())
 
