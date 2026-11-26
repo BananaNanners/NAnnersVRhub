@@ -242,6 +242,109 @@ class FatekeeperCommitTests(unittest.TestCase):
         window._run.assert_not_called()
         self.assertEqual(self.config.read_bytes(), b"new configuration")
 
+    def test_production_storage_changed_during_noop_preflight(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        records = auth._mount_records()
+        changed = [(m, "0:999", r, f, s) if self.prefix.is_relative_to(m)
+                   else (m, d, r, f, s) for m, d, r, f, s in records]
+        no = PreparedInstall(self.prefix, profile_safety._snapshot(self.injector),
+                             profile_safety._snapshot(self.profile), hub._load_state(path=state), {})
+        current = [records]
+        def prepare(*args, **kwargs):
+            current[0] = changed
+            return no
+        before = state.read_bytes(), self.config.read_bytes()
+        with patch.object(auth, "_mount_records", side_effect=lambda: current[0]), \
+                patch("vrhub.fatekeeper_install.prepare_reviewed_install", side_effect=prepare):
+            with self.assertRaisesRegex(RuntimeError, "storage identity changed"):
+                transaction.install_reviewed("review")
+        self.assertFalse(journal.exists())
+        self.assertFalse(authority.exists())
+        self.assertEqual((state.read_bytes(), self.config.read_bytes()), before)
+
+    def test_production_mountinfo_malformed_refused(self):
+        from unittest.mock import mock_open
+        from vrhub import fatekeeper_authorization as auth
+        for raw in ("garbage", "1 2 invalid / / rw - tmpfs tmpfs rw", ""):
+            with self.subTest(raw=raw), patch.object(auth, "open", mock_open(read_data=raw), create=True):
+                with self.assertRaisesRegex(RuntimeError, "Cannot verify production mount topology"):
+                    auth._mount_records()
+
+    def test_production_storage_nested_mount_rejected_before_provision(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        records = auth._mount_records()
+        for target in (self.prefix, self.profile, state.parent, authority):
+            with self.subTest(target=target), patch.object(auth, "_mount_records",
+                    return_value=records + [(target, "0:99", "/", "tmpfs", "tmpfs")]):
+                with self.assertRaisesRegex(RuntimeError, "Unexpected mount"):
+                    transaction.install_reviewed("review")
+                self.assertFalse(journal.exists())
+                self.assertFalse(authority.exists())
+                self.assertEqual(self.config.read_bytes(), b"old configuration")
+
+    def test_production_storage_changed_backing_mount_rejects_recovery(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        approved = transaction.review_live_recovery()
+        records = auth._mount_records()
+        # Alter the backing device identity without touching actual mounts.
+        changed = [(m, "0:999", r, f, s) if self.prefix.is_relative_to(m)
+                   else (m, d, r, f, s) for m, d, r, f, s in records]
+        before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        with patch.object(auth, "_mount_records", return_value=changed):
+            with self.assertRaisesRegex(RuntimeError, "provenance|identity"):
+                transaction.recover_live(approved_review=approved)
+        self.assertEqual({p: p.read_bytes() for p in before}, before)
+
+    def test_production_storage_replaced_ancestor_rejected(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        transaction.install_reviewed("review")
+        approved = transaction.review_live_recovery()
+        # Preserve the actual authority directory inode but replace its parent.
+        parent = authority.parent
+        retained = parent.with_name("retained-share")
+        parent.rename(retained)
+        parent.mkdir()
+        (retained / authority.name).rename(authority)
+        self.assertEqual(auth._directory(authority, authority), approved.authority_identity)
+        before = state.read_bytes(), self.config.read_bytes()
+        with self.assertRaisesRegex(RuntimeError, "provenance|identity"):
+            transaction.recover_live(approved_review=approved)
+        self.assertEqual((state.read_bytes(), self.config.read_bytes()), before)
+
+    def test_production_storage_ordinary_ancestor_mount_supported(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        records = auth._mount_records()
+        with patch.object(auth, "_mount_records", return_value=records +
+                          [(self.root, "0:99", "/subvol", "btrfs", "/dev/test")]):
+            transaction.install_reviewed("review")
+            transaction.recover_live(approved_review=transaction.review_live_recovery())
+        self.assertEqual(self.config.read_bytes(), b"old configuration")
+
+    def test_production_storage_ambiguous_mount_rejected(self):
+        from vrhub import fatekeeper_authorization as auth
+        state, journal, authority = self.production_fixture()
+        records = auth._mount_records()
+        with patch.object(auth, "_mount_records", return_value=records +
+                          [(self.root, "0:98", "/", "tmpfs", "tmpfs"),
+                           (self.root, "0:99", "/", "tmpfs", "tmpfs")]):
+            with self.assertRaisesRegex(RuntimeError, "Ambiguous production mount"):
+                transaction.install_reviewed("review")
+        self.assertFalse(journal.exists())
+
+    def test_production_mountinfo_decodes_escaped_paths(self):
+        from unittest.mock import mock_open
+        from vrhub import fatekeeper_authorization as auth
+        line = r"20 1 0:99 /sub\040vol /mnt/game\040library rw - btrfs /dev/test rw" + "\n"
+        with patch.object(auth, "open", mock_open(read_data=line), create=True):
+            self.assertEqual(auth._mount_records(),
+                [(Path("/mnt/game library"), "0:99", "/sub vol", "btrfs", "/dev/test")])
+
     def test_production_noop_legacy_creates_no_authority(self):
         state, journal, authority = self.production_fixture()
         self.production_noop(state)

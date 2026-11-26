@@ -155,6 +155,7 @@ class ProductionScope:
     identity: dict
     authority: Path
     authority_identity: tuple
+    storage_identity: dict
 
 
 def _production_authority_path(destination):
@@ -168,6 +169,63 @@ def _production_authority_path(destination):
             or destination.state.is_relative_to(authority)):
         raise RuntimeError('Unsafe production authority storage.')
     return authority
+
+
+def _mount_records():
+    """Read Linux mount topology, decoding mountinfo's octal escapes."""
+    def decode(value):
+        return re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), value)
+    records = []
+    with open('/proc/self/mountinfo', encoding='utf-8') as stream:
+        for line in stream:
+            try:
+                left, right = line.rstrip('\n').split(' - ', 1)
+                fields, fs = left.split(), right.split()
+                mount = Path(decode(fields[4]))
+                if not mount.is_absolute() or not re.fullmatch(r'[0-9]+:[0-9]+', fields[2]):
+                    raise ValueError('invalid mount entry')
+                records.append((mount, fields[2], decode(fields[3]), fs[0], decode(fs[1])))
+            except (ValueError, IndexError) as exc:
+                raise RuntimeError('Cannot verify production mount topology.') from exc
+    if not records:
+        raise RuntimeError('Cannot verify production mount topology.')
+    return records
+
+
+def production_storage_identity(destination, authority):
+    """Bind stable ancestors and backing mounts, not boot-local mount IDs.
+
+    The prefix, state parent and authority parent must exist. Dependency
+    roots can legitimately be created or removed by the transaction.
+    Refuse nested mounts anywhere in the protected trees, including
+    same-device bind mounts. Separate ordinary library/home mounts above
+    those trees are supported.
+    """
+    anchors = (destination.prefix, destination.state.parent, authority.parent)
+    protected = (destination.prefix, destination.state.parent, authority)
+    mounts = _mount_records()
+    for mount, *_ in mounts:
+        if any(mount.is_relative_to(root) for root in protected):
+            raise RuntimeError('Unexpected mount inside production storage; manual review required.')
+    result = {}
+    for anchor in anchors:
+        if not anchor.is_absolute() or anchor.resolve() != anchor:
+            raise RuntimeError('Unsafe production storage ancestor.')
+        for path in (anchor, *anchor.parents):
+            info = path.lstat()
+            if not stat.S_ISDIR(info.st_mode):
+                raise RuntimeError('Unsafe production storage ancestor.')
+            candidates = [m for m in mounts if path.is_relative_to(m[0])]
+            if not candidates:
+                raise RuntimeError('Cannot verify production mount topology.')
+            depth = max(len(m[0].parts) for m in candidates)
+            nearest = [m for m in candidates if len(m[0].parts) == depth]
+            if len(nearest) != 1:
+                raise RuntimeError('Ambiguous production mount topology.')
+            mount, device, root, fs, source = nearest[0]
+            result[str(path)] = [info.st_dev, info.st_ino, str(mount),
+                                 device, root, fs, source]
+    return result
 
 
 def _refuse_atomic_residue(path):
@@ -188,6 +246,7 @@ def validate_production_atomic_evidence(destination, targets=()):
     authority = _production_authority_path(destination)
     if authority.exists() or authority.is_symlink():
         _private_parent(authority)
+    production_storage_identity(destination, authority)
     profile_safety._safe_destination(destination.journal_dir, destination.root)
     ledger = authority / (sha256(str(destination.state).encode()).hexdigest() + '.json')
     for path in (ledger, destination.journal_dir / 'fk4-journal.json', destination.state, *targets):
@@ -249,6 +308,7 @@ def production_authority(destination, *, provision=False):
         raise RuntimeError('Explicit live Fatekeeper authorization is required.')
     authority = _production_authority_path(destination)
     parent = authority.parent
+    storage_identity = production_storage_identity(destination, authority)
     if provision and not authority.exists() and not authority.is_symlink():
         authority.mkdir(mode=0o700)
         tx._sync(parent)
@@ -264,7 +324,8 @@ def production_authority(destination, *, provision=False):
             raise RuntimeError('Unsafe production transaction evidence.')
     return ProductionScope(destination.root, destination.prefix, destination.state,
                            destination.injector, destination.profile, destination.journal_dir,
-                           tx._identity(destination), authority, _directory(authority, authority))
+                           tx._identity(destination), authority, _directory(authority, authority),
+                           storage_identity)
 
 
 def _assert_scope(scope):
