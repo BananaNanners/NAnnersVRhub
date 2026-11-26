@@ -32,3 +32,72 @@ not proof of running service. Previous preview PID 20755 absent before launch.
 Stable Hub state unchanged, production gate closed. Original manifest retained.
 
 Acceptance manifest SHA-256: 3aa54c7d5eafc11d1a2f6445b552e9986d971cacdda2064641e4a2624df48c52.
+
+## A6.7-B — Shared capability inventory and preview policy
+
+Baseline a9d8d5ed5738871c906d5db069f1af9d2b935ac5.
+The immutable capability inventory describes existing routes, not permission,
+readiness, ownership, upstream compatibility or gameplay. Unknown games default
+to unsupported. It does not yet drive shared maintenance presentation (C).
+
+I = implemented; R = restricted; N = unsupported; E = externally managed.
+An implemented route still requires its existing handler guards.
+
+| Game | version_check | install_review | install | integrity | recognition | repair | update | original_restore | latest_rollback | persistent_recovery |
+|---|---|---|---|---|---|---|---|---|---|---|
+| fatekeeper | I | I | R | I | I | R | R | N | R | R |
+| hogwarts-legacy | I | I | R | R | N | N | R | R | N | N |
+| subnautica | I | I | I | I | R | N | N | I | N | N |
+| valheim | I | I | I | I | R | N | N | I | N | N |
+| elden-ring | I | I | R | I | R | N | N | I | N | N |
+| ready-or-not | I | I | I | R | N | N | N | I | N | N |
+| cyberpunk-2077 | I | I | I | I | R | N | N | I | N | N |
+| doom-2016-gog | I | R | R | R | R | N | N | R | N | N |
+| skyrim-vr-mgo | I | E | E | R | R | E | E | E | E | E |
+
+The shared ReadOnlyPreview preserves ordinary availability checks, permits manual
+update refresh, source links, archive scan/inspection, install review, integrity
+and compatibility checks, and isolated archive-folder preferences. It disables
+transfers, installation, removal, rollback, mark-current, Nexus credential edits,
+game launch dispatcher, development tools and Hub application update. Preview
+startup omits automatic updates/setup scans; manual update worker skips Nexus
+name-cache writes. Ordinary Hub startup and update worker defaults are unchanged.
+Policy is UI review protection, not a backend security boundary or a general
+read-only filesystem sandbox. Preview preferences/scan results may be persisted
+in isolated storage. No new production authorization or game recipe changes.
+
+### Validation
+
+Initial dedicated 3 passed (0.697s); targeted 124 passed (7.838s).
+Final dedicated 4 passed (1.100s, process 27405), including blocked duplicate
+refresh and navigation through all nine games during a held update worker,
+simulated scan completion, restrictions after refresh, and suppressed metadata
+writes. Network results and scan completion are mocked in this asynchronous test.
+Full unittest discovery: 1755 passed (77.560s, process 27588, exit 0),
+no failures/errors/skips; 11 KHARVOX BridgeTests included using a private copy
+verified against the pinned manifest and package inventory. Offscreen Qt and
+isolated state/config/cache/data; not a new live gameplay test.
+Earlier actual read-only lookup recorded all nine recipes and unchanged stable
+and isolated state. Subnautica and Valheim current, Hogwarts one update and one
+unknown, Fatekeeper pinned backend verified and two unknown, DOOM unknown,
+Cyberpunk and Ready or Not no Nexus key, Elden Ring and Skyrim no update rows.
+Authenticated Nexus lookup remains unverified; unknown versions are not current.
+
+### Preservation and acceptance gate
+
+20 prior Dev5G manifests checked against committed hashes; 83 entries verified.
+Both A5 fixture inventories (28 entries each) and original checksum sets matched;
+A5.6 rollback report matched committed digest. Exact regular-file membership,
+hashes and modes of 11 injector and 110 Fatekeeper profile files matched E8.
+Stable state matched A6.7-B baseline before/after regression:
+8ee962ac73ca851b5efb6d3091eafd5bfe5289f638af38739344ec474dd7fb90.
+Older E8 state differs due to documented F3 metadata refresh; no claim of
+unchanged state since E8. Not a comprehensive audit of all game files, saves,
+prefixes or symlinks. Production gate independently checked closed.
+Existing A6.7-A preview PID 25571 retained; running checkpoint 0c4a078,
+not the new B code. Interactive KDE acceptance remains pending; replace safely
+per AGENTS.md only after verifying process/window and idle state. No release,
+push, live install or recovery. A6.7-C/D/E and A6.6 readiness remain pending.
+
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7B-evidence-MbSbDx.
+Manifest SHA-256: 789b490c51999ec77dbea8a10b64fa4c825edc3eb5832725ab25c0f542628ffa.

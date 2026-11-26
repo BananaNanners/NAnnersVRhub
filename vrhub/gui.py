@@ -457,11 +457,16 @@ class UpdateWorker(QThread):
     """Checks GitHub in the background so the window never freezes."""
     done = Signal(object)
 
+    def __init__(self, *, refresh_names=True):
+        super().__init__()
+        self.refresh_names = refresh_names
+
     def run(self):
         try:
             recipes = hub.load_recipes()
-            for r in recipes.values():  # fill in real mod names (only if a Nexus key is set)
-                hub.refresh_component_names(r)
+            if self.refresh_names:
+                for r in recipes.values():
+                    hub.refresh_component_names(r)
             res = updates.check_all(recipes, hub.state())
         except Exception:  # never let a network hiccup crash the app
             res = {}
@@ -579,7 +584,7 @@ def preferred_launcher_size(available_width: int, available_height: int) -> tupl
 
 
 class HubWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, *, read_only_preview=False):
         super().__init__()
         self.setWindowTitle(f"NAnnersVRhub {__version__}")
         screen = QApplication.primaryScreen()
@@ -598,7 +603,8 @@ class HubWindow(QMainWindow):
         self.scan_worker: ScanWorker | None = None
         self.scan_report: dict | None = None
         self._closing = False
-        self.allow_guided_installs = True
+        self.read_only_preview = read_only_preview
+        self.allow_guided_installs = not read_only_preview
         self.development_tools_enabled = False
         tools_menu = self.menuBar().addMenu("Tools")
         self.development_tools_action = QAction("Enable development tools", self)
@@ -685,6 +691,7 @@ class HubWindow(QMainWindow):
         self.mod_updates = ModUpdatesPage()
         self.mod_updates.refresh_requested.connect(self.check_updates)
         self.downloads = GuidedDownloadsPage()
+        self.downloads.allow_transfers = not read_only_preview
         self.downloads.inspect_requested.connect(self.inspect_planned_archive)
         self.downloads.install_review_requested.connect(self.review_requested_install)
         self.downloads.recognition_changed.connect(self.refresh_compatibility)
@@ -1069,9 +1076,10 @@ class HubWindow(QMainWindow):
         self.scan_timer.timeout.connect(self.refresh_system_live)
         self.scan_timer.start()
         self.refresh()
-        self.check_updates()  # quietly, in the background
-        QTimer.singleShot(0, self.scan_setup)
-        QTimer.singleShot(0, self.hub_updates.startup)
+        if not self.read_only_preview:
+            self.check_updates()  # quietly, in the background
+            QTimer.singleShot(0, self.scan_setup)
+            QTimer.singleShot(0, self.hub_updates.startup)
 
     def update_hub_button(self):
         controller = self.hub_updates
@@ -1543,7 +1551,7 @@ class HubWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             return
         self.mod_updates.set_checking(True)
-        self.worker = UpdateWorker()
+        self.worker = UpdateWorker(refresh_names=not self.read_only_preview)
         self.worker.done.connect(self._updates_done)
         self.worker.finished.connect(self.close_when_idle)
         self.worker.start()
@@ -1712,7 +1720,7 @@ class HubWindow(QMainWindow):
                     plan, self,
                     install_action=lambda asset: fatekeeper_commit.install_reviewed(
                         plan, _roots(), verified_backend=asset),
-                    install_authorized=fatekeeper_commit.live_install_authorized,
+                    install_authorized=lambda: not getattr(self, "read_only_preview", False) and fatekeeper_commit.live_install_authorized(),
                 )
                 dialog.exec()
                 if dialog.install_attempted:
