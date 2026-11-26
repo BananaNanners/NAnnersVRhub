@@ -368,3 +368,9 @@ New shared preview regression uses deterministic connection telemetry to check i
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7E1-full-CCEOMC.
 Manifest SHA-256: a9940b3e2fcd34c7a8cfce85b3a004ef788afd68f7293722d701679ba1c74667.
 Prior accepted preview runtime 32c55a9 PID 27614 requires normal close before replacement. Desktop correction acceptance pending; no push or release. No gameplay or controller verification inferred from headset connection.
+
+### A6.7-E final player acceptance
+Initial consolidated KDE review 21/22 at runtime 32c55a9, PID 27614: nine game checks and 12 shared checks passed; dashboard pending. Previous preview closed normally, process absent and lock released before corrected launch. Player reported E1 dashboard retest 6/6, no observations, runtime 18dfb4c1b294b544c4e258ce1ae5c67c16d8fe6f PID 35688. Consolidated acceptance 22/22 (prior checks retained plus corrected dashboard retest, not a fresh all-game repeat). Corrected full regression 1914/1914 exit 0. Process and lock verified; visible window user-confirmed, independent compositor identity not established. Historical audit 47 manifests/290 entries, ERVR 20, nested D1, two reboot fixtures, 121 Fatekeeper files, four original archives and four copies. Production pins, transaction engine and stable state unchanged; gate closed.
+Evidence: /home/bananananers/NAnnersVRhub-recovery/Dev5G-A6.7E-acceptance-vKZNvf.
+Acceptance manifest SHA-256: ee721e9d5c8aed10bdff3a88e2a14e6b2a14d445928ec5be95069335924fe2bb.
+A6.7-E accepted. A6.6 final production readiness remains pending; existing gameplay, update compatibility and transaction authorization limitations remain. Documentation-only acceptance; no production writes, push or release.
