@@ -205,6 +205,199 @@ class FatekeeperRehearsalTests(unittest.TestCase):
             self.assertEqual((injector / "UEVRInjector.exe").read_bytes(),
                              b"injector")
 
+    def managed_repair_fixture(self):
+        from vrhub import fatekeeper_commit as tx, profile_safety
+        recipe = hub.load_recipes()["fatekeeper"]
+        root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="nanners-a6-", dir=Path.home())))
+        prefix = root / "pfx"
+        injector = prefix / "drive_c/uevr"
+        profile = prefix / "drive_c/users/steamuser/AppData" / recipe["profile"]["dir"]
+        prefix.mkdir()
+        state = root / "hub/state.json"
+        state.parent.mkdir()
+        state.write_bytes(b'{"other":{"files":[]}}  ')
+        home = root / "home"
+        (home / ".local/share").mkdir(parents=True)
+        self.enterContext(patch("pathlib.Path.home", return_value=home))
+        self.enterContext(patch.multiple(hub, _pfx=lambda *_: prefix, _uevr_dir=lambda *_: injector,
+                             profile_dir=lambda *_: profile, state_file=lambda: state))
+        stopped = self.enterContext(patch.object(profile_safety, "_assert_game_stopped"))
+        self.enterContext(patch.object(tx, "live_install_authorized", return_value=True))
+        self.enterContext(patch.multiple(fatekeeper_install, FATEKEEPER_BACKEND_SIZE=len(self.asset),
+                               FATEKEEPER_BACKEND_SHA256=sha256(self.asset).hexdigest()))
+        tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        backend = injector / "UEVRBackend.dll"
+        backend.unlink()
+        (profile / "config.txt").write_bytes(b"custom settings")
+        (profile / "extra.ini").write_bytes(b"manual file")
+        return tx, recipe, root, prefix, state, backend, stopped
+
+    @staticmethod
+    def maintenance_inventory(folder):
+        return {str(p.relative_to(folder)): (p.lstat().st_mode, p.read_bytes() if p.is_file() else None)
+                for p in folder.rglob("*")}
+
+    def test_managed_production_repair_interrupted_and_repeated(self):
+        from vrhub import fatekeeper_authorization as auth
+        tx, recipe, root, prefix, state, backend, stopped = self.managed_repair_fixture()
+        dest = tx._live_destination(None)
+        journal = dest.journal_dir / "fk4-journal.json"
+        prior = journal.read_bytes()
+        old_backup = dest.journal_dir / json.loads(prior)["backup"]
+        evidence = self.maintenance_inventory(old_backup)
+        before = self.maintenance_inventory(prefix)
+        original_state = state.read_bytes()
+        plan = review.build_plan(recipe, self.archives)
+        write = tx._write
+        def interrupt(path, data, mode=0o600):
+            write(path, data, mode)
+            if path == backend:
+                stopped.side_effect = RuntimeError("simulated running game")
+        with patch.object(tx, "_write", side_effect=interrupt):
+            with self.assertRaisesRegex(RuntimeError, "simulated running game"):
+                tx.install_reviewed(plan, verified_backend=self.asset)
+        stopped.side_effect = None
+        self.assertEqual(json.loads(journal.read_bytes())["phase"], "applying")
+        self.assertEqual(state.read_bytes(), original_state)
+        self.assertEqual(backend.read_bytes(), self.asset)
+        pending = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "Recover|recover|pending"):
+            tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        self.assertEqual(self.maintenance_inventory(root), pending)
+        tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertEqual(self.maintenance_inventory(prefix), before)
+        self.assertEqual(state.read_bytes(), original_state)
+        self.assertEqual(self.maintenance_inventory(old_backup), evidence)
+        tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        self.assertEqual(backend.read_bytes(), self.asset)
+        self.assertEqual(auth.production_journal(auth.production_authority(dest))[1]["phase"], "committed")
+        tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertEqual(self.maintenance_inventory(prefix), before)
+        self.assertEqual(state.read_bytes(), original_state)
+        self.assertEqual(self.maintenance_inventory(old_backup), evidence)
+        self.assertEqual(len(list(dest.journal_dir.glob("history-*"))), 2)
+
+    def test_managed_production_repair_corrupt_previous_backup(self):
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
+        dest = tx._live_destination(None)
+        journal = dest.journal_dir / "fk4-journal.json"
+        record = json.loads(journal.read_bytes())
+        backup = dest.journal_dir / record["backup"]
+        # The original state existed, so its backup is a real prior-byte row.
+        (backup / str(len(record["rows"]) - 1)).write_bytes(b"corrupted prior state")
+        before = self.maintenance_inventory(prefix)
+        state_before, journal_before = state.read_bytes(), journal.read_bytes()
+        from vrhub import fatekeeper_authorization as auth
+        ledger = auth._ledger_path(auth.production_authority(dest))
+        ledger_before = ledger.read_bytes()
+        with self.assertRaisesRegex(RuntimeError, "Previous Fatekeeper backup verification failed"):
+            tx.install_reviewed(review.build_plan(recipe, self.archives), verified_backend=self.asset)
+        self.assertEqual(self.maintenance_inventory(prefix), before)
+        self.assertEqual((state.read_bytes(), journal.read_bytes(), ledger.read_bytes()),
+                         (state_before, journal_before, ledger_before))
+        self.assertFalse(backend.exists())
+        self.assertEqual((backup / str(len(record["rows"]) - 1)).read_bytes(), b"corrupted prior state")
+
+    def test_managed_production_repair_stale_review(self):
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture()
+        plan = review.build_plan(recipe, self.archives)
+        (prefix / "drive_c/uevr/UEVRInjector.exe").write_bytes(b"changed after review")
+        before = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "changed"):
+            tx.install_reviewed(plan, verified_backend=self.asset)
+        self.assertEqual(self.maintenance_inventory(root), before)
+        self.assertFalse(backend.exists())
+
+    def test_managed_production_repair_cycle(self):
+        from vrhub import fatekeeper_commit as tx, fatekeeper_authorization as auth
+        from vrhub import profile_safety
+        import stat
+        recipe = hub.load_recipes()["fatekeeper"]
+        with zipfile.ZipFile(self.archives[1], "a") as archive:
+            for name in review.FATEKEEPER_LOCAL_PROFILE_FILES - {"config.txt"}:
+                archive.writestr(name, b"packaged defaults")
+        recipe["archive_pins"]["profile"] = sha256(self.archives[1].read_bytes()).hexdigest()
+        root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="nanners-a6-", dir=Path.home())))
+        prefix = root / "pfx"
+        injector = prefix / "drive_c/uevr"
+        profile = prefix / "drive_c/users/steamuser/AppData" / recipe["profile"]["dir"]
+        prefix.mkdir()
+        state = root / "hub/state.json"
+        state.parent.mkdir()
+        state.write_bytes(b'{"other":{"files":[]}}  ')
+        home = root / "home"
+        (home / ".local/share").mkdir(parents=True)
+        save = prefix / "unrelated-save.bin"
+        save.write_bytes(b"player save")
+        def inventory(folder):
+            return {str(p.relative_to(folder)): (p.lstat().st_mode, p.read_bytes() if p.is_file() else None)
+                    for p in folder.rglob("*")}
+        with patch("pathlib.Path.home", return_value=home), \
+                patch.multiple(hub, _pfx=lambda *_: prefix, _uevr_dir=lambda *_: injector,
+                               profile_dir=lambda *_: profile, state_file=lambda: state), \
+                patch.object(profile_safety, "_assert_game_stopped"), \
+                patch.object(tx, "live_install_authorized", return_value=True), \
+                patch.multiple(fatekeeper_install, FATEKEEPER_BACKEND_SIZE=len(self.asset),
+                               FATEKEEPER_BACKEND_SHA256=sha256(self.asset).hexdigest()):
+            fresh = review.build_plan(recipe, self.archives)
+            self.assertTrue(all(a == "Install" for a, _, _ in fresh.file_decisions))
+            tx.install_reviewed(fresh, verified_backend=self.asset)
+            destination = tx._live_destination(None)
+            self.assertTrue(destination.root.is_relative_to(root))
+            journal = destination.journal_dir / "fk4-journal.json"
+            original_journal = journal.read_bytes()
+            first_backup = destination.journal_dir / json.loads(original_journal)["backup"]
+            first_evidence = inventory(first_backup)
+            initial_state = state.read_bytes()
+            initial = hub._load_state(path=state)
+            backend = injector / "UEVRBackend.dll"
+            plugin = profile / "plugins/test.dll"
+            preserved = [profile / name for name in review.FATEKEEPER_LOCAL_PROFILE_FILES]
+            for path in preserved:
+                path.write_bytes(b"player settings")
+                path.chmod(0o640)
+            extra = profile / "extra.ini"
+            extra.write_bytes(b"manual addition")
+            backend.unlink()
+            plugin.write_bytes(b"damaged plugin")
+            plugin.chmod(0o640)
+            before = inventory(prefix)
+            repaired = review.build_plan(recipe, self.archives)
+            self.assertIn(("Install", "Injector", "UEVRBackend.dll"), repaired.file_decisions)
+            self.assertIn(("Replace", "Profile", "plugins/test.dll"), repaired.file_decisions)
+            for path in preserved + [extra]:
+                self.assertIn(("Preserve", "Profile", path.relative_to(profile).as_posix()), repaired.file_decisions)
+            self.assertEqual(set(tx.install_reviewed(repaired, verified_backend=self.asset)), {backend, plugin})
+            self.assertEqual(backend.read_bytes(), self.asset)
+            self.assertEqual(plugin.read_bytes(), b"plugin")
+            self.assertEqual(stat.S_IMODE(plugin.stat().st_mode), 0o640)
+            records = hub._load_state(path=state)
+            self.assertEqual(records["other"], initial["other"])
+            for key in ("fatekeeper", "fatekeeper:profile"):
+                self.assertEqual(set(records[key]["files"]), set(initial[key]["files"]))
+            self.assertNotIn(str(extra), records["fatekeeper:profile"]["files"])
+            self.assertEqual(inventory(first_backup), first_evidence)
+            history, = destination.journal_dir.glob("history-*")
+            self.assertEqual((history / "fk4-journal.json").read_bytes(), original_journal)
+            self.assertEqual(inventory(history / first_backup.name), first_evidence)
+            for path in preserved + [extra, save]:
+                self.assertEqual(inventory(prefix)[str(path.relative_to(prefix))], before[str(path.relative_to(prefix))])
+            noop = review.build_plan(recipe, self.archives)
+            self.assertTrue(all(a == "Preserve" for a, _, _ in noop.file_decisions))
+            snapshot = inventory(root)
+            with patch.object(tx, "_commit", side_effect=AssertionError("no-op opened transaction")), \
+                    patch.object(rehearsal, "build_payload", wraps=rehearsal.build_payload) as payload:
+                self.assertEqual(tx.install_reviewed(noop, verified_backend=self.asset), [])
+                self.assertEqual(payload.call_args.args[1], self.asset)
+            self.assertEqual(inventory(root), snapshot)
+            tx.recover_live(approved_review=tx.review_live_recovery())
+            self.assertEqual(inventory(prefix), before)
+            self.assertEqual(state.read_bytes(), initial_state)
+            self.assertEqual(inventory(first_backup), first_evidence)
+            self.assertEqual((history / "fk4-journal.json").read_bytes(), original_journal)
+            scope = auth.production_authority(destination)
+            self.assertEqual(auth.production_journal(scope)[1]["phase"], "rolled-back")
+
     def test_smart_preservation_fresh_repair_recovery_and_noop(self):
         from vrhub import fatekeeper_commit
 
