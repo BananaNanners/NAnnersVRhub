@@ -11,7 +11,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import __version__, runtime, wivrn_status, steamvr_status
+from . import __version__, runtime, wivrn_status, steamvr_status, launch_environment
 from .display_time import local_time
 from .steam import STEAM_ROOTS
 
@@ -47,7 +47,7 @@ def _process_names(proc: Path = Path("/proc")) -> set[str] | None:
 
 def _adapter_paths() -> tuple[list[Path], str]:
     """Configured OpenVR paths plus a small inventory of known host locations."""
-    cfg = Path(os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config"))
+    cfg = Path(launch_environment.host_config_home() or str(Path.home() / ".config"))
     override = os.environ.get("VR_OVERRIDE")
     if override:
         return [Path(override).expanduser()], "VR_OVERRIDE"

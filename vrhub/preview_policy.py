@@ -29,7 +29,8 @@ class ReadOnlyPreview(HubWindow):
                    d.inspect, d.integrity_button, d.set_global, d.set_game,
                    d.clear_game, d.reset_global, d.manual_review_button,
                    d.comparison_toggle, d.safety_button, self.mod_updates.refresh_button,
-                   self.compat_refresh_btn, self.compat_copy_btn}
+                   self.compat_refresh_btn, self.compat_copy_btn,
+                   self.scan_btn, self.copy_scan_btn}
         for button in self.mod_updates.findChildren(QPushButton) + d.table.findChildren(QPushButton):
             if button.objectName() == "modSourceButton" or button.text() == "Open source":
                 allowed.add(button)
@@ -58,8 +59,22 @@ class ReadOnlyPreview(HubWindow):
     def uninstall_profile(self):
         return
 
-    def scan_setup(self, *args, **kwargs):
-        # System setup scan is outside this preview's review-only scope.
+    def refresh_system_live(self):
+        # Bootstrap on first dashboard visit; thereafter use the existing
+        # five-second read-only refresh. No runtime is started or selected.
+        if self.auto_live.isChecked():
+            if self.scan_report is None:
+                if self.tabs.currentIndex() == 0:
+                    self.scan_setup()
+            else:
+                super().refresh_system_live()
+
+    def show_system_report(self, report):
+        super().show_system_report(report)
+        self.save_scan_btn.setEnabled(False)
+
+    def save_system_report(self):
+        # Arbitrary report file writes remain outside preview scope.
         return
 
     def set_development_tools_enabled(self, checked):

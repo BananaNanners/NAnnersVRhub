@@ -99,3 +99,72 @@ class SharedPreviewPolicyTests(unittest.TestCase):
                 release.set()
                 if win.worker:
                     win.worker.wait(6000)
+
+    def test_system_dashboard_readonly_scan_and_refresh(self):
+        from copy import deepcopy
+        from PySide6.QtCore import QCoreApplication, QEvent
+        from vrhub import system_scan
+        # The actual scanner contract is covered separately; use deterministic
+        # telemetry here to test the shared preview, not a historical subclass.
+        with patch.object(system_scan, "_process_names", return_value=set()):
+            sample = system_scan.scan()
+        sample["runtime"] = "WiVRn"
+        sample["live"].update(runtime_selected=True, server_running=True,
+                              headset_connected=True, activity="WiVRn CONNECTED",
+                              controllers_verified=False)
+        disconnected = deepcopy(sample)
+        disconnected["live"].update(headset_connected=False, activity="Idle")
+        with patch.object(system_scan, "scan", return_value=sample) as scan, \
+             patch.object(system_scan, "refresh_live", return_value=disconnected) as refresh, \
+             patch.object(gui.QFileDialog, "getSaveFileName") as save:
+            win = ReadOnlyPreview()
+            try:
+                win.show()
+                win.scan_timer.stop()
+                scan.assert_not_called()
+                win.tabs.setCurrentIndex(0)
+                for _ in range(300):
+                    QTest.qWait(10)
+                    if win.scan_report is not None and win.scan_worker is None:
+                        break
+                scan.assert_called_once()
+                self.assertIsNone(win.scan_worker)
+                self.assertEqual(win.headset_state.text(), "Headset: CONNECTED")
+                self.assertTrue(win.scan_btn.isEnabled())
+                self.assertTrue(win.copy_scan_btn.isEnabled())
+                self.assertFalse(win.save_scan_btn.isEnabled())
+                win.save_system_report()
+                save.assert_not_called()
+                win.refresh_system_live()
+                for _ in range(300):
+                    QTest.qWait(10)
+                    if win.scan_worker is None:
+                        break
+                refresh.assert_called_once()
+                self.assertEqual(win.headset_state.text(), "Headset: DISCONNECTED")
+                self.assertIn("Not tested", win.controllers_state.text())
+                win.auto_live.setChecked(False)
+                win.refresh_system_live()
+                refresh.assert_called_once()
+                win.scan_btn.click()
+                for _ in range(300):
+                    QTest.qWait(10)
+                    if win.scan_worker is None:
+                        break
+                self.assertEqual(scan.call_count, 2)
+                self.assertEqual(win.headset_state.text(), "Headset: CONNECTED")
+                win.apply_preview_policy()
+                self.assertTrue(win.scan_btn.isEnabled())
+                self.assertTrue(win.copy_scan_btn.isEnabled())
+                self.assertFalse(win.save_scan_btn.isEnabled())
+                self.assertFalse(win.allow_guided_installs)
+                self.assertFalse(win.downloads.allow_transfers)
+                self.assertFalse(win.hub_update_btn.isEnabled())
+            finally:
+                if win.scan_worker:
+                    win.scan_worker.wait(6000)
+                    self.app.processEvents()
+                win.close()
+                win.deleteLater()
+                QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+                self.app.processEvents()
