@@ -122,6 +122,9 @@ class InstalledIntegrityWorker(QThread):
                 from . import bepinex_recognition
                 result["bepinex_recognition"] = bepinex_recognition.recognize(
                     self.recipe, self.recognition_archives)
+                from . import bepinex_repair_review
+                result["bepinex_repair_review"] = bepinex_repair_review.from_evidence(
+                    self.recipe, result["bepinex_recognition"])
                 if self.cancel_flag.is_set():
                     self.cancelled.emit()
                     return
@@ -1738,6 +1741,21 @@ class GuidedDownloadsPage(QWidget):
         if isinstance(bep, dict) and self.recipe.get("id") in ("subnautica", "valheim"):
             from .bepinex_recognition import summary_text
             message = summary_text(bep) + " Historical record integrity (separate): " + message
+        repair = result.get("bepinex_repair_review")
+        if (isinstance(repair, dict) and self.recipe.get("id") in ("subnautica", "valheim")
+                and repair.get("game_id") == self.recipe.get("id")
+                and repair.get("write_authorized") is False):
+            counts = repair["counts"]
+            message += (" Repair review (read only): " + repair["status"] + ". "
+                        + ", ".join(f"{counts.get(action, 0)} {label}" for action, label in (
+                            ("Preserve", "preserve"), ("Proposed restore", "proposed restore"),
+                            ("Proposed replacement", "proposed replacement"),
+                            ("Manual review", "manual review"), ("Blocked", "blocked")))
+                        + ". No repair will be performed.")
+            if not repair["rows"] and repair["blockers"]:
+                message += " " + " ".join(repair["blockers"])
+        else:
+            repair = None
         self.integrity_status.setText(message + " No game-file writes performed.")
         self.recognition_changed.emit()
         self._update_review_action()
@@ -1753,6 +1771,24 @@ class GuidedDownloadsPage(QWidget):
                 lines.append("Known conflicting plugin: " + path)
             if len(conflicts) > 12:
                 lines.append(f"{len(conflicts)-12} additional known conflicts not displayed.")
+        if repair is not None and repair["rows"]:
+            lines.extend(("REPAIR REVIEW — NO FILES WILL BE CHANGED",
+                          "Sampled file evidence only; run Verify installed files again after changes.",
+                          "Files outside the pinned packages are left untouched, not inventoried.",
+                          "Matching recorded inventory is not repair permission."))
+            for blocker in repair["blockers"]:
+                lines.append("Blocked: " + blocker)
+            for path in repair["conflicts"]:
+                lines.append("Known conflict: " + path)
+            lines.append(f"Complete pinned inventory: {len(repair['rows'])} file(s)")
+            for row in repair["rows"]:
+                lines.extend((
+                    f"{row['action']} — {row['component']} / {row['path']}",
+                    "  " + row["reason"],
+                    "  Expected SHA-256: " + row["expected_sha256"],
+                    "  Sampled SHA-256: " + (row["actual_sha256"] or "Missing"),
+                ))
+            lines.append("END REPAIR REVIEW — historical integrity follows")
         if self.recognition_result is not None:
             for component in self.recognition_result.get("components", ()):
                 for name, action in component["issues"][:installed_integrity.MAX_ISSUES_PER_COMPONENT]:

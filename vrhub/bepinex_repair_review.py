@@ -5,12 +5,16 @@ from . import bepinex_recognition as recognition
 
 
 def review(recipe, archives, steam_roots=None):
+    return from_evidence(recipe, recognition.recognize(recipe, archives, steam_roots))
+
+
+def from_evidence(recipe, evidence):
+    """Render the same fresh recognition sample; no second filesystem scan."""
     result = dict(game_id=recipe.get("id"), status="Blocked", rows=(),
                   counts={}, blockers=(), conflicts=(), write_authorized=False,
                   ownership_established=False, gameplay_verified=False,
                   outside_inventory="Leave untouched; not inventoried or certified.",
                   detail="Review only. No files will be changed.")
-    evidence = recognition.recognize(recipe, archives, steam_roots)
     if evidence["status"] == "Unknown":
         return dict(result, blockers=(evidence["detail"],))
     blockers = []

@@ -250,3 +250,11 @@ Eleven new tests; targeted 75/75, full 1835/1835 (83.824s), process 61548 exit 0
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D2B-full-RYMiXX.
 Manifest SHA-256: 1b882f9f8faaa9836d0a143f1018993d68da9f1ec219643a6c61aacad8b3ee1a.
 Limitations: D2-A sampling and backup provenance restrictions remain. Review is not execution authority, compatibility evidence or a complete backup inventory. D2-C interface integration and D2-D desktop acceptance pending. No preview replacement, push or release.
+
+## D2-C — Existing Install / Update repair review
+Baseline b0be460bb2c905342a0e4fa829770ebbcd32cbd9. Existing Verify installed files worker derives read-only repair review from the same recognition sample; existing summary and details panel display counts, blockers, complete pinned inventory, proposed actions, reasons and hashes. No new controls, execution route, branding changes or pin promotion. Game switching and cancellation suppress stale results. Initial full regression 1839 tests, one failure (empty review unnecessarily expanded details); exit 1. Corrected presentation keeps empty-review blockers in summary and retains historical details behavior. Existing assertion unchanged.
+Corrected targeted 87/87; full 1839/1839 (81.447s), process 63027 exit 0. Three source/test hashes and stable state matched. Preservation audit: 30 historical manifests/149 entries, ERVR 20 entries, nested D1, two reboot fixtures, 121 Fatekeeper files. Gate closed.
+Original evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D2C-full-yu6ib1.
+Combined evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D2C-corrected-Ts6f6j.
+Manifest SHA-256: c4ad9b2cd3a97a3da1cd9b2dd7485f79968d48d3b99526be02cfdd8fca402e51.
+Limitations: offscreen GUI tests only; interactive KDE readability and acceptance pending D2-D. Read-only review is not repair authority; sampling and legacy backup provenance restrictions remain. No preview replacement, push or release.
