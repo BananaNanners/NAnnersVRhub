@@ -30,3 +30,21 @@ No interactive obsolete dependency reproduction or compositor confirmation
 claimed; automated disposable compatibility tests passed. Gate closed.
 A6.3-A manifest 31ffe82befe57d112cc1b0994462718a1363c508b3a32d70ccaf66a3a0ab838d.
 A6.3-B manifest 2bbe9df174b7435e44c2468a64506937be266accc4d72d2898b86a2b0570d751.
+
+## A6.3-C/D update interruption and final validation
+Two integrated tests exercise update interruption after payload and state
+publication, pending retry refusal, exact v1 restoration, subsequent update,
+historical evidence preservation, malformed/changed ZIP rejection and changed
+settings rejection. Initial stale-review test expected checksum error for a
+malformed ZIP; corrected and added structurally valid modified ZIP case.
+Two tests passed (2.860s), targeted 119 passed (27.233s), process 13681 exit 0.
+Full regression 1728 passed (67.831s), process 13774 exit 0, no skips/errors/
+failures; verified KHARVOX payload included. All nine prior Dev5G manifests
+and both A5 reboot fixtures reverified; stable state unchanged; gate closed.
+Accepted preview PID 13200 remained running during verification. Tests/docs
+only since A6.3-B5; no runtime or real release pin changes. Interruption is
+simulated active game, not power failure; synthetic updates not upstream
+compatibility proof. A6.3 complete; A6.4 artifact protection pending.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.3C-evidence-aGQlyL.
+
+A6.3-C/D manifest SHA-256: 2ff3ecbc773c31fbf5bfd5bc6d5db22e9e21a4ccf64e14b5b11ef4a9cc636a0c.

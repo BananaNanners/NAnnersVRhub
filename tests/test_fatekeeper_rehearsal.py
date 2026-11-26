@@ -379,6 +379,100 @@ class FatekeeperRehearsalTests(unittest.TestCase):
         recipe["archive_pins"] = old_pins
         self.assertEqual(installed_integrity.verify(recipe, state=json.loads(old_state))["status"], "Verified")
 
+    def test_managed_update_interrupted_after_payload_and_state(self):
+        from vrhub import fatekeeper_authorization as auth, installed_integrity
+        tx, recipe, root, prefix, state, backend, stopped = self.managed_repair_fixture(damage=False)
+        dest = tx._live_destination(None)
+        journal = dest.journal_dir / "fk4-journal.json"
+        old_pins = dict(recipe["archive_pins"])
+        old_state = state.read_bytes()
+        prior = journal.read_bytes()
+        backup = dest.journal_dir / json.loads(prior)["backup"]
+        evidence = self.maintenance_inventory(backup)
+        changed = dest.profile / "plugins/test.dll"
+        added = dest.profile / "plugins/new.dll"
+        changed.chmod(0o640)
+        (prefix / "save.bin").write_bytes(b"unrelated save")
+        before = self.maintenance_inventory(prefix)
+        v2 = root / "profile-v2.zip"
+        with zipfile.ZipFile(v2, "w") as archive:
+            archive.writestr("config.txt", b"new defaults")
+            archive.writestr("plugins/test.dll", b"plugin v2")
+            archive.writestr("plugins/new.dll", b"new plugin")
+        recipe["archive_pins"] = {**old_pins, "profile": sha256(v2.read_bytes()).hexdigest()}
+        archives = [self.archives[0], v2]
+        write = tx._write
+        for boundary in (changed, state):
+            with self.subTest(boundary=boundary.name):
+                plan = review.build_plan(recipe, archives)
+                def interrupt(path, data, mode=0o600):
+                    write(path, data, mode)
+                    if path == boundary:
+                        stopped.side_effect = RuntimeError("simulated running game")
+                with patch.object(tx, "_write", side_effect=interrupt):
+                    with self.assertRaisesRegex(RuntimeError, "simulated running game"):
+                        tx.install_reviewed(plan, verified_backend=self.asset)
+                stopped.side_effect = None
+                self.assertEqual(json.loads(journal.read_bytes())["phase"], "applying")
+                if boundary == state:
+                    self.assertEqual(json.loads(state.read_bytes())["fatekeeper:profile"]["archive_sha256"],
+                                     recipe["archive_pins"]["profile"])
+                else:
+                    self.assertEqual(state.read_bytes(), old_state)
+                pending = self.maintenance_inventory(root)
+                with self.assertRaisesRegex(RuntimeError, "Recover|recover|pending"):
+                    tx.install_reviewed(review.build_plan(recipe, archives), verified_backend=self.asset)
+                self.assertEqual(self.maintenance_inventory(root), pending)
+                tx.recover_live(approved_review=tx.review_live_recovery())
+                self.assertEqual(self.maintenance_inventory(prefix), before)
+                self.assertEqual(state.read_bytes(), old_state)
+                self.assertEqual(self.maintenance_inventory(backup), evidence)
+                self.assertEqual(auth.production_journal(auth.production_authority(dest))[1]["phase"], "rolled-back")
+                self.assertEqual(installed_integrity.verify({**recipe, "archive_pins": old_pins},
+                                                           state=json.loads(old_state))["status"], "Verified")
+        tx.install_reviewed(review.build_plan(recipe, archives), verified_backend=self.asset)
+        self.assertEqual(changed.read_bytes(), b"plugin v2")
+        self.assertEqual(added.read_bytes(), b"new plugin")
+        self.assertEqual(installed_integrity.verify(recipe, state=json.loads(state.read_bytes()))["status"], "Verified")
+        tx.recover_live(approved_review=tx.review_live_recovery())
+        self.assertEqual(self.maintenance_inventory(prefix), before)
+        self.assertEqual(state.read_bytes(), old_state)
+        histories = list(dest.journal_dir.glob("history-*"))
+        self.assertEqual(len(histories), 3)
+        original, = [h for h in histories if (h / "fk4-journal.json").read_bytes() == prior]
+        self.assertEqual(self.maintenance_inventory(original / backup.name), evidence)
+
+    def test_managed_update_stale_review_refuses_changed_archive_or_settings(self):
+        tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture(damage=False)
+        dest = tx._live_destination(None)
+        v2 = root / "profile-v2.zip"
+        with zipfile.ZipFile(v2, "w") as archive:
+            archive.writestr("config.txt", b"new defaults")
+            archive.writestr("plugins/test.dll", b"plugin v2")
+        recipe["archive_pins"]["profile"] = sha256(v2.read_bytes()).hexdigest()
+        archives = [self.archives[0], v2]
+        plan = review.build_plan(recipe, archives)
+        original = v2.read_bytes()
+        v2.write_bytes(b"tampered")
+        before = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "Invalid UEVR ZIP archive"):
+            tx.install_reviewed(plan, verified_backend=self.asset)
+        self.assertEqual(self.maintenance_inventory(root), before)
+        with zipfile.ZipFile(v2, "w") as archive:
+            archive.writestr("config.txt", b"new defaults")
+            archive.writestr("plugins/test.dll", b"tampered plugin")
+        before = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "checksum"):
+            tx.install_reviewed(plan, verified_backend=self.asset)
+        self.assertEqual(self.maintenance_inventory(root), before)
+        v2.write_bytes(original)
+        plan = review.build_plan(recipe, archives)
+        (dest.profile / "config.txt").write_bytes(b"new player settings")
+        before = self.maintenance_inventory(root)
+        with self.assertRaisesRegex(RuntimeError, "changed"):
+            tx.install_reviewed(plan, verified_backend=self.asset)
+        self.assertEqual(self.maintenance_inventory(root), before)
+
     def test_managed_update_omitted_dependency_blocks_without_writes(self):
         from dataclasses import replace
         tx, recipe, root, prefix, state, backend, _ = self.managed_repair_fixture(damage=False)
