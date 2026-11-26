@@ -243,3 +243,10 @@ Twelve additional tests, targeted 64/64, full 1824/1824 (80.885s), process 60685
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D2A-full-QrolJq.
 Manifest SHA-256: 1f7034bbeecceb0b880e8a3a200fbb009ed7d3fdf42fcd8e7aa2d6781c999dfc.
 Limitations: sampling cannot certify absence of concurrent changes; ancestor path reads and legacy backup provenance are not transaction authority; retired trees unverified. Backup validation is recorded-original evidence, not a complete backup inventory. D2-B exact repair manifest, D2-C UI, D2-D desktop acceptance pending. ERVR preview retained at runtime 3e9b2b1, not this new code.
+
+## D2-B — Exact read-only repair manifest
+Baseline 9cdbd7e2d2a229371c65b827d66fed95577137ff. Deterministic per-pinned-file review with sampled/expected hashes, component, action and reason. Preserve matching files and existing protected settings/bindings; missing protected files require manual review. Proposed restore/replacement only with consistent recorded inventory, matching recorded original backups and no known conflicts or missing protected settings. All such proposals suppressed when blockers exist. Unknown evidence returns no partial inventory. Outside-package files excluded, not comprehensively inventoried. No repair dispatch, GUI changes, pin promotion or write authority.
+Eleven new tests; targeted 75/75, full 1835/1835 (83.824s), process 61548 exit 0. Both new source/test hashes and stable state matched after regression. Corrected preservation audit: 29 historical manifests/141 entries, ERVR 20 entries, nested D1, two reboot fixtures, 121 Fatekeeper files. Initial audit invocation failed with Python syntax error; empty output and failure note retained; corrected audit passed. Gate closed.
+Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7D2B-full-RYMiXX.
+Manifest SHA-256: 1b882f9f8faaa9836d0a143f1018993d68da9f1ec219643a6c61aacad8b3ee1a.
+Limitations: D2-A sampling and backup provenance restrictions remain. Review is not execution authority, compatibility evidence or a complete backup inventory. D2-C interface integration and D2-D desktop acceptance pending. No preview replacement, push or release.
