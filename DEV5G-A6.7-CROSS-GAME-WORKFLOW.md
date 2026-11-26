@@ -199,3 +199,11 @@ Audit covers recorded protected inventory, not every game file or save.
 Interactive KDE acceptance pending; no preview launched by this step.
 Evidence: ~/NAnnersVRhub-recovery/Dev5G-A6.7C-corrected-tsPKzB.
 Manifest SHA-256: ce6a850788b9123e2a7785a4a1de55737e75ed0d07818e0b82316b0efe13ef80.
+
+### A6.7-C player acceptance
+All twelve KDE checks passed by player. Runtime checkpoint 6564c7f07953eeeab43914c9aa1fcf397fd86616; PID 45512,
+start 2026-11-25 23:42:34 PST, launcher output and isolated state supplied
+by player; independently observed process/worktree/held lock. Preview remains
+running. Independent compositor identity and previous window absence remain
+unverified. Stable state unchanged; gate closed. Original manifest retained.
+Acceptance manifest SHA-256: a74be18042683fca5cd4f915eb8b2a44fdfd5c71c8afdf45c300f0ba78ab4f24.
