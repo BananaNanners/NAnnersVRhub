@@ -209,6 +209,51 @@ class PreUpdateSafetyWorker(QThread):
             self.done.emit(result)
 
 
+class ManagedUpdateReviewWorker(QThread):
+    """Explicit read-only managed update review; no installer dispatch."""
+    done = Signal(object)
+    failed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(self, recipe, folders, selected=None, parent=None):
+        super().__init__(parent)
+        self.recipe = copy.deepcopy(recipe)
+        self.folders = tuple(folders)
+        self.selected = copy.deepcopy(selected)
+        self.cancel_flag = Event()
+
+    def cancel(self):
+        self.cancel_flag.set()
+
+    def run(self):
+        try:
+            from . import bepinex_recognition, bepinex_update_manifest
+            # A normal scan may select a newer official ZIP instead of the
+            # pinned baseline. Recover the pinned pair without changing selection.
+            pins = planner.build_plan(self.recipe, self.folders)
+            archives = (() if pins.get("warning") else
+                        bepinex_recognition.archives_from_rows(self.recipe, pins["rows"]))
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+            result = bepinex_update_manifest.review(self.recipe, archives, self.folders)
+            if self.selected is not None:
+                expected = {r["id"]:(r["file"],r["candidates"][0]["sha256"])
+                            for r in self.selected if GuidedDownloadsPage._official_pin_review(r)}
+                actual = {r["id"]:(r["candidate"]["path"],r["candidate"]["sha256"])
+                          for r in result["candidates"] if r["candidate"]}
+                if expected != actual:
+                    result.update(status="Blocked", rows=(), counts={},
+                                  blockers=("Downloads or release information changed. Scan again before reviewing.",))
+            if self.cancel_flag.is_set():
+                raise installed_integrity.Cancelled()
+        except installed_integrity.Cancelled:
+            self.cancelled.emit()
+        except Exception:
+            self.failed.emit("Update evidence could not be checked safely. Scan again before reviewing.")
+        else:
+            self.done.emit(result)
+
+
 class VerifiedArchiveDownloadWorker(QThread):
     """One explicitly authorized, digest-pinned download; never installs."""
     progress_changed = Signal(object, object)
@@ -530,6 +575,9 @@ class GuidedDownloadsPage(QWidget):
         self._comparison_scroll_timer = QTimer(self)
         self._comparison_scroll_timer.setSingleShot(True)
         self._comparison_scroll_timer.timeout.connect(self._scroll_to_comparison)
+        self._safety_scroll_timer = QTimer(self)
+        self._safety_scroll_timer.setSingleShot(True)
+        self._safety_scroll_timer.timeout.connect(self._scroll_to_safety)
         self.comparison_toggle.toggled.connect(self._toggle_comparison)
         outer.addWidget(self.comparison_toggle)
         outer.addWidget(self.comparison_panel)
@@ -1057,6 +1105,7 @@ class GuidedDownloadsPage(QWidget):
             return
         if self.integrity_worker is not None:
             self.integrity_worker.cancel()
+        self._invalidate_safety_review()
         if self.recognition_result is not None or (
                 self.recipe.get("id") in ("subnautica", "valheim") and
                 self._integrity_result is not None):
@@ -1251,6 +1300,7 @@ class GuidedDownloadsPage(QWidget):
             "online results only. Refresh online results separately in Updates.")
 
     def _invalidate_safety_review(self):
+        self._safety_scroll_timer.stop()
         if self.safety_worker is not None and self.safety_worker.isRunning():
             self.safety_worker.cancel()
         self._safety_result = None
@@ -1304,6 +1354,79 @@ class GuidedDownloadsPage(QWidget):
         worker.finished.connect(lambda token=worker:
                                 self._safety_finished(token))
         worker.start()
+
+    def _start_managed_update_review(self, selected=None):
+        if self.safety_worker is not None or not self.recipe:
+            return
+        self._invalidate_safety_review()
+        try:
+            folders = self._folders()
+        except (OSError, RuntimeError, ValueError):
+            self.safety_summary.setText("Check your archive folders and scan again.")
+            return
+        self.comparison_toggle.setChecked(True)
+        self.safety_summary.setText("Checking your downloads and installed files. Nothing will change.")
+        worker = ManagedUpdateReviewWorker(self.recipe, folders, selected, self)
+        self.safety_worker = worker
+        self.safety_button.setText("Cancel update review")
+        worker.done.connect(lambda result, token=worker: self._managed_update_done(result, token))
+        worker.failed.connect(lambda error, token=worker: self._safety_failed(error, token))
+        worker.cancelled.connect(lambda token=worker: self._safety_cancelled(token))
+        worker.finished.connect(lambda token=worker: self._safety_finished(token))
+        worker.start()
+
+    def _managed_update_done(self, result, worker):
+        if (worker is not self.safety_worker or worker.cancel_flag.is_set()
+                or not self.recipe or result.get("game_id") != self.recipe.get("id")
+                or result.get("write_authorized") is not False
+                or result.get("compatibility_verified") is not False):
+            return
+        try:
+            if self._folders() != worker.folders:
+                return
+        except (OSError, RuntimeError, ValueError):
+            return
+        # Do not hand this result to generic replacement or install logic.
+        blocked = result["status"] != "Review required"
+        counts = {a:sum((r["action"] == a if not blocked else
+                         (r["action"] == "Preserve" if a == "Preserve" else
+                          r["action"] != "Preserve" if a == "Block" else False))
+                        for r in result["rows"])
+                  for a in ("Install","Replace","Preserve","Remove","Block")}
+        summary = ("Update blocked. " if blocked else "Update reviewed. ")
+        summary += ", ".join(f"{counts.get(a,0)} {label}" for a,label in
+                             (("Install","to add"),("Replace","to replace"),("Preserve","to keep"),
+                              ("Remove","to remove"),("Block","blocked")))
+        self.safety_summary.setText(summary + ". Installation is not approved. Nothing changed.")
+        lines = ["UPDATE REVIEW — NO FILES WILL BE CHANGED",
+                 "Compatibility with this release is not verified. Keep your current installation."]
+        for row in result.get("candidates", ()):
+            status = {
+                "Candidate identity matched — pin blocked": "New download verified; installation not approved",
+                "Pinned archive identity — no new payload": "Current supported download; no new files",
+                "Official digest unavailable": "Source has not provided a checksum; cannot verify download",
+                "Manual release review": "Check the source manually",
+            }.get(row["candidate_status"],row["candidate_status"])
+            lines.append(f"{row['name']}: {status}")
+            if row.get("candidate"):
+                lines.append(f"  Download: {Path(row['candidate']['path']).name} · {row['candidate']['tag']}")
+        for blocker in result["blockers"]:
+            lines.append("Blocked: " + blocker)
+        if result["rows"]:
+            lines.append(f"Complete update inventory: {len(result['rows'])} file(s)")
+            for row in result["rows"]:
+                action = row["action"]
+                if blocked and action in ("Install","Replace","Remove"):
+                    action = "Block"
+                lines.extend((f"{action} — {row['path']}", "  "+row["reason"],
+                              "  Installed SHA-256: "+(row["current_sha256"] or "Missing"),
+                              "  Download SHA-256: "+(row["new_sha256"] or "Not in new package")))
+        lines.append("Files outside these packages are left untouched. Review only; no installation or repair.")
+        self.safety_details.setPlainText(chr(10).join(lines))
+        self.safety_details.show()
+        self.comparison_panel.setMinimumHeight(345)
+        self.comparison_panel.updateGeometry()
+        self._safety_scroll_timer.start(0)
 
     def _safety_done(self, result, worker):
         if (worker is not self.safety_worker or worker.cancel_flag.is_set()
@@ -1634,7 +1757,7 @@ class GuidedDownloadsPage(QWidget):
         self.safety_details.show()
         self.comparison_panel.setMinimumHeight(345)
         self.comparison_panel.updateGeometry()
-        QTimer.singleShot(0, self._scroll_to_safety)
+        self._safety_scroll_timer.start(0)
 
     def _safety_failed(self, error, worker):
         if worker is self.safety_worker and self.recipe and (
@@ -1646,7 +1769,7 @@ class GuidedDownloadsPage(QWidget):
             self.safety_details.show()
             self.comparison_panel.setMinimumHeight(345)
             self.comparison_panel.updateGeometry()
-            QTimer.singleShot(0, self._scroll_to_safety)
+            self._safety_scroll_timer.start(0)
 
     def _safety_cancelled(self, worker):
         if worker is self.safety_worker and self.recipe and (
@@ -2033,7 +2156,7 @@ class GuidedDownloadsPage(QWidget):
         batch = method in ("bepinex", "ervr", "uevr")
         relevant = rows if batch or not row else [row]
         if method in ("bepinex", "ervr") and self._pin_review_set(rows):
-            return "pinned-release-review", "Review installation"
+            return "pinned-release-review", "Review update" if recipe.get("id") in ("subnautica", "valheim") else "Review installation"
         if method == "uevr" and recipe.get("archive_pins") and any(
                 r.get("file") and r.get("sha256") and self._verification_blocked(r)
                 and not self._needs_rescan(r) for r in rows):
@@ -2309,6 +2432,9 @@ class GuidedDownloadsPage(QWidget):
                     raise ValueError("Archive evidence changed. Rescan before review.")
             except (ValueError, RuntimeError, OSError) as exc:
                 self._folder_feedback(str(exc))
+                return
+            if rid in ("subnautica", "valheim"):
+                self._start_managed_update_review(rows)
                 return
             self.install_review_requested.emit({"game_id": rid, "route": route,
                 "archives": [r["file"] for r in rows], "rows": rows, "origin": "downloads-page"})

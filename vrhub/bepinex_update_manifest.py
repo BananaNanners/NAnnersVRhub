@@ -69,18 +69,21 @@ def review(recipe, pinned_archives, folder, *, fetch=None, steam_roots=None):
     restoration review; unknown new targets are not adopted.
     """
     result = dict(game_id=recipe.get("id"), status="Blocked", rows=(), counts={},
-                  blockers=(), write_authorized=False, compatibility_verified=False)
+                  blockers=(), candidates=(), write_authorized=False, compatibility_verified=False)
     try:
         if recipe.get("id") not in recognition.SUPPORTED:
             raise RuntimeError("Unsupported managed update recipe.")
         pins = {p["sha256"]:p["id"] for p in recipe["packages"]}
         pinned_archives = tuple(Path(p) for p in pinned_archives)
-        old = _inventory(recipe, pinned_archives, pins)
         state = copy.deepcopy(hub.state())
         discovery = bepinex_update_review.review(recipe, folder, state, fetch=fetch)
+        result["candidates"] = discovery["rows"]
         candidates = {r["id"]:r["candidate"] for r in discovery["rows"] if r["candidate"]}
         if not candidates:
             raise RuntimeError("No digest-matched update candidate.")
+        if len(pinned_archives) != len(recipe["packages"]):
+            raise RuntimeError("Keep both previously supported ZIP archives in your scan folders, then review again.")
+        old = _inventory(recipe, pinned_archives, pins)
         paths = {}
         for path in pinned_archives:
             with recognition._archive_snapshot(path) as (_, sha, _):

@@ -160,13 +160,15 @@ class PersistenceActionsTests(unittest.TestCase):
                 self.assertEqual(row["file"],str(new_path))
                 archive_scans.persist(plan)
                 self.page.set_recipe(recipe)
-                self.assertEqual(self.page.install_review_button.text(),"Review installation")
+                self.assertEqual(self.page.install_review_button.text(),"Review update")
                 events=[]
                 self.page.install_review_requested.connect(events.append)
-                self.page.install_review_button.click()
+                with mock.patch.object(self.page,"_start_managed_update_review") as review:
+                    self.page.install_review_button.click()
+                    review.assert_called_once_with(self.page._last_plan["rows"])
                 self.page.install_review_requested.disconnect(events.append)
-                self.assertEqual(events[-1]["route"],"pinned-release-review")
-                dialog=ReviewDialog(build_review(recipe,events[-1]["rows"]))
+                self.assertEqual(events,[])
+                dialog=ReviewDialog(build_review(recipe,self.page._last_plan["rows"]))
                 self.addCleanup(dialog.close)
                 self.assertFalse(dialog.apply_button.isEnabled())
                 # An unknown replacement is never elevated to review.
