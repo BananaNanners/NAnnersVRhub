@@ -1,12 +1,12 @@
-## 0.5.5 — Release candidate (unpublished)
+## 0.5.5
 
 - Player-first game library, consolidated Install / Update workflow, saved multi-folder archive scans, clearer dependency status, setup guides and controller references for nine games.
 - Read-only VR System diagnostics and installed-file recognition; distinguish local evidence from gameplay confirmation.
 - Reviewed archive inventories, backup guidance and restricted maintenance reviews. Existing guarded installers retained; new live Fatekeeper, Hogwarts profile and managed BepInEx/ERVR maintenance execution remains disabled.
 - Block legacy Hogwarts injector install/removal and reject unsupported ERVR executable versions before installation.
 - Preserve the exact Hogwarts baseline through upgrades from the actual 0.5.4 updater; fresh and upgraded application payloads matched in disposable rehearsals, with two-way rollback and fixture data preservation.
-- Previous full regression: 1920/1920; consolidated development desktop acceptance: 22/22. Final versioned candidate regression and desktop acceptance pending.
-- See RELEASE-NOTES-0.5.5.md, RELEASE-SCOPE-0.5.5.md and RELEASE-CHECKLIST-0.5.5.md. No publication or new production authorization.
+- Final versioned regression: 1920/1920; final KDE desktop acceptance: 17/17. Earlier consolidated development acceptance: 22/22.
+- See RELEASE-NOTES-0.5.5.md, RELEASE-SCOPE-0.5.5.md and RELEASE-CHECKLIST-0.5.5.md. Public update delivery is a separate post-publication check; no new production transaction authorization.
 
 ## 0.5.5-dev5F3 — Controller bindings (unreleased)
 

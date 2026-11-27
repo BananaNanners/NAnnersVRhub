@@ -1,6 +1,6 @@
 # NAnnersVRhub — VR Mod Hub for Linux
 
-NAnnersVRhub **0.5.5 — release candidate (not yet published)** · [Current stable 0.5.4 downloads](https://github.com/BananaNanners/NAnnersVRhub/releases/tag/v0.5.4)
+NAnnersVRhub **0.5.5** · [Release downloads](https://github.com/BananaNanners/NAnnersVRhub/releases)
 
 A Linux VR mod hub with a player-first game library, runtime/headset diagnostics,
 guided archive discovery, installation reviews, compatibility reports, controller
@@ -11,9 +11,9 @@ See [0.5.5 release notes](RELEASE-NOTES-0.5.5.md) and the
 Some game workflows are review-only or external; a discovered update is not
 permission to install. Current gameplay is not certified by local checks.
 
-Development evidence and remaining release checks are recorded in
+Final candidate validation passed 1,920 regression tests and all 17 KDE desktop acceptance checks. Evidence and limitations are recorded in
 [production readiness](DEV5G-A6.6-PRODUCTION-READINESS.md).
-The stable release remains 0.5.4 until explicit publication approval.
+Public update delivery is validated separately after publication.
 
 ## Screenshots
 
@@ -40,7 +40,7 @@ The stable release remains 0.5.4 until explicit publication approval.
 ## Install or update
 
 Linux, Python 3.11+ and working PySide6 are required for the Hub. Close the
-old Hub, extract the verified custom source ZIP and run (once 0.5.5 is published, or in an explicitly approved test environment):
+old Hub, extract the verified custom source ZIP and run:
 
 ```fish
 cd ~/Downloads/NAnnersVRhub-0.5.5

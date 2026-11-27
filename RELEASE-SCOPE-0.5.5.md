@@ -1,6 +1,6 @@
 # NAnnersVRhub 0.5.5 — game capability matrix
 
-Release candidate, not published. All nine profiles include setup guidance, controller references, version tracking and compatibility reporting. Local evidence is not a gameplay guarantee.
+All nine profiles include setup guidance, controller references, version tracking and compatibility reporting. Local evidence is not a gameplay guarantee.
 
 | Game | Installation | Repair / update | Restoration |
 |---|---|---|---|
