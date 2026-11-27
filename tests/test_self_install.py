@@ -90,17 +90,17 @@ class ManagedInstallTests(unittest.TestCase):
         self.assertIn(str(self.root / "icon.png"), desktop.read_text())
 
     def test_managed_hogwarts_resource_is_exact_and_not_generic_json(self):
+        from vrhub import hogwarts_update_pilot as pilot
         name = "vrhub/recipes/hogwarts-profile-v2.0.6.json"
+        self.assertEqual(pilot.BASELINE_JSON, (REPO / name).read_bytes())
         (self.source / "vrhub/recipes/unrelated.json").write_text("{}")
         self.install()
         installed = self.root / "releases" / self.record()["current"]
-        self.assertEqual((installed / name).read_bytes(), (REPO / name).read_bytes())
+        self.assertFalse((installed / name).exists())
         self.assertFalse((installed / "vrhub/recipes/unrelated.json").exists())
         shutil.rmtree(self.source)
-        code = ("from importlib.resources import files; import json; "
-                "from vrhub import hogwarts_update_pilot as p; "
-                "r=json.loads(files('vrhub').joinpath('recipes',"
-                "'hogwarts-profile-v2.0.6.json').read_text()); "
+        code = ("from vrhub import hogwarts_update_pilot as p; "
+                "r=p.baseline_reference(); "
                 "assert r['archive_sha256']==p.BASELINE; assert len(r['files'])==192")
         result = subprocess.run([sys.executable, "-I", "-B", "-c",
                                  "import sys;sys.path.insert(0,sys.argv[1]);"+code,
@@ -108,8 +108,9 @@ class ManagedInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_missing_hogwarts_resource_refuses_before_install(self):
-        (self.source / "vrhub/recipes/hogwarts-profile-v2.0.6.json").unlink()
-        with self.assertRaisesRegex(RuntimeError, "hogwarts-profile-v2.0.6.json"):
+        (self.source / "vrhub/hogwarts_update_pilot.py").unlink()
+        self.probe.stop()
+        with self.assertRaisesRegex(RuntimeError, "dependency/resource check failed"):
             self.install()
         self.assertFalse(self.root.exists())
 

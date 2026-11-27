@@ -13,6 +13,14 @@ class HogwartsPilotTests(unittest.TestCase):
         self.current = {**self.baseline, **dict.fromkeys(pilot.LOCAL_FILES, "local"), "log.txt": "log"}
         self.incoming = {**self.baseline, "changed.lua": "new", "config_AFW.txt": "optional"}
 
+    def test_embedded_baseline_matches_historical_bytes_and_refuses_damage(self):
+        source = Path(__file__).resolve().parents[1] / "vrhub/recipes/hogwarts-profile-v2.0.6.json"
+        self.assertEqual(pilot.BASELINE_JSON, source.read_bytes())
+        self.assertEqual(len(pilot.baseline_reference()["files"]), 192)
+        with patch.object(pilot, "BASELINE_JSON", b"{}"):
+            with self.assertRaisesRegex(RuntimeError, "resource changed"):
+                pilot.baseline_reference()
+
     def test_classifies_all_paths_without_promoting_optional_config(self):
         rows = pilot.classify(self.current, self.baseline, self.incoming, tuple(self.baseline))
         actions = {name: action for action, name, _ in rows}

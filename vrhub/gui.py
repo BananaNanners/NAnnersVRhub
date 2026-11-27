@@ -28,9 +28,12 @@ from .mod_updates_gui import ModUpdatesPage
 from .downloads_gui import GuidedDownloadsPage
 from .install_review_gui import InstallReviewDialog
 from .profile_review_gui import ProfileReviewDialog
-from . import profile_safety
+from . import profile_safety, hogwarts_update_pilot
 from . import artwork, download_planner, install_review
 from .table_columns import enable_spreadsheet_columns
+
+# Required packaged baseline must also pass the legacy managed installer's GUI import probe.
+hogwarts_update_pilot.baseline_reference()
 
 
 def _tab_icon_with_color(original: QIcon, color: str, edge: int = 18) -> QIcon:
@@ -1702,7 +1705,6 @@ class HubWindow(QMainWindow):
             from .uevr_dependency_review_gui import DependencyReviewDialog
             if r.get("id") not in uevr_dependency_review.SUPPORTED or len(files) != 2:
                 return
-            from . import hogwarts_update_pilot
             if hogwarts_update_pilot.applies(r, files[1]):
                 self.review_profile_archive(r, files[1])
                 return
@@ -1796,7 +1798,6 @@ class HubWindow(QMainWindow):
         current = self.current()
         if not current or current["id"] != recipe["id"] or not current.get("profile"):
             return
-        from . import hogwarts_update_pilot
         decisions = ()
         try:
             if hogwarts_update_pilot.applies(recipe, zip_file):

@@ -173,8 +173,7 @@ def _source_files(source: Path) -> tuple[str, dict[str, bytes]]:
         if '__pycache__' in path.relative_to(package).parts or path.suffix in {'.pyc', '.pyo'}:
             continue
         if path.is_file() and ((path.suffix in {".py", ".png", ".toml"}
-                               or (path.parent == package / "licenses" and path.suffix == ".txt")
-                               or path == package / "recipes/hogwarts-profile-v2.0.6.json")):
+                               or (path.parent == package / "licenses" and path.suffix == ".txt"))):
             files[path.relative_to(source).as_posix()] = path.read_bytes()
     version = _version(package)
     project = tomllib.loads((source / "pyproject.toml").read_text())
@@ -208,8 +207,6 @@ def _source_files(source: Path) -> tuple[str, dict[str, bytes]]:
             raise RuntimeError("Invalid packaged controller guide inventory.")
         required.update({"vrhub/controller_bindings.py", "vrhub/controller_gui.py",
                          *{f"vrhub/controls/{rid}.toml" for rid in guides}})
-    if (package / "hogwarts_update_pilot.py").is_file():
-        required.add("vrhub/recipes/hogwarts-profile-v2.0.6.json")
     if missing := required - files.keys():
         raise RuntimeError("Incomplete source folder: " + ", ".join(sorted(missing)))
     if config.get('required_kharvox_installer'):
