@@ -53,7 +53,7 @@ class QtUpdateTests(unittest.TestCase):
         c.start("check", True)
         self.wait()
         c.show()
-        self.assertIn("0.5.5", c.dialog.versions.text())
+        self.assertIn("0.5.6", c.dialog.versions.text())
         self.assertEqual(c.dialog.notes.toPlainText(), self.fixture.metadata["body"])
         self.assertFalse(c.dialog.install.isEnabled())  # Source run.
         self.assertFalse(c.dialog.rollback.isEnabled())
@@ -172,7 +172,7 @@ with mock.patch.object(HubWindow,'check_updates'), mock.patch.object(HubWindow,'
   app.processEvents()
  assert w.table.rowCount()==9
  c.dialog.check.click(); wait()
- assert c.release['version']=='0.5.5',c.message
+ assert c.release['version']=='0.5.6',c.message
  c.dialog.download.click(); wait()
  assert c.dialog.install.isEnabled(),c.message
  with mock.patch.object(QMessageBox,'question',return_value=QMessageBox.Yes):
@@ -190,7 +190,7 @@ print('Real managed GUI: check -> download -> verify -> install -> restart: OK')
 '''
         output = run(sys.executable, "-I", "-B", "-c", probe, root / "releases" / first, fixture.base, __version__)
         self.assertIn("restart: OK", output)
-        self.assertIn("0.5.5", run(root / "bin/nannersvrhub", "--version"))
+        self.assertIn("0.5.6", run(root / "bin/nannersvrhub", "--version"))
         self.assertIn("Fatekeeper", run(root / "bin/nannersvrhub", "info", "fatekeeper"))
         after = json.loads((root / "installation.json").read_text())
         self.assertEqual(after["previous"], first)
@@ -224,7 +224,7 @@ print('Managed GUI rollback and restart: OK')
         self.assertIn('Managed GUI rollback and restart: OK', output)
         self.assertIn(__version__, run(root / "bin/nannersvrhub", "--version"))
         run(root / "bin/nannersvrhub-manage", "rollback")
-        self.assertIn("0.5.5", run(root / "bin/nannersvrhub", "--version"))
+        self.assertIn("0.5.6", run(root / "bin/nannersvrhub", "--version"))
 
     def test_rollback_unavailable_or_corrupt_previous_is_disabled(self):
         c=self.controller
